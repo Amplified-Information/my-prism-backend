@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Prism Market</title>
+    <meta name="description" content="Decentralized event prediction markets powered by Hedera" />
+    <meta name="author" content="Prism Market" />
+
+    <meta property="og:title" content="Prism Market" />
+    <meta property="og:description" content="Decentralized event prediction markets powered by Hedera" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="billboard.png" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@PrismMarket" />
+    <meta name="twitter:image" content="billboard.png" />
+
+    <script>
+      // CRITICAL: Polyfill Node.js globals BEFORE any modules load
+      (function() {
+        if (typeof globalThis !== 'undefined') {
+          if (typeof globalThis.global === 'undefined') {
+            globalThis.global = globalThis;
+          }
+        } else if (typeof window !== 'undefined') {
+          if (typeof window.global === 'undefined') {
+            window.global = window;
+          }
+          if (typeof window.globalThis === 'undefined') {
+            window.globalThis = window;
+          }
+        }
+
+        // Additional polyfills for HashConnect
+        if (typeof process === 'undefined') {
+          var process = { env: {}, browser: true };
+          if (typeof window !== 'undefined') {
+            window.process = process;
+          }
+          if (typeof globalThis !== 'undefined') {
+            globalThis.process = process;
+          }
+        }
+
+        // Buffer polyfill if needed
+        if (typeof Buffer === 'undefined') {
+          if (typeof window !== 'undefined') {
+            window.Buffer = window.Buffer || {};
+          }
+        }
+      })();
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </head>
+
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

@@ -1,0 +1,28 @@
+.secrets
+.secrets.*
+
+# Ignore version control directories
+.git
+.gitignore
+.github
+
+# Ignore large directories
+resources/
+scs/
+target/
+node_modules/
+
+# Ignore build artifacts
+debug/
+build/
+dist/
+
+# Ignore temporary files
+*.log
+*.tmp
+*.swp
+
+# Ignore IDE/editor files
+.vscode/
+.idea/
+*.iml

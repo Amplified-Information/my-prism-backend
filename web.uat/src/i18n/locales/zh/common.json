@@ -1,0 +1,481 @@
+{
+  "header": {
+    "markets": "探索市场",
+    "rewards": "奖励",
+    "marketFactory": "市场工厂",
+    "stake": "质押",
+    "portfolio": "投资组合",
+    "governance": "治理",
+    "docs": "文档",
+    "testnet": "测试网",
+    "language": "语言"
+  },
+  "hero": {
+    "title": "预测未来，",
+    "titleHighlight": "自信交易",
+    "description": "在Hedera上交易真实世界事件。为速度、公平和下一代Web3构建的去中心化预测协议。",
+    "startTrading": "开始交易",
+    "exploreMarkets": "探索事件预测市场"
+  },
+  "features": {
+    "betOnEvents": {
+      "title": "事件预测",
+      "description": "通过是/否预测交易真实世界事件。查看订单簿并以您偏好的价格进行交易。"
+    },
+    "provideLiquidity": {
+      "title": "提供流动性",
+      "description": "在价差内提供待处理限价单以获得奖励。"
+    },
+    "governance": {
+      "title": "治理",
+      "description": "对社区提案进行投票，塑造平台的未来。"
+    },
+    "stakePrsm": {
+      "title": "质押 PRSM",
+      "description": "质押PRSM代币以赚取xPRSM，并以增强的投票权参与治理。"
+    },
+    "learnMore": "了解更多 →"
+  },
+  "categories": {
+    "all": "所有事件市场",
+    "favourites": "收藏",
+    "politics": "政治",
+    "sports": "体育",
+    "culture": "文化",
+    "crypto": "加密货币",
+    "climate": "气候",
+    "economics": "经济",
+    "mentions": "提及",
+    "companies": "公司",
+    "financials": "金融",
+    "techScience": "科技与科学",
+    "health": "健康",
+    "world": "世界",
+    "allSubcategory": "全部"
+  },
+  "markets": {
+    "searchPlaceholder": "搜索预测市场...",
+    "allCategories": "所有类别",
+    "trending": "热门",
+    "endingSoon": "即将结束",
+    "new": "最新",
+    "highVolume": "高交易量",
+    "volume": "交易量",
+    "liquidity": "流动性",
+    "change24h": "24小时变化",
+    "noMarketsFound": "未找到符合条件的预测市场。",
+    "yourFavoriteMarkets": "您收藏的市场",
+    "noMarketsYet": "暂无{{category}}市场",
+    "allInCategory": "全部",
+    "allMarketsInCategory": "此类别的所有市场",
+    "backToCategories": "返回类别",
+    "backToSubcategories": "返回",
+    "eventPredictionMarkets": "事件预测市场",
+    "predictionMarkets": "预测市场",
+    "activeEventMarkets": "活跃事件市场",
+    "totalVolume": "总交易量",
+    "trend24h": "24小时趋势",
+    "exploreCategory": "探索{{category}}事件市场",
+    "allMarkets": "所有市场",
+    "filters": "筛选",
+    "searchDatabase": "搜索市场...（按回车搜索数据库）",
+    "searchResults": "搜索结果 \"{{query}}\" - 找到 {{count}} 个市场",
+    "clearSearch": "清除搜索",
+    "chooseSubcategory": "选择子类别",
+    "subcategoriesCount": "{{count}} 个子类别",
+    "mostPopularMarket": "最热门市场",
+    "traders": "交易者",
+    "accuracy": "准确率",
+    "avgDays": "平均天数",
+    "newToday": "今日新增",
+    "marketsLabel": "市场",
+    "noMarketsFoundTitle": "未找到市场",
+    "noMarketsFoundSearch": "尝试调整搜索词",
+    "noMarketsFoundEmpty": "稍后再来查看新市场",
+    "tabs": {
+      "all": "全部",
+      "featured": "精选",
+      "trending": "热门",
+      "new": "最新",
+      "endingSoon": "即将结束",
+      "highVolume": "高交易量"
+    },
+    "tabTitles": {
+      "allMarkets": "所有市场",
+      "featuredMarkets": "精选市场",
+      "trendingMarkets": "热门市场",
+      "newMarkets": "最新市场",
+      "endingSoon": "即将结束",
+      "highVolumeMarkets": "高交易量市场"
+    },
+    "emptyState": {
+      "noFeatured": "暂无精选市场",
+      "noFeaturedDesc": "此类别目前没有精选市场",
+      "noTrending": "暂无热门市场",
+      "noTrendingDesc": "此类别目前没有热门市场",
+      "noNew": "暂无新市场",
+      "noNewDesc": "过去30天内没有创建新市场",
+      "noEndingSoon": "暂无即将结束的市场",
+      "noEndingSoonDesc": "所有市场的结算日期都在7天以上",
+      "noHighVolume": "暂无高交易量市场",
+      "noHighVolumeDesc": "目前没有交易量超过$10,000的市场"
+    },
+    "badgeLabels": {
+      "markets": "{{count}} 个市场",
+      "markets30Days": "{{count}} 个市场（30天）",
+      "markets7Days": "{{count}} 个市场（7天）",
+      "markets10k": "{{count}} 个市场（$10K+）"
+    }
+  },
+  "carousel": {
+    "topCandidates": "热门候选人",
+    "total": "共计",
+    "noCandidates": "暂无候选人"
+  },
+  "stats": {
+    "tvl": "总锁定价值",
+    "activeMarkets": "活跃预测市场",
+    "activeTraders": "活跃交易者",
+    "tradersSubtitle": "(按上月活动计算)",
+    "volume24h": "24小时交易量"
+  },
+  "wallet": {
+    "connect": "连接钱包",
+    "disconnect": "断开连接",
+    "connectionFailed": "连接失败",
+    "connectionFailedDesc": "钱包连接失败，请重试。",
+    "copied": "已复制！",
+    "copiedDesc": "账户ID已复制到剪贴板",
+    "balance": "余额",
+    "balances": "余额",
+    "hbarBalance": "HBAR 余额",
+    "usdcBalance": "USDC 余额",
+    "prsmBalance": "PRSM 余额",
+    "xprsmBalance": "xPRSM 余额",
+    "copyAddress": "复制地址",
+    "viewOnHashscan": "在Hashscan上查看",
+    "persona": "钱包角色",
+    "accountId": "账户ID",
+    "refreshBalances": "刷新余额",
+    "balancesRefreshed": "余额已更新",
+    "balancesRefreshedDesc": "您的钱包余额已刷新",
+    "refreshFailed": "刷新余额失败"
+  },
+  "footer": {
+    "copyright": "© 2025 Prism Market. 保留所有权利。"
+  },
+  "common": {
+    "loading": "加载中...",
+    "error": "错误",
+    "success": "成功",
+    "cancel": "取消",
+    "confirm": "确认",
+    "yes": "是",
+    "no": "否",
+    "poweredBy": "技术支持",
+    "all": "全部"
+  },
+  "rewards": {
+    "earnings": "收益",
+    "dailyRewards": "每日奖励",
+    "description": "通过在价差内下单来赚取奖励。价差越小，您的潜在收益越高。",
+    "enableRewards": "启用奖励",
+    "rewardsActive": "奖励已激活",
+    "todaysEarnings": "今日收益",
+    "totalEarnings": "总收益",
+    "walletConnected": "钱包已连接！奖励已启用。",
+    "rewardsEnabled": "奖励已启用！",
+    "failedToConnect": "连接钱包失败",
+    "searchPlaceholder": "搜索市场...",
+    "noMarketsFound": "未找到符合条件的市场",
+    "tableHeaders": {
+      "market": "市场",
+      "maxSpread": "最大价差",
+      "minShares": "最小份额",
+      "reward": "奖励",
+      "competition": "竞争",
+      "earnings": "收益",
+      "percent": "百分比"
+    },
+    "connectWalletToFavorite": "连接钱包以保存收藏",
+    "toggleFavorite": "切换收藏",
+    "categoryAll": "全部",
+    "categoryFavourite": "收藏"
+  },
+  "stake": {
+    "title": "质押您的 PRSM 赚取奖励",
+    "subtitle": "质押 PRSM 并获得 xPRSM。",
+    "approximateApr": "大约年化收益率",
+    "totalValueLocked": "总锁定价值",
+    "stakeTokens": "质押 PRSM 代币",
+    "stakeTokensDesc": "质押您的 PRSM 代币以获得 xPRSM 并赚取奖励",
+    "amountToStake": "质押数量",
+    "available": "可用：",
+    "youWillReceive": "您将获得",
+    "connectWalletToStake": "连接钱包以质押",
+    "stakePrsmComingSoon": "质押 PRSM（即将推出）",
+    "howItWorks": "如何运作",
+    "step1Title": "质押 PRSM",
+    "step1Desc": "随时质押您的 PRSM 代币",
+    "step2Title": "获得 xPRSM",
+    "step2Desc": "获得具有投票权的 xPRSM 治理代币",
+    "step3Title": "赚取奖励",
+    "step3Desc": "累积奖励和更高的投票权",
+    "exchangeRate": "兑换率",
+    "prsm": "PRSM",
+    "xprsm": "xPRSM",
+    "invalidInput": "输入无效",
+    "positiveAmountsOnly": "您只能质押正数的 PRSM。",
+    "wholeNumbersOnly": "请输入整数。"
+  },
+  "marketFactory": {
+    "title": "市场工厂",
+    "description": "通过社区治理创建和部署预测市场",
+    "tabs": {
+      "create": "创建市场",
+      "governance": "治理面板"
+    },
+    "steps": {
+      "marketDetails": "市场详情",
+      "resolutionParams": "解决参数",
+      "economicParams": "经济参数",
+      "reviewSubmit": "审核并提交"
+    },
+    "form": {
+      "proposalTitle": "提案标题",
+      "proposalTitlePlaceholder": "提案简要标题",
+      "proposalDescription": "提案描述",
+      "proposalDescriptionPlaceholder": "解释为什么应该创建这个市场",
+      "marketType": "市场类型",
+      "selectMarketType": "选择市场类型",
+      "binaryMarket": "二元市场（是/否）",
+      "multipleChoice": "多选市场",
+      "marketQuestion": "市场问题",
+      "marketQuestionPlaceholder": "例如：比特币会在2024年底达到100,000美元吗？",
+      "marketDescription": "市场描述",
+      "marketDescriptionPlaceholder": "市场和条件的详细描述",
+      "proposalVotingEndDate": "提案投票截止日期",
+      "selectProposalEndDate": "选择提案投票截止日期",
+      "proposalVotingDateHint": "提案投票必须在1-14天内结束，且在市场解决日期之前。",
+      "marketImage": "市场图片",
+      "uploadMarketImage": "上传市场图片",
+      "marketOutcomes": "市场结果",
+      "yesOutcome": "是 结果",
+      "noOutcome": "否 结果",
+      "outcome": "结果",
+      "uploadImage": "上传图片",
+      "addOutcome": "添加结果",
+      "resolutionDate": "解决日期",
+      "selectResolutionDate": "选择解决日期",
+      "oracleType": "预言机类型",
+      "selectOracleType": "选择预言机类型",
+      "manualResolution": "手动解决",
+      "apiOracle": "API预言机",
+      "consensusOracle": "共识预言机",
+      "apiEndpoint": "API端点",
+      "initialLiquidity": "初始流动性 (HBAR)",
+      "collateralType": "抵押品类型",
+      "selectCollateralType": "选择抵押品类型",
+      "previous": "上一步",
+      "next": "下一步",
+      "creating": "创建中...",
+      "createProposal": "创建提案"
+    },
+    "review": {
+      "title": "审核您的提案",
+      "proposalDetails": "提案详情",
+      "titleLabel": "标题：",
+      "descriptionLabel": "描述：",
+      "marketConfig": "市场配置",
+      "questionLabel": "问题：",
+      "outcomesLabel": "结果：",
+      "resolutionParams": "解决参数",
+      "resolutionDateLabel": "解决日期：",
+      "oracleTypeLabel": "预言机类型：",
+      "economicParams": "经济参数",
+      "initialLiquidityLabel": "初始流动性：",
+      "collateralTypeLabel": "抵押品类型："
+    },
+    "alerts": {
+      "connectWallet": "请连接您的钱包以创建市场提案。",
+      "votingPowerRequired": "您需要至少 {{required}} 投票权才能创建提案。您目前拥有 {{current}} 投票权。"
+    },
+    "dashboard": {
+      "yourVotingPower": "您的投票权",
+      "tokenBalance": "代币余额",
+      "stakedBalance": "质押余额",
+      "totalVotingPower": "总投票权",
+      "activeProposals": "活跃提案",
+      "myProposals": "我的提案",
+      "votingHistory": "投票历史",
+      "noActiveProposals": "没有活跃提案",
+      "noProposalsYet": "您还没有创建任何提案",
+      "noVotingHistory": "没有投票历史",
+      "connectWalletDashboard": "连接您的钱包以查看治理面板",
+      "proposalVoting": "提案投票",
+      "electionVoting": "选举投票",
+      "proposalPhaseEnded": "提案阶段已结束",
+      "electionEnded": "选举已结束",
+      "quorumProgress": "法定人数进度",
+      "for": "支持",
+      "against": "反对",
+      "abstain": "弃权",
+      "voteFor": "投票支持",
+      "voteAgainst": "投票反对",
+      "youHaveVoted": "您已投票",
+      "ends": "结束：",
+      "created": "创建于：",
+      "submitting": "提交中...",
+      "submitForVoting": "提交投票",
+      "proposal": "提案",
+      "votingPower": "投票权"
+    }
+  },
+  "portfolio": {
+    "title": "我的投资组合",
+    "subtitle": "跟踪您的事件预测市场持仓和表现",
+    "summary": {
+      "totalValue": "投资组合总价值",
+      "totalValueDesc": "持仓的总市场价值",
+      "totalPnL": "总盈亏",
+      "overall": "总体",
+      "dayChange": "日变化",
+      "today": "今日",
+      "totalCost": "总成本",
+      "totalCostDesc": "总投资金额"
+    },
+    "holdings": {
+      "title": "我的持仓",
+      "market": "市场",
+      "position": "方向",
+      "shares": "份额",
+      "avgPrice": "平均价格",
+      "currentPrice": "当前价格",
+      "marketValue": "市值",
+      "pnl": "盈亏",
+      "endDate": "结束日期",
+      "action": "操作",
+      "trade": "交易"
+    },
+    "errors": {
+      "loadFailed": "加载投资组合数据失败："
+    },
+    "empty": {
+      "message": "未找到持仓。开始在一些市场交易以建立您的投资组合！"
+    }
+  },
+  "wallet": {
+    "connect": "连接钱包",
+    "disconnect": "断开连接",
+    "connectionFailed": "连接失败",
+    "connectionFailedDesc": "无法连接到钱包",
+    "copied": "已复制",
+    "copiedDesc": "账户ID已复制到剪贴板",
+    "accountId": "账户ID",
+    "hbarBalance": "HBAR余额",
+    "usdcBalance": "USDC余额",
+    "copyAddress": "复制地址",
+    "viewOnHashscan": "在Hashscan查看",
+    "persona": "钱包身份",
+    "balances": "余额",
+    "refreshBalances": "刷新余额",
+    "balancesRefreshed": "余额已刷新",
+    "balancesRefreshedDesc": "您的钱包余额已更新",
+    "refreshFailed": "刷新余额失败",
+    "testnet": "测试网",
+    "mainnet": "主网"
+  },
+  "governance": {
+    "title": "治理",
+    "subtitle": "使用您的xPRSM代币对提案进行投票，参与协议治理。通过去中心化决策塑造Prism Market的未来。",
+    "votingPower": {
+      "title": "您的投票权",
+      "connectedDesc": "您当前的xPRSM余额和投票权",
+      "disconnectedDesc": "连接钱包以查看您的投票权",
+      "stakePrsm": "质押PRSM",
+      "connectWallet": "请连接您的钱包以参与治理",
+      "loadFailed": "加载治理代币余额失败",
+      "xprsmBalance": "xPRSM余额",
+      "activeVoter": "活跃投票者"
+    },
+    "dao": {
+      "title": "Prism Market DAO",
+      "subtitle": "一个去中心化自治组织，赋予xPRSM持有者集体治理协议、塑造市场创建并引导Hedera预测市场发展的权力。",
+      "tokenGovernance": {
+        "title": "代币治理",
+        "description": "PRSM是通过参与获得的实用代币。质押PRSM以获得具有投票权的xPRSM治理代币。"
+      },
+      "governanceScope": {
+        "title": "治理范围",
+        "description": "DAO治理市场创建、协议参数、资金分配和平台费用。所有重大决策都需要社区共识。"
+      },
+      "proposalLifecycle": {
+        "title": "提案生命周期",
+        "description": "提案经历草案→提案投票→选举投票阶段。每个阶段都需要达到最低法定人数门槛。"
+      }
+    },
+    "parameters": {
+      "title": "治理参数",
+      "subtitle": "管理提案和投票流程的当前设置",
+      "minXprsm": {
+        "label": "创建所需最低xPRSM",
+        "value": "1,000 xPRSM",
+        "description": "提交提案所需的最低投票权"
+      },
+      "proposalQuorum": {
+        "label": "提案法定人数",
+        "value": "10,000 xPRSM",
+        "description": "通过提案阶段所需的投票权"
+      },
+      "electionQuorum": {
+        "label": "选举法定人数",
+        "value": "15,000 xPRSM",
+        "description": "最终批准所需的投票权"
+      },
+      "votingDuration": {
+        "label": "投票时长",
+        "value": "24小时/阶段",
+        "description": "每个投票阶段分配的时间"
+      }
+    },
+    "features": {
+      "title": "为什么治理很重要",
+      "voteOnProposals": {
+        "title": "对提案投票",
+        "description": "使用您的xPRSM代币对协议升级、市场创建提案和参数更改进行投票。"
+      },
+      "communityDriven": {
+        "title": "社区驱动",
+        "description": "每个xPRSM持有者都在协议方向上拥有发言权。您的质押决定您的投票权。"
+      },
+      "transparentProcess": {
+        "title": "透明流程",
+        "description": "所有提案和投票都记录在链上，确保完全透明和可问责。"
+      },
+      "shapeFuture": {
+        "title": "塑造未来",
+        "description": "影响哪些市场被创建、奖励如何分配以及平台的演进。"
+      }
+    },
+    "howItWorks": {
+      "title": "治理如何运作",
+      "step1": {
+        "title": "获取PRSM代币",
+        "description": "通过交易、提供流动性或参与生态系统赚取PRSM代币。"
+      },
+      "step2": {
+        "title": "质押获取xPRSM",
+        "description": "质押您的PRSM代币以获得具有投票权的xPRSM治理代币。"
+      },
+      "step3": {
+        "title": "审查提案",
+        "description": "浏览活跃提案，包括市场创建、参数更改和协议升级。"
+      },
+      "step4": {
+        "title": "投出您的票",
+        "description": "对提案投赞成、反对或弃权票。您的投票权与您的xPRSM持有量成正比。"
+      }
+    },
+    "activeProposals": "活跃提案"
+  }
+}

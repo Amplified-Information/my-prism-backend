@@ -1,0 +1,29 @@
+0.1.0
+Initial version of the clob
+
+0.2.1
+Added more functionality
+
+0.2.2
+Changed naming of some interface endpoints for better consistency
+
+0.2.3
+Some protobuf naming changes
+
+0.2.4
+Resolved conflicting .config env vars
+
+0.2.5
+interface updates. Removed mainnet: testnet: prefix etc. New pricing streaming. Started recreation of orderbook functionality
+
+0.2.6
+pre-MVP release version
+
+0.2.7
+Update to clob.proto
+
+0.2.8
+Added new endpoints to support cancelling orders, retrieving open orders
+
+0.2.9
+Updates to CLOB to support clob recreation from power failure

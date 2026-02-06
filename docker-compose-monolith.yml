@@ -1,0 +1,100 @@
+# source ./api/loadEnv.sh local
+# source ./clob/loadEnv.sh local
+
+# docker compose -f docker-compose-monolith.yml -f docker-compose-monolith.dev.yml up -d
+services:
+  api:
+    image: ghcr.io/prismmarketlabs/api:0.3.7
+    # pull_policy: always
+    restart: always
+    ports:
+      - "8888:8888"
+      - "8889:8889" # /health
+    environment:
+      # keep in sync with main.go, docker-compose-monolith.yml, .config and .secrets and the run command in Dockerfile
+      API_SELF_HOST: ${API_SELF_HOST}
+      API_SELF_PORT: ${API_SELF_PORT}
+      API_SELF_PORT_HEALTH: ${API_SELF_PORT_HEALTH}
+      CLOB_HOST: ${CLOB_HOST}
+      CLOB_PORT: ${CLOB_PORT}
+      USDC_DECIMALS: ${USDC_DECIMALS}
+      PREVIEWNET_USDC_ADDRESS: ${PREVIEWNET_USDC_ADDRESS}
+      TESTNET_USDC_ADDRESS: ${TESTNET_USDC_ADDRESS}
+      MAINNET_USDC_ADDRESS: ${MAINNET_USDC_ADDRESS}
+      AVAILABLE_NETWORKS: ${AVAILABLE_NETWORKS}
+      PREVIEWNET_SMART_CONTRACT_ID: ${PREVIEWNET_SMART_CONTRACT_ID}
+      PREVIEWNET_HEDERA_OPERATOR_ID: ${PREVIEWNET_HEDERA_OPERATOR_ID}
+      PREVIEWNET_HEDERA_OPERATOR_KEY_TYPE: ${PREVIEWNET_HEDERA_OPERATOR_KEY_TYPE}
+      PREVIEWNET_PUBLIC_KEY: ${PREVIEWNET_PUBLIC_KEY}
+      TESTNET_SMART_CONTRACT_ID: ${TESTNET_SMART_CONTRACT_ID}
+      TESTNET_HEDERA_OPERATOR_KEY_TYPE: ${TESTNET_HEDERA_OPERATOR_KEY_TYPE}
+      TESTNET_HEDERA_OPERATOR_ID: ${TESTNET_HEDERA_OPERATOR_ID}
+      TESTNET_PUBLIC_KEY: ${TESTNET_PUBLIC_KEY}
+      MAINNET_SMART_CONTRACT_ID: ${MAINNET_SMART_CONTRACT_ID}
+      MAINNET_HEDERA_OPERATOR_ID: ${MAINNET_HEDERA_OPERATOR_ID}
+      MAINNET_HEDERA_OPERATOR_KEY_TYPE: ${MAINNET_HEDERA_OPERATOR_KEY_TYPE}
+      MAINNET_PUBLIC_KEY: ${MAINNET_PUBLIC_KEY}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_UNAME: ${DB_UNAME}
+      DB_NAME: ${DB_NAME}
+      DB_MAX_ROWS: ${DB_MAX_ROWS}
+      NATS_URL: ${NATS_URL}
+      TIMESTAMP_ALLOWED_PAST_SECONDS: ${TIMESTAMP_ALLOWED_PAST_SECONDS}
+      TIMESTAMP_ALLOWED_FUTURE_SECONDS: ${TIMESTAMP_ALLOWED_FUTURE_SECONDS}
+      SEND_EMAIL: ${SEND_EMAIL}
+      EMAIL_ADDRESS: ${EMAIL_ADDRESS}
+      SMTP_ENDPOINT: ${SMTP_ENDPOINT}
+      IAM_USERNAME: ${IAM_USERNAME}
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      MARKET_CREATION_FEE_USDC: ${MARKET_CREATION_FEE_USDC}
+      PREVIEWNET_TOKEN: ${PREVIEWNET_TOKEN}
+      TESTNET_TOKEN: ${TESTNET_TOKEN}
+      MAINNET_TOKEN: ${MAINNET_TOKEN}
+      MIN_ORDER_SIZE_USD: ${MIN_ORDER_SIZE_USD}
+      # secrets:
+      DB_PWORD: ${DB_PWORD}
+      PREVIEWNET_HEDERA_OPERATOR_KEY: ${PREVIEWNET_HEDERA_OPERATOR_KEY}
+      TESTNET_HEDERA_OPERATOR_KEY: ${TESTNET_HEDERA_OPERATOR_KEY}
+      MAINNET_HEDERA_OPERATOR_KEY: ${MAINNET_HEDERA_OPERATOR_KEY}
+      SMTP_PWORD: ${SMTP_PWORD}
+
+  clob:
+    image: ghcr.io/prismmarketlabs/clob:0.2.9
+    # pull_policy: always
+    restart: always
+    depends_on:
+      - api # API must be running so the clob can re-create orderbooks from the API on startup
+    ports:
+      - "50051:50051"
+    environment:
+      # keep in sync with main.rs, docker-compose-monolith.yml, .config and .secrets and the run command in clob Dockerfile
+      CLOB_SELF_HOST: ${CLOB_SELF_HOST}
+      CLOB_SELF_PORT: ${CLOB_SELF_PORT}
+      API_HOST: ${API_HOST}
+      API_PORT: ${API_PORT}
+      CLOB_MATCHING_INTERVAL_SECONDS: ${CLOB_MATCHING_INTERVAL_SECONDS}
+      NATS_HOST: ${NATS_HOST}
+      NATS_PORT: ${NATS_PORT}
+  # mw:
+  #   image: ghcr.io/prismmarketlabs/mw:0.0.1
+  #   # pull_policy: always
+  #   restart: always
+  #   ports:
+  #     - "5173:80"
+  #   environment:
+  #     IS_PASSWORD_PROTECTED: ${IS_PASSWORD_PROTECTED}
+  #     HTUSER: ${HTUSER}
+  #     # secrets:
+  #     HTPASSWD: ${HTPASSWD}
+  web:
+    image: ghcr.io/prismmarketlabs/web.eng:0.4.21
+    # pull_policy: always
+    restart: always
+    ports:
+      - "5173:80"
+    environment:
+      IS_PASSWORD_PROTECTED: ${IS_PASSWORD_PROTECTED}
+      HTUSER: ${HTUSER}
+      # secrets:
+      HTPASSWD: ${HTPASSWD}

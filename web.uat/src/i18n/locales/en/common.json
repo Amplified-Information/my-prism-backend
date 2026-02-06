@@ -1,0 +1,481 @@
+{
+  "header": {
+    "markets": "Explore Markets",
+    "rewards": "Rewards",
+    "marketFactory": "Market Factory",
+    "stake": "Stake",
+    "portfolio": "Portfolio",
+    "governance": "Governance",
+    "docs": "Docs",
+    "testnet": "Testnet",
+    "language": "Language"
+  },
+  "hero": {
+    "title": "Predict the Future,",
+    "titleHighlight": "Trade with Confidence",
+    "description": "Trade Real-World Events on Hedera. A decentralized prediction protocol built for speed, fairness, and the next generation of Web3.",
+    "startTrading": "Start Trading",
+    "exploreMarkets": "Explore Event Prediction Markets"
+  },
+  "features": {
+    "betOnEvents": {
+      "title": "Predict Events",
+      "description": "Trade on real-world events with YES/NO predictions. View order books and place trades at your preferred prices."
+    },
+    "provideLiquidity": {
+      "title": "Provide Liquidity",
+      "description": "Provide pending limit orders within the spread to receive rewards."
+    },
+    "governance": {
+      "title": "Governance",
+      "description": "Vote on community proposals and shape the future of the platform."
+    },
+    "stakePrsm": {
+      "title": "Stake PRSM",
+      "description": "Stake PRSM tokens to earn xPRSM and participate in governance with enhanced voting power."
+    },
+    "learnMore": "Learn More →"
+  },
+  "categories": {
+    "all": "All Event Markets",
+    "favourites": "Favourites",
+    "politics": "Politics",
+    "sports": "Sports",
+    "culture": "Culture",
+    "crypto": "Crypto",
+    "climate": "Climate",
+    "economics": "Economics",
+    "mentions": "Mentions",
+    "companies": "Companies",
+    "financials": "Financials",
+    "techScience": "Tech & Science",
+    "health": "Health",
+    "world": "World",
+    "allSubcategory": "All"
+  },
+  "markets": {
+    "searchPlaceholder": "Search prediction markets...",
+    "allCategories": "All Categories",
+    "trending": "Trending",
+    "endingSoon": "Ending Soon",
+    "new": "New",
+    "highVolume": "High Volume",
+    "volume": "Volume",
+    "liquidity": "Liquidity",
+    "change24h": "24h Change",
+    "noMarketsFound": "No prediction markets found matching your criteria.",
+    "yourFavoriteMarkets": "Your favorite markets",
+    "noMarketsYet": "No {{category}} markets yet",
+    "allInCategory": "All",
+    "allMarketsInCategory": "All markets in this category",
+    "backToCategories": "Back to Categories",
+    "backToSubcategories": "Back",
+    "eventPredictionMarkets": "Event Prediction Markets",
+    "predictionMarkets": "Prediction Markets",
+    "activeEventMarkets": "Active Event Markets",
+    "totalVolume": "Total Volume",
+    "trend24h": "24h Trend",
+    "exploreCategory": "Explore {{category}} Event Markets",
+    "allMarkets": "All Markets",
+    "filters": "Filters",
+    "searchDatabase": "Search markets... (Press Enter to search database)",
+    "searchResults": "Search results for \"{{query}}\" - {{count}} markets found",
+    "clearSearch": "Clear search",
+    "chooseSubcategory": "Choose a Subcategory",
+    "subcategoriesCount": "{{count}} Subcategories",
+    "mostPopularMarket": "Most Popular Market",
+    "traders": "Traders",
+    "accuracy": "Accuracy",
+    "avgDays": "Avg Days",
+    "newToday": "New Today",
+    "marketsLabel": "Markets",
+    "noMarketsFoundTitle": "No markets found",
+    "noMarketsFoundSearch": "Try adjusting your search terms",
+    "noMarketsFoundEmpty": "Check back later for new markets",
+    "tabs": {
+      "all": "All",
+      "featured": "Featured",
+      "trending": "Trending",
+      "new": "New",
+      "endingSoon": "Ending Soon",
+      "highVolume": "High Volume"
+    },
+    "tabTitles": {
+      "allMarkets": "All Markets",
+      "featuredMarkets": "Featured Markets",
+      "trendingMarkets": "Trending Markets",
+      "newMarkets": "New Markets",
+      "endingSoon": "Ending Soon",
+      "highVolumeMarkets": "High Volume Markets"
+    },
+    "emptyState": {
+      "noFeatured": "No featured markets",
+      "noFeaturedDesc": "No markets are currently featured in this category",
+      "noTrending": "No trending markets",
+      "noTrendingDesc": "No markets are currently trending in this category",
+      "noNew": "No new markets",
+      "noNewDesc": "No markets have been created in the last 30 days",
+      "noEndingSoon": "No markets ending soon",
+      "noEndingSoonDesc": "All markets have resolution dates more than 7 days away",
+      "noHighVolume": "No high volume markets",
+      "noHighVolumeDesc": "No markets currently have volume above $10,000"
+    },
+    "badgeLabels": {
+      "markets": "{{count}} Markets",
+      "markets30Days": "{{count}} Markets (30 days)",
+      "markets7Days": "{{count}} Markets (7 days)",
+      "markets10k": "{{count}} Markets ($10K+)"
+    }
+  },
+  "carousel": {
+    "topCandidates": "Top Candidates",
+    "total": "total",
+    "noCandidates": "No candidates available"
+  },
+  "stats": {
+    "tvl": "Total Value Locked",
+    "activeMarkets": "Active Event Prediction Markets",
+    "activeTraders": "Active Traders",
+    "tradersSubtitle": "(As measured by activity over the last month.)",
+    "volume24h": "24h Volume"
+  },
+  "wallet": {
+    "connect": "Connect Wallet",
+    "disconnect": "Disconnect",
+    "connectionFailed": "Connection Failed",
+    "connectionFailedDesc": "Failed to connect wallet. Please try again.",
+    "copied": "Copied!",
+    "copiedDesc": "Account ID copied to clipboard",
+    "balance": "Balance",
+    "balances": "Balances",
+    "hbarBalance": "HBAR Balance",
+    "usdcBalance": "USDC Balance",
+    "copyAddress": "Copy Address",
+    "viewOnHashscan": "View on Hashscan",
+    "persona": "Wallet Persona",
+    "accountId": "Account ID",
+    "refreshBalances": "Refresh Balances",
+    "balancesRefreshed": "Balances Updated",
+    "balancesRefreshedDesc": "Your wallet balances have been refreshed",
+    "refreshFailed": "Failed to refresh balances"
+  },
+  "footer": {
+    "copyright": "© 2025 Prism Market. All rights reserved."
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "yes": "Yes",
+    "no": "No",
+    "poweredBy": "Powered by",
+    "all": "All"
+  },
+  "rewards": {
+    "earnings": "EARNINGS",
+    "dailyRewards": "Daily Rewards",
+    "description": "Earn rewards by placing orders within the spread. The tighter the spread, the higher your potential earnings.",
+    "enableRewards": "Enable Rewards",
+    "rewardsActive": "Rewards Active",
+    "todaysEarnings": "Today's Earnings",
+    "totalEarnings": "Total Earnings",
+    "walletConnected": "Wallet connected! Rewards enabled.",
+    "rewardsEnabled": "Rewards enabled!",
+    "failedToConnect": "Failed to connect wallet",
+    "searchPlaceholder": "Search markets...",
+    "noMarketsFound": "No markets found matching your criteria",
+    "tableHeaders": {
+      "market": "Market",
+      "maxSpread": "Max Spread",
+      "minShares": "Min Shares",
+      "reward": "Reward",
+      "competition": "Comp.",
+      "earnings": "Earnings",
+      "percent": "Percent"
+    },
+    "connectWalletToFavorite": "Connect wallet to save favorites",
+    "toggleFavorite": "Toggle favorite",
+    "categoryAll": "All",
+    "categoryFavourite": "Favourite"
+  },
+  "stake": {
+    "title": "Stake your PRSM to Earn Rewards",
+    "subtitle": "Stake PRSM and receive xPRSM.",
+    "approximateApr": "Approximate APR",
+    "totalValueLocked": "Total Value Locked",
+    "stakeTokens": "Stake PRSM Tokens",
+    "stakeTokensDesc": "Stake your PRSM tokens to receive xPRSM and earn rewards",
+    "amountToStake": "Amount to Stake",
+    "available": "Available:",
+    "youWillReceive": "You will receive",
+    "connectWalletToStake": "Connect Wallet to Stake",
+    "stakePrsmComingSoon": "Stake PRSM (Coming Soon)",
+    "howItWorks": "How it Works",
+    "step1Title": "Stake PRSM",
+    "step1Desc": "Stake your PRSM tokens anytime",
+    "step2Title": "Receive xPRSM",
+    "step2Desc": "Get xPRSM governance tokens with voting power",
+    "step3Title": "Earn Rewards",
+    "step3Desc": "Accumulate rewards and increased voting power",
+    "exchangeRate": "Exchange Rate",
+    "prsm": "PRSM",
+    "xprsm": "xPRSM",
+    "invalidInput": "Invalid Input",
+    "positiveAmountsOnly": "You can only stake positive amounts of PRSM.",
+    "wholeNumbersOnly": "Please enter a whole number."
+  },
+  "marketFactory": {
+    "title": "Market Factory",
+    "description": "Create and deploy prediction markets through community governance",
+    "tabs": {
+      "create": "Create Market",
+      "governance": "Governance Dashboard"
+    },
+    "steps": {
+      "marketDetails": "Market Details",
+      "resolutionParams": "Resolution Parameters",
+      "economicParams": "Economic Parameters",
+      "reviewSubmit": "Review & Submit"
+    },
+    "form": {
+      "proposalTitle": "Proposal Title",
+      "proposalTitlePlaceholder": "Brief title for your proposal",
+      "proposalDescription": "Proposal Description",
+      "proposalDescriptionPlaceholder": "Explain why this market should be created",
+      "marketType": "Market Type",
+      "selectMarketType": "Select market type",
+      "binaryMarket": "Binary Market (Yes/No)",
+      "multipleChoice": "Multiple Choice Market",
+      "marketQuestion": "Market Question",
+      "marketQuestionPlaceholder": "e.g., Will Bitcoin reach $100,000 by end of 2024?",
+      "marketDescription": "Market Description",
+      "marketDescriptionPlaceholder": "Detailed description of the market and conditions",
+      "proposalVotingEndDate": "Proposal Voting End Date",
+      "selectProposalEndDate": "Select proposal voting end date",
+      "proposalVotingDateHint": "Proposal voting must end between 1-14 days from now and before the market resolution date.",
+      "marketImage": "Market Image",
+      "uploadMarketImage": "Upload market image",
+      "marketOutcomes": "Market Outcomes",
+      "yesOutcome": "Yes Outcome",
+      "noOutcome": "No Outcome",
+      "outcome": "Outcome",
+      "uploadImage": "Upload image",
+      "addOutcome": "Add Outcome",
+      "resolutionDate": "Resolution Date",
+      "selectResolutionDate": "Select resolution date",
+      "oracleType": "Oracle Type",
+      "selectOracleType": "Select oracle type",
+      "manualResolution": "Manual Resolution",
+      "apiOracle": "API Oracle",
+      "consensusOracle": "Consensus Oracle",
+      "apiEndpoint": "API Endpoint",
+      "initialLiquidity": "Initial Liquidity (HBAR)",
+      "collateralType": "Collateral Type",
+      "selectCollateralType": "Select collateral type",
+      "previous": "Previous",
+      "next": "Next",
+      "creating": "Creating...",
+      "createProposal": "Create Proposal"
+    },
+    "review": {
+      "title": "Review Your Proposal",
+      "proposalDetails": "Proposal Details",
+      "titleLabel": "Title:",
+      "descriptionLabel": "Description:",
+      "marketConfig": "Market Configuration",
+      "questionLabel": "Question:",
+      "outcomesLabel": "Outcomes:",
+      "resolutionParams": "Resolution Parameters",
+      "resolutionDateLabel": "Resolution Date:",
+      "oracleTypeLabel": "Oracle Type:",
+      "economicParams": "Economic Parameters",
+      "initialLiquidityLabel": "Initial Liquidity:",
+      "collateralTypeLabel": "Collateral Type:"
+    },
+    "alerts": {
+      "connectWallet": "Please connect your wallet to create a market proposal.",
+      "votingPowerRequired": "You need at least {{required}} voting power to create proposals. You currently have {{current}} voting power."
+    },
+    "dashboard": {
+      "yourVotingPower": "Your Voting Power",
+      "tokenBalance": "Token Balance",
+      "stakedBalance": "Staked Balance",
+      "totalVotingPower": "Total Voting Power",
+      "activeProposals": "Active Proposals",
+      "myProposals": "My Proposals",
+      "votingHistory": "Voting History",
+      "noActiveProposals": "No active proposals",
+      "noProposalsYet": "You haven't created any proposals yet",
+      "noVotingHistory": "No voting history yet",
+      "connectWalletDashboard": "Connect your wallet to view governance dashboard",
+      "proposalVoting": "Proposal Voting",
+      "electionVoting": "Election Voting",
+      "proposalPhaseEnded": "Proposal Phase Ended",
+      "electionEnded": "Election Ended",
+      "quorumProgress": "Quorum Progress",
+      "for": "For",
+      "against": "Against",
+      "abstain": "Abstain",
+      "voteFor": "Vote For",
+      "voteAgainst": "Vote Against",
+      "youHaveVoted": "You have voted",
+      "ends": "Ends:",
+      "created": "Created:",
+      "submitting": "Submitting...",
+      "submitForVoting": "Submit for Voting",
+      "proposal": "Proposal",
+      "votingPower": "voting power"
+    }
+  },
+  "portfolio": {
+    "title": "My Portfolio",
+    "subtitle": "Track your event prediction market positions and performance",
+    "summary": {
+      "totalValue": "Total Portfolio Value",
+      "totalValueDesc": "Total market value of positions",
+      "totalPnL": "Total P&L",
+      "overall": "overall",
+      "dayChange": "Day Change",
+      "today": "today",
+      "totalCost": "Total Cost",
+      "totalCostDesc": "Total invested amount"
+    },
+    "holdings": {
+      "title": "My Positions",
+      "market": "Market",
+      "position": "Position",
+      "shares": "Shares",
+      "avgPrice": "Avg Price",
+      "currentPrice": "Current Price",
+      "marketValue": "Market Value",
+      "pnl": "P&L",
+      "endDate": "End Date",
+      "action": "Action",
+      "trade": "Trade"
+    },
+    "errors": {
+      "loadFailed": "Failed to load portfolio data:"
+    },
+    "empty": {
+      "message": "No positions found. Start trading on some markets to build your portfolio!"
+    }
+  },
+  "wallet": {
+    "connect": "Connect Wallet",
+    "disconnect": "Disconnect",
+    "connectionFailed": "Connection Failed",
+    "connectionFailedDesc": "Failed to connect to wallet",
+    "copied": "Copied",
+    "copiedDesc": "Account ID copied to clipboard",
+    "accountId": "Account ID",
+    "hbarBalance": "HBAR Balance",
+    "usdcBalance": "USDC Balance",
+    "prsmBalance": "PRSM Balance",
+    "xprsmBalance": "xPRSM Balance",
+    "copyAddress": "Copy Address",
+    "viewOnHashscan": "View on Hashscan",
+    "persona": "Wallet Persona",
+    "balances": "Balances",
+    "refreshBalances": "Refresh Balances",
+    "balancesRefreshed": "Balances Refreshed",
+    "balancesRefreshedDesc": "Your wallet balances have been updated",
+    "refreshFailed": "Failed to refresh balances",
+    "testnet": "Testnet",
+    "mainnet": "Mainnet"
+  },
+  "governance": {
+    "title": "Governance",
+    "subtitle": "Participate in protocol governance by voting on proposals with your xPRSM tokens. Shape the future of Prism Market through decentralized decision-making.",
+    "votingPower": {
+      "title": "Your Voting Power",
+      "connectedDesc": "Your current xPRSM balance and voting power",
+      "disconnectedDesc": "Connect your wallet to view your voting power",
+      "stakePrsm": "Stake PRSM",
+      "connectWallet": "Please connect your wallet to participate in governance",
+      "loadFailed": "Failed to load governance token balance",
+      "xprsmBalance": "xPRSM balance",
+      "activeVoter": "Active Voter"
+    },
+    "dao": {
+      "title": "The Prism Market DAO",
+      "subtitle": "A decentralized autonomous organization empowering xPRSM holders to collectively govern the protocol, shape market creation, and guide the evolution of prediction markets on Hedera.",
+      "tokenGovernance": {
+        "title": "Token Governance",
+        "description": "PRSM is the utility token earned through participation. Stake PRSM to receive xPRSM governance tokens with voting power. Longer staking periods provide higher multipliers."
+      },
+      "governanceScope": {
+        "title": "Governance Scope",
+        "description": "The DAO governs market creation, protocol parameters, treasury allocations, and platform fees. All major decisions require community consensus."
+      },
+      "proposalLifecycle": {
+        "title": "Proposal Lifecycle",
+        "description": "Proposals progress through Draft → Proposal Voting → Election Voting phases. Each requires minimum quorum thresholds before advancing."
+      }
+    },
+    "parameters": {
+      "title": "Governance Parameters",
+      "subtitle": "Current settings that govern the proposal and voting process",
+      "minXprsm": {
+        "label": "Min. xPRSM to Create",
+        "value": "1,000 xPRSM",
+        "description": "Minimum voting power required to submit proposals"
+      },
+      "proposalQuorum": {
+        "label": "Proposal Quorum",
+        "value": "10,000 xPRSM",
+        "description": "Voting power needed to pass proposal phase"
+      },
+      "electionQuorum": {
+        "label": "Election Quorum",
+        "value": "15,000 xPRSM",
+        "description": "Voting power needed for final approval"
+      },
+      "votingDuration": {
+        "label": "Voting Duration",
+        "value": "24 hours/phase",
+        "description": "Time allocated for each voting phase"
+      }
+    },
+    "features": {
+      "title": "Why Governance Matters",
+      "voteOnProposals": {
+        "title": "Vote on Proposals",
+        "description": "Cast your vote on protocol upgrades, market creation proposals, and parameter changes using your xPRSM tokens."
+      },
+      "communityDriven": {
+        "title": "Community Driven",
+        "description": "Every xPRSM holder has a voice in the direction of the protocol. Your stake determines your voting power."
+      },
+      "transparentProcess": {
+        "title": "Transparent Process",
+        "description": "All proposals and votes are recorded on-chain, ensuring full transparency and accountability."
+      },
+      "shapeFuture": {
+        "title": "Shape the Future",
+        "description": "Influence which markets get created, how rewards are distributed, and the evolution of the platform."
+      }
+    },
+    "howItWorks": {
+      "title": "How Governance Works",
+      "step1": {
+        "title": "Acquire PRSM Tokens",
+        "description": "Earn PRSM tokens through trading, providing liquidity, or participating in the ecosystem."
+      },
+      "step2": {
+        "title": "Stake for xPRSM",
+        "description": "Stake your PRSM tokens to receive xPRSM governance tokens with voting power."
+      },
+      "step3": {
+        "title": "Review Proposals",
+        "description": "Browse active proposals including market creation, parameter changes, and protocol upgrades."
+      },
+      "step4": {
+        "title": "Cast Your Vote",
+        "description": "Vote FOR, AGAINST, or ABSTAIN on proposals. Your voting power is proportional to your xPRSM holdings."
+      }
+    },
+    "activeProposals": "Active Proposals"
+  }
+}
