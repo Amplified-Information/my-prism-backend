@@ -1,0 +1,12 @@
+.DS_Store
+old
+_old
+.env
+
+node_modules/
+
+.vscode
+
+/target/
+/target/release/
+/target/debug/

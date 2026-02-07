@@ -1,0 +1,3 @@
+# services:
+#   proxy:
+#     image: ghcr.io/prismmarketlabs/proxy:0.1.2

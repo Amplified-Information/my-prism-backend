@@ -1,0 +1,32 @@
+{
+  "name": "simulator",
+  "type": "module",
+  "version": "0.0.1",
+  "description": "",
+  "license": "ISC",
+  "author": "",
+  "main": "index.js",
+  "scripts": {
+    "gen": "mkdir -p ./gen && npm install -g @protobuf-ts/plugin && protoc -I=../proto --ts_out=gen ../proto/*.proto",
+    "sim": "npx tsx simulator.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/node": "^24.10.0",
+    "@types/uuid": "^10.0.0",
+    "eslint": "^9.39.1",
+    "globals": "^16.5.0",
+    "jiti": "^2.6.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.3"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.14.1",
+    "@protobuf-ts/grpc-transport": "^2.11.1",
+    "@protobuf-ts/runtime": "^2.11.1",
+    "@protobuf-ts/runtime-rpc": "^2.11.1",
+    "uuid": "^13.0.0"
+  }
+}

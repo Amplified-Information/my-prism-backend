@@ -1,0 +1,2 @@
+ALTER TABLE order_requests
+ADD COLUMN fully_matched_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;
