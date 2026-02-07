@@ -113,6 +113,10 @@ Use the VSCode plugin called "Database Client"
 
 ![Database Client plugin](resources/db.png)
 
+Login details:
+
+![login details](<resources/loginInfo.png>)
+
 ## yaak/Postman
 
 Please use [yaak](https://yaak.app/) (gRPC protocol) for graphical requests to the following services:

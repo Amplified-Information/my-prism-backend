@@ -17,3 +17,11 @@ const (
 	KEY_TYPE_ECDSA   HederaKeyType = 2
 	// Future key types
 )
+
+type RolesType string
+
+const (
+	ADMIN RolesType = "ADMIN"
+	USER  RolesType = "USER"
+	// Future roles
+)

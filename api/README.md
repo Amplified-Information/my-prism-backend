@@ -103,6 +103,10 @@ TO=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 FROM=$(date -u -d "-5 minutes" +"%Y-%m-%dT%H:%M:%SZ")
 easyrpc c -a localhost:8090 -w -i ./api/proto -p api.proto -d '{"marketId":"","net":"testnet","resolution":"hour","from":"'$FROM'","to":"'$TO'"}' api.ApiServicePublic.PriceHistory
 
+### auth:
+
+# get a challenge:
+easyrpc c -a localhost:8888 -i ./api/proto -p api.proto -d '{"accountId":"0.0.7090546","network":"testnet"}' api.ApiAuth.GetChallenge
 
 
 

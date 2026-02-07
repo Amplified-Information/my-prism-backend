@@ -4,6 +4,8 @@ import (
 	pb_api "api/gen"
 	sqlc "api/gen/sqlc"
 	repositories "api/server/repositories"
+	"context"
+	"time"
 )
 
 type PositionsService struct {
@@ -43,7 +45,7 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 	}
 
 	response := &pb_api.UserPortfolioResponse{
-		Positions:             make(map[string]*pb_api.Position),
+		Positions:             make(map[string]*pb_api.PositionInfo),
 		OpenPredictionIntents: make(map[string]*pb_api.PredictionIntents),
 	}
 
@@ -59,14 +61,22 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 		}
 
 		position := &pb_api.Position{
+			MarketId:   userPosition.MarketID.String(),
+			EvmAddress: userPosition.EvmAddress,
 			Yes:        uint64(userPosition.NYes),
 			No:         uint64(userPosition.NNo),
+			UpdatedAt:  userPosition.UpdatedAt.Format(time.RFC3339),
+			CreatedAt:  userPosition.CreatedAt.Format(time.RFC3339),
+		}
+
+		elem := &pb_api.PositionInfo{
+			Position:   position,
 			PriceUsd:   priceUsd,
 			IsPaused:   market.IsPaused,
 			ResolvedAt: market.ResolvedAt.Time.String(),
 		}
 
-		response.Positions[userPosition.MarketID.String()] = position
+		response.Positions[userPosition.MarketID.String()] = elem
 	}
 
 	// now construct the open orderbookPositions by retrieving all open orders from prediction_intents:
@@ -113,4 +123,26 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 	// 	SetFunction("getUserTokens", params)
 	// 	// TODO - remove this print!
 	// fmt.Println(query.GetContractID().String())
+}
+
+func (ps *PositionsService) GetAllPositions(limit int32, offset int32) ([]*pb_api.Position, error) {
+	positionsResp, err := ps.positionsRepository.GetAllPositions(context.Background(), int(limit), int(offset))
+	if err != nil {
+		return nil, ps.log.Log(ERROR, "failed to get all positions: %v", err)
+	}
+
+	var apiPositions []*pb_api.Position
+	for _, p := range positionsResp {
+		apiPosition := &pb_api.Position{
+			MarketId:   p.MarketID.String(),
+			EvmAddress: p.EvmAddress,
+			Yes:        uint64(p.NYes),
+			No:         uint64(p.NNo),
+			UpdatedAt:  p.UpdatedAt.Format(time.RFC3339),
+			CreatedAt:  p.CreatedAt.Format(time.RFC3339),
+		}
+		apiPositions = append(apiPositions, apiPosition)
+	}
+
+	return apiPositions, nil
 }

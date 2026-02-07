@@ -22,6 +22,11 @@ service ApiServicePublic {
   rpc GetComments(GetCommentsRequest) returns (GetCommentsResponse);
   rpc GetUserPortfolio(UserPortfolioRequest) returns (UserPortfolioResponse);
   rpc CancelPredictionIntent(CancelOrderRequest) returns (StdResponse);
+
+  // authenticated endpoints
+  rpc GetAllMatches(LimitOffsetRequest) returns (MatchesResponse);
+  rpc GetAllPositions(LimitOffsetRequest) returns (PositionsResponse);
+  rpc GetAllPredictionIntents(LimitOffsetRequest) returns (PredictionIntentsResponse);
 }
 
 service ApiServiceInternal {
@@ -31,8 +36,8 @@ service ApiServiceInternal {
 }
 
 service ApiAuth {
-  rpc GetChallenge(Empty) returns (StdResponse);
-  rpc VerifyChallenge(ChallengeRequest) returns (StdResponse); // pass the signature in the
+  rpc GetChallenge(ChallengeRequest) returns (StdResponse);
+  rpc VerifyChallenge(VerifyChallengeRequest) returns (StdResponse); // pass the signature in the
 }
 
 message Empty {}
@@ -60,11 +65,15 @@ message StdResponse {
 }
 
 message ChallengeRequest {
-  string challenge = 1    [json_name = "challenge"]; // the challenge string that was originally sent to the client, included here to prevent replay attacks and to allow stateless verification on the server
-  string account_id = 2   [json_name = "accountId",   (validate.rules).string = {pattern: "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$"} /* Hedera account ID (no leading zeros) */];
-  string sig = 3          [json_name = "sig",         (validate.rules).string = {pattern: "^[A-Za-z0-9+/]{20,100}={0,2}$"} /* base64-encoded signature (URL-safe base64 without padding, min 20 chars, max 100 chars) */];
-  string public_key = 4   [json_name = "publicKey",   (validate.rules).string = {pattern: "^(04|03|02)[0-9a-fA-F]{32,256}$"} /* uncompressed (04...) or compressed (02... or 03...) public key (ed25519, ecdsa, etc.) in hex format */];
-  uint32 key_type = 5     [json_name = "keyType",     (validate.rules).uint32 = {in: [1, 2]} /* 1 = ed25519, 2 = ecdsa_secp256k1 */];
+  string account_id = 1   [json_name = "accountId",   (validate.rules).string = {pattern: "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$"} /* Hedera account ID (no leading zeros) */];
+  string network = 2      [json_name = "network",     (validate.rules).string = {in: ["mainnet", "testnet", "previewnet"]} /* Hedera network */];
+}
+
+message VerifyChallengeRequest {
+  string challenge_response = 1          [json_name = "challengeResponse", (validate.rules).string = {min_len: 10, max_len: 2048}]; // the signature of the challenge string, signed by the client and sent back to the server for verification
+  string public_key = 2                  [json_name = "publicKey",         (validate.rules).string = {pattern: "^(04|03|02)[0-9a-fA-F]{32,256}$"} /* uncompressed (04...) or compressed (02... or 03...) public key (ed25519, ecdsa, etc.) in hex format */];
+  uint32 key_type = 3                    [json_name = "keyType",           (validate.rules).uint32 = {in: [1, 2]} /* 1 = ed25519, 2 = ecdsa_secp256k1 */];
+  ChallengeRequest challenge_request = 4 [json_name = "challengeRequest"]; // include the original ChallengeRequest for stateless verification
 }
 
 message MacroMetadataResponse {
@@ -91,11 +100,12 @@ message UserPortfolioRequest {
   optional string market_id = 3    [json_name = "marketId",    (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
 }
 message Position {
-  uint64 yes = 1              [json_name = "yes"];
-  uint64 no = 2               [json_name = "no"];
-  float price_usd = 3         [json_name = "priceUsd"];
-  bool is_paused = 4          [json_name = "isPaused"];
-  string resolved_at = 5      [json_name = "resolvedAt"];
+  string market_id = 1        [json_name = "marketId"];
+  string evm_address = 2      [json_name = "evmAddress"];
+  uint64 yes = 3              [json_name = "yes"];
+  uint64 no = 4               [json_name = "no"];
+  string updated_at = 5      [json_name = "updatedAt"];
+  string created_at = 6      [json_name = "createdAt"];
 }
 
 message PredictionIntent {
@@ -113,8 +123,15 @@ message PredictionIntents {
   repeated PredictionIntent prediction_intents = 1   [json_name = "openPredictionIntents"];
 }
 
+message PositionInfo {
+  Position position = 1         [json_name = "position"];
+  float price_usd = 2           [json_name = "priceUsd"];
+  bool is_paused = 3            [json_name = "isPaused"];
+  string resolved_at = 4        [json_name = "resolvedAt"];
+}
+
 message UserPortfolioResponse {
-  map<string, Position> positions = 1                          [json_name = "positions"];
+  map<string, PositionInfo> positions = 1                      [json_name = "positions"];
   map<string, PredictionIntents> open_prediction_intents = 2   [json_name = "openPredictionIntents"];
 }
 
@@ -222,4 +239,30 @@ message ClobOrder {
 message CancelOrderRequest {
   string market_id = 1      [json_name = "marketId",  (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
   string tx_id = 2          [json_name = "txId",      (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
+}
+
+
+
+
+message Match {
+  string market_id = 1       [json_name = "marketId"];
+  string tx_id1 = 2          [json_name = "txId1"];
+  string tx_id2 = 3          [json_name = "txId2"];
+  double price_usd = 5       [json_name = "priceUsd"];
+  double qty1 = 6            [json_name = "qty1"];
+  double qty2 = 7            [json_name = "qty2"];
+  string created_at = 8      [json_name = "matchedAt"];
+  string tx_hash = 9         [json_name = "txHash"];
+}
+
+message MatchesResponse {
+  repeated Match matches = 1;
+}
+
+message PositionsResponse {
+  repeated Position positions = 1;
+}
+
+message PredictionIntentsResponse {
+  repeated PredictionIntentRequest /* PIRequest for now*/ prediction_intents = 1;
 }

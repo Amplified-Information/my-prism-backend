@@ -197,3 +197,19 @@ func (matchesRepository *MatchesRepository) GetAllMatchesForMarketIdTxId(marketI
 
 	return matches, nil
 }
+
+func (matchesRepository *MatchesRepository) GetAllMatches(ctx context.Context, limit int, offset int) ([]sqlc.Match, error) {
+	if matchesRepository.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	q := sqlc.New(matchesRepository.db)
+	matches, err := q.GetAllMatches(context.Background(), sqlc.GetAllMatchesParams{
+		Limit:  int32(limit),
+		Offset: int32(offset),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("GetAllMatches failed: %v", err)
+	}
+
+	return matches, nil
+}

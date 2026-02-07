@@ -75,12 +75,12 @@ func (positionsRepository *PositionsRepository) GetUserPositionsByMarketId(evmAd
 	return converted, err
 }
 
-func (dbRespository *DbRepository) UpsertUserPositions(evmAddress string, marketId string, nYesTokens int64, nNoTokens int64) (*sqlc.Position, error) {
-	if dbRespository.db == nil {
+func (positionsRepository *PositionsRepository) UpsertUserPositions(evmAddress string, marketId string, nYesTokens int64, nNoTokens int64) (*sqlc.Position, error) {
+	if positionsRepository.db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
 
-	q := sqlc.New(dbRespository.db)
+	q := sqlc.New(positionsRepository.db)
 
 	result, err := q.UpsertPositions(context.Background(), sqlc.UpsertPositionsParams{
 		MarketID:   uuid.MustParse(marketId),
@@ -94,4 +94,22 @@ func (dbRespository *DbRepository) UpsertUserPositions(evmAddress string, market
 
 	log.Printf("Updated user position tokens: %+v", result)
 	return &result, nil
+}
+
+func (positionsRepository *PositionsRepository) GetAllPositions(ctx context.Context, limit int, offset int) ([]sqlc.Position, error) {
+	if positionsRepository.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	q := sqlc.New(positionsRepository.db)
+
+	result, err := q.GetAllPositions(ctx, sqlc.GetAllPositionsParams{
+		Limit:  int32(limit),
+		Offset: int32(offset),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("GetAllPositions failed: %v", err)
+	}
+
+	return result, nil
 }

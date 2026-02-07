@@ -21,20 +21,22 @@ import (
 )
 
 type HederaService struct {
-	log               *LogService
-	hedera_clients    map[string]*hiero.Client // look up based on 'previewnet', 'testnet', 'mainnet'
-	dbRepository      *repositories.DbRepository
-	priceRepository   *repositories.PriceRepository
-	marketsRepository *repositories.MarketsRepository
-	matchesRepository *repositories.MatchesRepository
+	log                 *LogService
+	hedera_clients      map[string]*hiero.Client // look up based on 'previewnet', 'testnet', 'mainnet'
+	dbRepository        *repositories.DbRepository
+	priceRepository     *repositories.PriceRepository
+	marketsRepository   *repositories.MarketsRepository
+	matchesRepository   *repositories.MatchesRepository
+	positionsRepository *repositories.PositionsRepository
 }
 
-func (hs *HederaService) InitHedera(log *LogService, dbRepository *repositories.DbRepository, priceRepository *repositories.PriceRepository, marketsRepository *repositories.MarketsRepository, matchesRepository *repositories.MatchesRepository) error {
+func (hs *HederaService) InitHedera(log *LogService, dbRepository *repositories.DbRepository, priceRepository *repositories.PriceRepository, marketsRepository *repositories.MarketsRepository, matchesRepository *repositories.MatchesRepository, positionsRepository *repositories.PositionsRepository) error {
 	hs.log = log
 	hs.dbRepository = dbRepository
 	hs.priceRepository = priceRepository
 	hs.marketsRepository = marketsRepository
 	hs.matchesRepository = matchesRepository
+	hs.positionsRepository = positionsRepository
 
 	// First initialize the map to avoid nil map assignment
 	hs.hedera_clients = make(map[string]*hiero.Client)
@@ -535,12 +537,12 @@ func (hs *HederaService) BuyPositionTokens(sideYes *pb_clob.CreateOrderRequestCl
 	// }
 
 	// 3. record the YES/NO balances
-	resultYes, err := hs.dbRepository.UpsertUserPositions(sideYes.EvmAddress, sideYes.MarketId, nYesTokens.Int64(), nNoTokens.Int64())
+	resultYes, err := hs.positionsRepository.UpsertUserPositions(sideYes.EvmAddress, sideYes.MarketId, nYesTokens.Int64(), nNoTokens.Int64())
 	if err != nil {
 		return false, hs.log.Log(ERROR, "Error upserting user position tokens for %s on market %s: %v", sideYes.EvmAddress, sideYes.MarketId, err)
 	}
 	hs.log.Log(INFO, "In marketId=%s, user with evmAddress=%s, has nYes=%d | nNo=%d", resultYes.MarketID, resultYes.EvmAddress, resultYes.NYes, resultYes.NNo)
-	resultNo, err := hs.dbRepository.UpsertUserPositions(sideNo.EvmAddress, sideNo.MarketId, nYesTokens2.Int64(), nNoTokens2.Int64())
+	resultNo, err := hs.positionsRepository.UpsertUserPositions(sideNo.EvmAddress, sideNo.MarketId, nYesTokens2.Int64(), nNoTokens2.Int64())
 	if err != nil {
 		return false, hs.log.Log(ERROR, "Error upserting user position tokens for %s on market %s: %v", sideNo.EvmAddress, sideNo.MarketId, err)
 	}

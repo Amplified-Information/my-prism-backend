@@ -230,3 +230,20 @@ func (pir *PredictionIntentsRepository) GetAllOpenPredictionIntentsByEvmAddress(
 
 	return predictionIntents, nil
 }
+
+func (pir *PredictionIntentsRepository) GetAllPredictionIntents(limit int, offset int) ([]sqlc.PredictionIntent, error) {
+	if pir.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	q := sqlc.New(pir.db)
+	predictionIntents, err := q.GetAllPredictionIntents(context.Background(), sqlc.GetAllPredictionIntentsParams{
+		Limit:  int32(limit),
+		Offset: int32(offset),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("GetAllPredictionIntents failed: %v", err)
+	}
+
+	return predictionIntents, nil
+}

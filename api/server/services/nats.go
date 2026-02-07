@@ -261,6 +261,9 @@ func (ns *NatsService) HandleOrderMatches() error {
 		if !isOK {
 			ns.log.Log(ERROR, "BuyPositionTokens returned !isOK for txId=%s, txId=%s", orderRequestClobTuple[0].TxId, orderRequestClobTuple[1].TxId)
 		}
+
+		// TODO - handle situation when smart contract fails
+
 	})
 	if err != nil {
 		return err

@@ -24,7 +24,8 @@ SELECT
   evm_address,
   n_yes,
   n_no,
-  updated_at
+  updated_at,
+  created_at
 FROM positions
 WHERE evm_address = $1;
 
@@ -34,7 +35,8 @@ SELECT
   evm_address,
   n_yes,
   n_no,
-  updated_at
+  updated_at,
+  created_at
 FROM positions
 WHERE evm_address = $1 AND market_id = $2;
 
@@ -43,6 +45,16 @@ WHERE evm_address = $1 AND market_id = $2;
 SELECT COUNT(DISTINCT evm_address) 
 FROM positions
 WHERE updated_at >= NOW() - INTERVAL '30 days';
+
+
+-- name: GetAllPositions :many
+SELECT *
+FROM positions
+ORDER BY updated_at DESC
+LIMIT $1 OFFSET $2;
+
+
+
 
 -- UPDATE
 

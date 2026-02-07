@@ -81,6 +81,17 @@ static_resources:
                           timeout: 0s
                           max_stream_duration:
                             grpc_timeout_header_max: 0s
+                      - match:
+                          prefix: "/api.ApiAuth/"            # proto package 'api'
+                          headers:
+                            - name: "content-type"
+                              string_match:
+                                prefix: "application/grpc-web"
+                        route:
+                          cluster: api_service
+                          timeout: 0s
+                          max_stream_duration:
+                            grpc_timeout_header_max: 0s
                       ###
                       # Route gRPC requests (identified by content-type: application/grpc) 
                       ###
@@ -98,6 +109,17 @@ static_resources:
                             grpc_timeout_header_max: 0s
                       - match:
                           prefix: "/api.ApiServicePublic/"   # proto package 'api'
+                          headers:
+                            - name: "content-type"
+                              string_match:
+                                prefix: "application/grpc"
+                        route:
+                          cluster: api_service
+                          timeout: 0s
+                          max_stream_duration:
+                            grpc_timeout_header_max: 0s
+                      - match:
+                          prefix: "/api.ApiAuth/"            # proto package 'api'
                           headers:
                             - name: "content-type"
                               string_match:

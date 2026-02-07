@@ -49,13 +49,45 @@ CREATE FUNCTION public.update_updated_at_column() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
-	NEW.updated_at = CURRENT_TIMESTAMP;
-	RETURN NEW;
+  NEW.updated_at = NOW();
+  RETURN NEW;
 END;
 $$;
 
 
 ALTER FUNCTION public.update_updated_at_column() OWNER TO your_db_user;
+
+--
+-- Name: update_user_roles_updated_at_column(); Type: FUNCTION; Schema: public; Owner: your_db_user
+--
+
+CREATE FUNCTION public.update_user_roles_updated_at_column() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION public.update_user_roles_updated_at_column() OWNER TO your_db_user;
+
+--
+-- Name: update_users_updated_at_column(); Type: FUNCTION; Schema: public; Owner: your_db_user
+--
+
+CREATE FUNCTION public.update_users_updated_at_column() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION public.update_users_updated_at_column() OWNER TO your_db_user;
 
 SET default_tablespace = '';
 
@@ -181,7 +213,7 @@ CREATE TABLE public.markets (
     smart_contract_id character varying(256) DEFAULT '0.0.0'::character varying NOT NULL,
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     closes_at timestamp with time zone DEFAULT (now() + '30 days'::interval) NOT NULL,
-    description text,
+    description text NOT NULL,
     is_suspended boolean DEFAULT false NOT NULL,
     CONSTRAINT smart_contract_id_check CHECK (((length((smart_contract_id)::text) >= 5) AND ((smart_contract_id)::text ~~ '%.%.%'::text)))
 );
@@ -557,6 +589,43 @@ CREATE TABLE public.price_history_p20260311 (
 ALTER TABLE public.price_history_p20260311 OWNER TO your_db_user;
 
 --
+-- Name: roles; Type: TABLE; Schema: public; Owner: your_db_user
+--
+
+CREATE TABLE public.roles (
+    id integer NOT NULL,
+    name character varying(255) NOT NULL,
+    description text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.roles OWNER TO your_db_user;
+
+--
+-- Name: roles_id_seq; Type: SEQUENCE; Schema: public; Owner: your_db_user
+--
+
+CREATE SEQUENCE public.roles_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.roles_id_seq OWNER TO your_db_user;
+
+--
+-- Name: roles_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: your_db_user
+--
+
+ALTER SEQUENCE public.roles_id_seq OWNED BY public.roles.id;
+
+
+--
 -- Name: schema_migrations; Type: TABLE; Schema: public; Owner: your_db_user
 --
 
@@ -567,6 +636,83 @@ CREATE TABLE public.schema_migrations (
 
 
 ALTER TABLE public.schema_migrations OWNER TO your_db_user;
+
+--
+-- Name: user_roles; Type: TABLE; Schema: public; Owner: your_db_user
+--
+
+CREATE TABLE public.user_roles (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    role_id integer NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.user_roles OWNER TO your_db_user;
+
+--
+-- Name: user_roles_id_seq; Type: SEQUENCE; Schema: public; Owner: your_db_user
+--
+
+CREATE SEQUENCE public.user_roles_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.user_roles_id_seq OWNER TO your_db_user;
+
+--
+-- Name: user_roles_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: your_db_user
+--
+
+ALTER SEQUENCE public.user_roles_id_seq OWNED BY public.user_roles.id;
+
+
+--
+-- Name: users; Type: TABLE; Schema: public; Owner: your_db_user
+--
+
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    wallet_id character varying(255) NOT NULL,
+    network character varying(255) NOT NULL,
+    challenge bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT users_network_check CHECK (((network)::text = ANY ((ARRAY['mainnet'::character varying, 'testnet'::character varying, 'previewnet'::character varying])::text[]))),
+    CONSTRAINT users_wallet_id_check CHECK (((wallet_id)::text ~ '^\d+\.\d+\.\d+$'::text))
+);
+
+
+ALTER TABLE public.users OWNER TO your_db_user;
+
+--
+-- Name: users_id_seq; Type: SEQUENCE; Schema: public; Owner: your_db_user
+--
+
+CREATE SEQUENCE public.users_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.users_id_seq OWNER TO your_db_user;
+
+--
+-- Name: users_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: your_db_user
+--
+
+ALTER SEQUENCE public.users_id_seq OWNED BY public.users.id;
+
 
 --
 -- Name: price_history_default; Type: TABLE ATTACH; Schema: public; Owner: your_db_user
@@ -699,6 +845,27 @@ ALTER TABLE ONLY public.newsletter ALTER COLUMN id SET DEFAULT nextval('public.n
 --
 
 ALTER TABLE ONLY public.positions ALTER COLUMN id SET DEFAULT nextval('public.positions_id_seq'::regclass);
+
+
+--
+-- Name: roles id; Type: DEFAULT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.roles ALTER COLUMN id SET DEFAULT nextval('public.roles_id_seq'::regclass);
+
+
+--
+-- Name: user_roles id; Type: DEFAULT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.user_roles ALTER COLUMN id SET DEFAULT nextval('public.user_roles_id_seq'::regclass);
+
+
+--
+-- Name: users id; Type: DEFAULT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.users ALTER COLUMN id SET DEFAULT nextval('public.users_id_seq'::regclass);
 
 
 --
@@ -910,6 +1077,22 @@ ALTER TABLE ONLY public.price_history_p20260311
 
 
 --
+-- Name: roles roles_name_key; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.roles
+    ADD CONSTRAINT roles_name_key UNIQUE (name);
+
+
+--
+-- Name: roles roles_pkey; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.roles
+    ADD CONSTRAINT roles_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: schema_migrations schema_migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: your_db_user
 --
 
@@ -923,6 +1106,46 @@ ALTER TABLE ONLY public.schema_migrations
 
 ALTER TABLE ONLY public.positions
     ADD CONSTRAINT unique_market_id_evm_address UNIQUE (market_id, evm_address);
+
+
+--
+-- Name: prediction_intents unique_tx_id; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.prediction_intents
+    ADD CONSTRAINT unique_tx_id UNIQUE (tx_id);
+
+
+--
+-- Name: user_roles user_roles_pkey; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.user_roles
+    ADD CONSTRAINT user_roles_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_roles user_roles_user_id_role_id_key; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.user_roles
+    ADD CONSTRAINT user_roles_user_id_role_id_key UNIQUE (user_id, role_id);
+
+
+--
+-- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: users users_wallet_network_unique; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_wallet_network_unique UNIQUE (wallet_id, network);
 
 
 --
@@ -1241,6 +1464,27 @@ ALTER INDEX public.price_history_pkey ATTACH PARTITION public.price_history_p202
 
 
 --
+-- Name: roles trigger_update_updated_at; Type: TRIGGER; Schema: public; Owner: your_db_user
+--
+
+CREATE TRIGGER trigger_update_updated_at BEFORE UPDATE ON public.roles FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+
+--
+-- Name: user_roles trigger_update_user_roles_updated_at; Type: TRIGGER; Schema: public; Owner: your_db_user
+--
+
+CREATE TRIGGER trigger_update_user_roles_updated_at BEFORE UPDATE ON public.user_roles FOR EACH ROW EXECUTE FUNCTION public.update_user_roles_updated_at_column();
+
+
+--
+-- Name: users trigger_update_users_updated_at; Type: TRIGGER; Schema: public; Owner: your_db_user
+--
+
+CREATE TRIGGER trigger_update_users_updated_at BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.update_users_updated_at_column();
+
+
+--
 -- Name: markets update_markets_updated_at; Type: TRIGGER; Schema: public; Owner: your_db_user
 --
 
@@ -1276,6 +1520,22 @@ ALTER TABLE ONLY public.market_categories
 
 ALTER TABLE ONLY public.market_categories
     ADD CONSTRAINT market_categories_market_id_fkey FOREIGN KEY (market_id) REFERENCES public.markets(market_id) ON DELETE CASCADE;
+
+
+--
+-- Name: user_roles user_roles_role_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.user_roles
+    ADD CONSTRAINT user_roles_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.roles(id) ON DELETE CASCADE;
+
+
+--
+-- Name: user_roles user_roles_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.user_roles
+    ADD CONSTRAINT user_roles_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
 
 --

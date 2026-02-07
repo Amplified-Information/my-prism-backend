@@ -148,13 +148,6 @@ func (ms *MarketsService) mapMarketToMarketResponse(market *sqlc.Market) (*pb_ap
 		return nil, ms.log.Log(ERROR, "failed to get latest price for market %s: %v", market.MarketID.String(), err)
 	}
 
-	var description string
-	if market.Description.Valid {
-		description = market.Description.String
-	} else {
-		description = ""
-	}
-
 	marketResponse := &pb_api.MarketResponse{
 		MarketId:    market.MarketID.String(),
 		Net:         market.Net,
@@ -165,7 +158,7 @@ func (ms *MarketsService) mapMarketToMarketResponse(market *sqlc.Market) (*pb_ap
 		ResolvedAt:  resolvedAt,
 		ImageUrl:    imageUrl,
 		PriceUsd:    priceUsd,
-		Description: description,
+		Description: market.Description,
 	}
 	return marketResponse, nil
 }

@@ -323,3 +323,31 @@ func (pis *PredictionIntentsService) GetAllPredictionIntentsForMarketIdAndAccoun
 	}
 	return predictionIntent, nil
 }
+
+func (pis *PredictionIntentsService) GetAllPredictionIntents(limit int32, offset int32) ([]*pb_api.PredictionIntentRequest, error) {
+	predictionIntents, err := pis.predictionIntentsRepository.GetAllPredictionIntents(int(limit), int(offset))
+	if err != nil {
+		return nil, pis.log.Log(ERROR, "failed to get all prediction intents: %v", err)
+	}
+
+	// Map []sqlc.PredictionIntent to []*pb_api.PredictionIntentRequest
+	var pbPredictionIntents []*pb_api.PredictionIntentRequest
+	for _, pi := range predictionIntents {
+		pbPredictionIntents = append(pbPredictionIntents, &pb_api.PredictionIntentRequest{
+			TxId:        pi.TxID.String(),
+			Net:         pi.Net,
+			MarketId:    pi.MarketID.String(),
+			AccountId:   pi.AccountID,
+			MarketLimit: pi.MarketLimit,
+			PriceUsd:    pi.PriceUsd,
+			Qty:         pi.Qty,
+			Sig:         pi.Sig,
+			PublicKey:   pi.PublicKeyHex,
+			EvmAddress:  pi.Evmaddress,
+			KeyType:     uint32(pi.Keytype),
+			GeneratedAt: pi.GeneratedAt.Format(time.RFC3339),
+		})
+	}
+
+	return pbPredictionIntents, nil
+}

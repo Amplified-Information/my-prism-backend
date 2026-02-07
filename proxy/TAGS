@@ -45,3 +45,6 @@ CORS changes
 
 0.1.15
 CORS update - added domains
+
+0.1.16
+added support for api/ApiAuth

@@ -152,3 +152,32 @@ ON CONFLICT (name) DO NOTHING;
 --       'Warren Buffett retiring? Maybe he will start a podcast. I would listen to that!',
 --       CURRENT_TIMESTAMP
 --     );
+
+
+
+-- Seed data for the users/roles/user_roles tables:
+-- roles: ADMIN, USER
+INSERT INTO roles (name, description)
+VALUES
+  ('ADMIN', 'Administrator with full access to all resources'),
+  ('USER', 'Regular user with limited access to resources')
+ON CONFLICT (name) DO NOTHING;
+
+
+-- ADMIN users: 
+-- {0.0.6781806, 0.0.7090546, 0.0.5852902}
+INSERT INTO users (wallet_id, network, challenge)
+VALUES
+  ('0.0.6781806', 'testnet', FLOOR(EXTRACT(EPOCH FROM NOW()) * 1000) + FLOOR(RANDOM() * 1000000)),
+  ('0.0.7090546', 'testnet', FLOOR(EXTRACT(EPOCH FROM NOW()) * 1000) + FLOOR(RANDOM() * 1000000)),
+  ('0.0.5852902', 'testnet', FLOOR(EXTRACT(EPOCH FROM NOW()) * 1000) + FLOOR(RANDOM() * 1000000))
+ON CONFLICT (wallet_id, network) DO NOTHING;
+
+-- make the 3 users above ADMIN users:
+INSERT INTO user_roles (user_id, role_id)
+SELECT u.id, r.id
+FROM users u
+JOIN roles r ON r.name = 'ADMIN'
+WHERE u.wallet_id IN ('0.0.6781806', '0.0.7090546', '0.0.5852902') AND u.network = 'testnet'
+-- ignore constraint conflicts:
+ON CONFLICT DO NOTHING;

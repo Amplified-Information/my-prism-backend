@@ -2,6 +2,7 @@ package main
 
 import (
 	// Import the lib package
+	"api/server/lib"
 	"api/server/services"
 	"context"
 	"fmt"
@@ -21,6 +22,7 @@ import (
 type server struct {
 	pb_api.UnimplementedApiServiceInternalServer
 	pb_api.UnimplementedApiServicePublicServer
+	pb_api.UnimplementedApiAuthServer
 
 	commentsRepository          repositories.CommentsRepository
 	dbRepository                repositories.DbRepository
@@ -29,12 +31,15 @@ type server struct {
 	positionsRepository         repositories.PositionsRepository
 	predictionIntentsRepository repositories.PredictionIntentsRepository
 	priceRepository             repositories.PriceRepository
+	userRoleRepository          repositories.UserRoleRepository
 
+	authService              services.AuthService
 	commentsService          services.CommentsService
 	cronService              services.CronService
 	hederaService            services.HederaService
 	logService               services.LogService
 	marketsService           services.MarketsService
+	matchesService           services.MatchesService
 	natsService              services.NatsService
 	newsletterService        services.NewsletterService
 	positionsService         services.PositionsService
@@ -127,6 +132,59 @@ func (s *server) CancelPredictionIntent(ctx context.Context, req *pb_api.CancelO
 	return cancelResp, err
 }
 
+func (s *server) GetChallenge(ctx context.Context, req *pb_api.ChallengeRequest) (*pb_api.StdResponse, error) {
+	challengesResp, err := s.authService.GetChallenge(req.AccountId, req.Network)
+	return &pb_api.StdResponse{
+		Message:   fmt.Sprintf("%d", challengesResp),
+		ErrorCode: 0,
+	}, err
+}
+
+func (s *server) GetAllMatches(ctx context.Context, req *pb_api.LimitOffsetRequest) (*pb_api.MatchesResponse, error) {
+	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
+		return nil, s.logService.Log(services.ERROR, "unauthorized: ADMIN role required")
+	}
+
+	allMatches, err := s.matchesService.GetAllMatches(req.Limit, req.Offset)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb_api.MatchesResponse{
+		Matches: allMatches,
+	}, nil
+}
+
+func (s *server) GetAllPositions(ctx context.Context, req *pb_api.LimitOffsetRequest) (*pb_api.PositionsResponse, error) {
+	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
+		return nil, s.logService.Log(services.ERROR, "unauthorized: ADMIN role required")
+	}
+
+	positions, err := s.positionsService.GetAllPositions(req.Limit, req.Offset)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb_api.PositionsResponse{
+		Positions: positions,
+	}, nil
+}
+
+func (s *server) GetAllPredictionIntents(ctx context.Context, req *pb_api.LimitOffsetRequest) (*pb_api.PredictionIntentsResponse, error) {
+	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
+		return nil, s.logService.Log(services.ERROR, "unauthorized: ADMIN role required")
+	}
+
+	predictionIntents, err := s.predictionIntentsService.GetAllPredictionIntents(req.Limit, req.Offset)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb_api.PredictionIntentsResponse{
+		PredictionIntents: predictionIntents,
+	}, nil
+}
+
 func main() {
 	// check env vars are available (.config.ENV and .secrets.ENV are loaded):
 	vars := []string{
@@ -171,6 +229,7 @@ func main() {
 		"TESTNET_TOKEN",
 		"MAINNET_TOKEN",
 		"MIN_ORDER_SIZE_USD",
+		"CRON_STR",
 		// secrets:
 		"DB_PWORD",
 		"PREVIEWNET_HEDERA_OPERATOR_KEY",
@@ -248,6 +307,13 @@ func main() {
 	}
 	defer matchesRepository.CloseDb()
 
+	userRoleRepository := repositories.UserRoleRepository{}
+	err = userRoleRepository.InitDb()
+	if err != nil {
+		log.Fatalf("Failed to initialize database: %v", err)
+	}
+	defer userRoleRepository.CloseDb()
+
 	/////
 	// service layer
 	/////
@@ -257,11 +323,18 @@ func main() {
 
 	// initialize Hedera service
 	hederaService := services.HederaService{}
-	err = hederaService.InitHedera(&logService, &dbRepository, &priceRepository, &marketsRepository, &matchesRepository)
+	err = hederaService.InitHedera(&logService, &dbRepository, &priceRepository, &marketsRepository, &matchesRepository, &positionsRepository)
 	if err != nil {
 		log.Fatalf("Failed to initialize Hedera service: %v", err)
 	}
 	// TODO: defer hederaService cleanup
+
+	// initialize Auth service
+	authService := services.AuthService{}
+	err = authService.Init(&logService, &userRoleRepository, &hederaService)
+	if err != nil {
+		log.Fatalf("Failed to initialize Auth service: %v", err)
+	}
 
 	// initialize price service
 	priceService := services.PriceService{}
@@ -275,6 +348,13 @@ func main() {
 	err = marketsService.Init(&logService, &marketsRepository, &hederaService, &priceService)
 	if err != nil {
 		log.Fatalf("Failed to initialize Markets service: %v", err)
+	}
+
+	// initialize Matches service
+	matchesService := services.MatchesService{}
+	err = matchesService.Init(&logService, &matchesRepository)
+	if err != nil {
+		log.Fatalf("Failed to initialize Matches service: %v", err)
 	}
 
 	// initialize Comments service
@@ -348,12 +428,15 @@ func main() {
 		positionsRepository:         positionsRepository,
 		predictionIntentsRepository: predictionIntentsRepository,
 		priceRepository:             priceRepository,
+		userRoleRepository:          userRoleRepository,
 
+		authService:              authService,
 		commentsService:          commentsService,
 		cronService:              cronService,
 		hederaService:            hederaService,
 		logService:               logService,
 		marketsService:           marketsService,
+		matchesService:           matchesService,
 		natsService:              natsService,
 		newsletterService:        newsletterService,
 		positionsService:         positionsService,
@@ -364,10 +447,11 @@ func main() {
 	// must pass the grpc server to bother internal and the public servers!
 	pb_api.RegisterApiServiceInternalServer(grpcServer, sharedServer)
 	pb_api.RegisterApiServicePublicServer(grpcServer, sharedServer)
+	pb_api.RegisterApiAuthServer(grpcServer, sharedServer)
 
 	// start a cron job
 	c := cron.New(cron.WithSeconds())
-	_, err = c.AddFunc("0 * * * * *", cronService.CronJob) // Every minute on the minute
+	_, err = c.AddFunc(os.Getenv("CRON_STR"), cronService.CronJob)
 	if err != nil {
 		log.Fatalf("Failed to schedule cron job: %v", err)
 	}

@@ -18,7 +18,11 @@ FROM matches
 WHERE market_id = $1 AND (tx_id1 = $2 OR tx_id2 = $2)
 ORDER BY created_at DESC;
 
-
+-- name: GetAllMatches :many
+SELECT *
+FROM matches
+ORDER BY created_at DESC
+LIMIT $1 OFFSET $2;
 
 
 

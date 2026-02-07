@@ -37,6 +37,12 @@ WHERE evmaddress = $1
 AND cancelled_at IS NULL AND fully_matched_at IS NULL AND evicted_at IS NULL;
 
 
+-- name: GetAllPredictionIntents :many
+SELECT *
+FROM prediction_intents
+ORDER BY generated_at DESC
+LIMIT $1 OFFSET $2;
+
 
 -- name: IsDuplicateTxId :one
 SELECT COUNT(*) > 0 AS exists

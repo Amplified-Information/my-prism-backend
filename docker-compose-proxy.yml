@@ -3,7 +3,7 @@
 # docker compose -f docker-compose-proxy.yml -f docker-compose-proxy.dev.yml up -d 
 services:
   proxy:
-    image: ghcr.io/prismmarketlabs/proxy:0.1.15
+    image: ghcr.io/prismmarketlabs/proxy:0.1.16
     # pull_policy: always
     restart: always
     ports:
