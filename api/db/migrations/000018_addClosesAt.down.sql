@@ -1,2 +1,0 @@
-ALTER TABLE markets
-DROP COLUMN IF EXISTS closes_at;

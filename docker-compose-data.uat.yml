@@ -1,9 +1,0 @@
-# services:
-#   db:
-#     # image: ghcr.io/prismmarketlabs/db:0.1.0
-#     deploy:
-#       replicas: 0
-#   eventbus:
-#     # image: ghcr.io/prismmarketlabs/eventbus:0.1.0
-#     deploy:
-#       replicas: 0

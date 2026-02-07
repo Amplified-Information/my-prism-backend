@@ -1,7 +1,0 @@
-# services:
-#   db:
-#     deploy:
-#       replicas: 0
-#   eventbus:
-#     deploy:
-#       replicas: 0

@@ -1,8 +1,0 @@
-CLOB_HOST=0.0.0.0
-
-DB_HOST=172.17.0.1
-
-NATS_URL=nats://172.17.0.1:4222
-
-SEND_EMAIL=true
-EMAIL_ADDRESS=development@prism.market

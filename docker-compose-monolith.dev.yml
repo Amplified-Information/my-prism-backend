@@ -1,7 +1,0 @@
-# services:
-#   web:
-#     image: ghcr.io/prismmarketlabs/web:0.2.1
-#   api:
-#     image: ghcr.io/prismmarketlabs/api:0.2.1
-#   clob:
-#     image: ghcr.io/prismmarketlabs/clob:0.2.1
