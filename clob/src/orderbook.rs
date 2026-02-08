@@ -259,14 +259,13 @@ impl OrderBook {
                     let nats_clone = nats_service.clone();
                     tokio::spawn(async move {
                         // ensure the positive price order is always first!
-                        if orc1.price_usd < 0.0 {
-                            if let Err(e) = nats_clone.publish_match(false, &orc2, &orc1).await {
-                                log::error!("NATS\tFailed to publish match: {}", e);
-                            }
+                        let (first, second) = if orc1.price_usd >= 0.0 {
+                            (&orc1, &orc2)
                         } else {
-                            if let Err(e) = nats_clone.publish_match(false, &orc1, &orc2).await {
-                                log::error!("NATS\tFailed to publish match: {}", e);
-                            }
+                            (&orc2, &orc1)
+                        };
+                        if let Err(e) = nats_clone.publish_match(false, first, second).await {
+                            log::error!("NATS\tFailed to publish match: {}", e);
                         }
                     });
                     
@@ -283,14 +282,13 @@ impl OrderBook {
                     let nats_clone = nats_service.clone();
                     tokio::spawn(async move {
                         // ensure the positive price order is always first!
-                        if orc1.price_usd < 0.0 {
-                            if let Err(e) = nats_clone.publish_match(true, &orc2, &orc1).await {
-                                log::error!("NATS\tFailed to publish (partial) match: {}", e);
-                            }
+                        let (first, second) = if orc1.price_usd >= 0.0 {
+                            (&orc1, &orc2)
                         } else {
-                            if let Err(e) = nats_clone.publish_match(true, &orc1, &orc2).await {
-                                log::error!("NATS\tFailed to publish (partial) match: {}", e);
-                            }
+                            (&orc2, &orc1)
+                        };
+                        if let Err(e) = nats_clone.publish_match(true, first, second).await {
+                            log::error!("NATS\tFailed to publish (partial) match: {}", e);
                         }
                     });
                     continue; // Continue searching for additional matches (partial match)

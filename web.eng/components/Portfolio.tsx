@@ -10,8 +10,8 @@ const Portfolio = () => {
         ${(Object.values(userPortfolio.positions).reduce((acc, pos) => {
           return (
             acc +
-            Number(pos.yes) * pos.priceUsd +
-            Number(pos.no) * (1 - pos.priceUsd)
+            Number(pos.position?.yes) * pos.priceUsd +
+            Number(pos.position?.no) * (1 - pos.priceUsd)
           )
         }, 0) * ( 1 / 10 ** usdcNdecimals)).toFixed(2) }
         </a>
@@ -24,13 +24,13 @@ const Portfolio = () => {
                 <div className="flex justify-between items-center">
                   <span>Yes Positions:</span>
                   <span className="font-mono font-semibold text-green-600">
-                    ${(Number(pos.yes) / (10 ** usdcNdecimals)).toFixed(2)}
+                    ${(Number(pos.position?.yes) / (10 ** usdcNdecimals)).toFixed(2)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span>No Positions:</span>
                   <span className="font-mono font-semibold text-red-600">
-                  ${(Number(pos.no) / (10 ** usdcNdecimals)).toFixed(2)}
+                  ${(Number(pos.position?.no) / (10 ** usdcNdecimals)).toFixed(2)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">

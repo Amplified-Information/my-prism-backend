@@ -7,8 +7,12 @@ import (
 	"log"
 	"math"
 	"math/big"
+	"os"
+	"strconv"
 	"strings"
+	"time"
 
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/hiero-ledger/hiero-sdk-go/v2/proto/services"
 	hiero "github.com/hiero-ledger/hiero-sdk-go/v2/sdk"
 	"golang.org/x/crypto/sha3"
@@ -27,11 +31,14 @@ import (
 * @returns a long string conforming to the format
  */
 func AssemblePayloadHexForSigning(req *pb_api.PredictionIntentRequest, usdcDecimals uint64) (string, error) {
+	log.Printf("%v", req)
+
 	collateralUsdAbs := math.Abs(req.PriceUsd * req.Qty)
 	collateralUsdAbsScaled, err := FloatToBigIntScaledDecimals(collateralUsdAbs, int(usdcDecimals))
 	if err != nil {
 		return "", fmt.Errorf("failed to scale collateralUsdAbs: %v", err)
 	}
+	log.Printf("collateralUsdAbsScaled: %s", collateralUsdAbsScaled.String())
 
 	marketIdBigInt, err := Uuid7_to_bigint(req.MarketId)
 	if err != nil {
@@ -169,6 +176,7 @@ func FloatToBigIntScaledDecimals(value float64, nDecimals int) (*big.Int, error)
 	// 	return BigInt(scaledValue)
 	// }
 	valueStr := fmt.Sprintf("%f", value)
+	// valueStr := strconv.FormatFloat(value, 'f', -1, 64) // N.B. preserves all digits, no rounding
 	parts := strings.Split(valueStr, ".")
 	integerPart := parts[0]
 	fractionalPart := ""
@@ -223,4 +231,22 @@ func VerifySig(publicKey *hiero.PublicKey, payloadHex string, sigBase64 string) 
 		return true, nil
 	}
 	return false, fmt.Errorf("Invalid signature")
+}
+
+func GenerateJWT(secret string, claims map[string]interface{}) (string, error) {
+	token := jwt.New(jwt.SigningMethodHS256)
+	claimsMap := token.Claims.(jwt.MapClaims)
+	for k, v := range claims {
+		claimsMap[k] = v
+	}
+
+	jwtExpiryHoursStr := os.Getenv("JWT_EXPIRY_HOURS")
+	jwtExpiryHours, err := strconv.Atoi(jwtExpiryHoursStr)
+	if err != nil {
+		jwtExpiryHours = 24 // default to 24 hours if env var is not set or invalid
+	}
+
+	claimsMap["exp"] = time.Now().Add(time.Hour * time.Duration(jwtExpiryHours)).Unix()
+
+	return token.SignedString([]byte(secret))
 }

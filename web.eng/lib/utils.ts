@@ -39,9 +39,13 @@ const getSpreadPercent = (book: BookSnapshot): number | undefined => {
 }
 
 const floatToBigIntScaledDecimals = (value: number, nDecimals: number): bigint => {
-  const [integerPart, fractionalPart = ''] = value.toString().split('.')
-  const scaledValue = '' + integerPart + '' + fractionalPart.padEnd(nDecimals, '0').slice(0, nDecimals)
-  return BigInt(scaledValue)
+  // const [integerPart, fractionalPart = ''] = value.toString().split('.')
+  // const scaledValue = '' + integerPart + '' + fractionalPart.padEnd(nDecimals, '0').slice(0, nDecimals)
+  // return BigInt(scaledValue)
+
+  const factor = 10 ** nDecimals
+  // N.B. Math.round preserves rounding:
+  return BigInt(Math.round(value * factor))
 }
 
 const bigIntScaledDecimalsToFloat = (value: bigint, nDecimals: number): number => {
@@ -70,9 +74,12 @@ const isValidUUIDv7 = (uuid: string): boolean => {
  * @returns a long string conforming to the format
  */
 const assemblePayloadHexForSigning = (predictionIntentRequest: PredictionIntentRequest, usdcDecimals: number): string => {
+  const collateralUsdAbsScaled = floatToBigIntScaledDecimals(Math.abs(predictionIntentRequest.priceUsd * predictionIntentRequest.qty), usdcDecimals).toString(16).padStart(64, '0')
+  console.log('collateralUsdAbsScaled: ', collateralUsdAbsScaled)
+
   const packedHex = [
     predictionIntentRequest.priceUsd < 0 ? 'f1': 'f0', // 1 => sell, 0 => buy (uint8 = 8 bits = 2 hex chars)
-    floatToBigIntScaledDecimals(Math.abs(predictionIntentRequest.priceUsd * predictionIntentRequest.qty), usdcDecimals).toString(16).padStart(64, '0'),
+    collateralUsdAbsScaled,
     predictionIntentRequest.evmAddress.replace(/^0x/, '').toLowerCase().padStart(40, '0'), // note: an evm address is exactly 20 bytes = 40 hex chars
     uuidToBigInt(predictionIntentRequest.marketId).toString(16).padStart(32, '0'),
     uuidToBigInt(predictionIntentRequest.txId).toString(16).padStart(32, '0')

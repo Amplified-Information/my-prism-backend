@@ -48,7 +48,7 @@ contract Prism {
   uint256 public marketCreationFeeUsdc;
   uint256 public collateralTokenNdecimals;
   
-  event PositionTokensPurchased(uint128 marketId, address indexed buyer, uint256 collateralUsd, uint256 priceUsdAbsScaled);
+  event PositionTokensPurchased(uint128 marketId, address indexed buyer, uint256 collateralUsd, uint256 qtyScaled);
   event MarketResolved(uint128 marketId, bool outcome);
   event WinningsRedeemed(uint128 marketId, address indexed user, uint256 amount);
   event TokenAssociated(address indexed token);
@@ -102,18 +102,18 @@ contract Prism {
   /**
   This function allows the CLOB to initiate the buying of YES and NO position tokens atomically on behalf of two accounts "yes" and "no".
   Requires --optimize flag due to size of the call stack
+  See: api/server/services/hedera.go `params := hiero.NewContractFunctionParameters()....`
   @param marketId The ID of the market
   @param signerYes The (signing) address of the account buying YES position tokens
   @param signerNo The (signing) address of the account buying NO position tokens
+  @param collateralUsdAbsScaledYes Yes side amount of collateral (in USDC) to be used for purchasing position tokens (scaled to the number of collatoral token decimal places).
+  @param collateralUsdAbsScaledNo  No side amount of collateral (in USDC) to be used for purchasing position tokens (scaled to the number of collatoral token decimal places).
   @param qtyScaledYes The quantity of YES position tokens to buy (scaled up to the number of collateral token decimal places)
   @param qtyScaledNo The quantity of NO position tokens to buy (scaled up to the number of collateral token decimal places)
-  @param priceUsdAbsScaledYes The price (in USDC) per YES position token (scaled up to the number of collateral token decimal places)
-  @param priceUsdAbsScaledNo The price (in USDC) per NO position token (scaled up to the number of collateral token decimal places)
   @param txIdYes txId of the Yes side 
   @param txIdNo txId of the No side
   @param sigObjYes The signatureObject (includes the key type) of the YES transaction
   @param sigObjNo The signatureObject (includes the key type) of the NO transaction
-
   @return yes The updated number of YES position tokens held by the signerYes account
   @return no The updated number of NO position tokens held by the signerNo account
   */
@@ -121,12 +121,12 @@ contract Prism {
     uint128 marketId,
     address signerYes,
     address signerNo,
-    // uint256 collateralUsdAbsScaledYes, // need to send Yes and No collateral amounts for sig verification
-    // uint256 collateralUsdAbsScaledNo,
+    uint256 collateralUsdAbsScaledYes, // need to send Yes and No collateral amounts for sig verification
+    uint256 collateralUsdAbsScaledNo,
     uint256 qtyScaledYes,
     uint256 qtyScaledNo,
-    uint256 priceUsdAbsScaledYes,
-    uint256 priceUsdAbsScaledNo,
+    // uint256 priceUsdAbsScaledYes,
+    // uint256 priceUsdAbsScaledNo,
     uint128 txIdYes,
     uint128 txIdNo,
     bytes calldata sigObjYes,
@@ -135,24 +135,31 @@ contract Prism {
     require(resolutionTimes[marketId] == 0, "Market resolved");
     require(bytes(statements[marketId]).length > 0, "No market statement has been set");
 
-    uint256 collateralUsdAbsScaledYes = (qtyScaledYes * priceUsdAbsScaledYes) / (10 ** collateralTokenNdecimals);
-    uint256 collateralUsdAbsScaledNo  = (qtyScaledNo  * priceUsdAbsScaledNo)  / (10 ** collateralTokenNdecimals);
+    // uint256 collateralUsdAbsScaledYes = (qtyScaledYes * priceUsdAbsScaledYes) / (10 ** collateralTokenNdecimals);
+    // uint256 collateralUsdAbsScaledNo  = (qtyScaledNo  * priceUsdAbsScaledNo)  / (10 ** collateralTokenNdecimals);
 
-    // prevent replay attacks by ensuring unique txIds // TODO - storage size ;(
-    require(!usedTxIds[txIdYes], "Duplicate txIdYes");
-    require(!usedTxIds[txIdNo], "Duplicate txIdNo");
+    // // prevent replay attacks by ensuring unique txIds // TODO - issue < is not enough. Must consider the case where partial match on both sides which wouldn't wipe on the order - get this working with unsigned math
+    // require(!usedTxIds[txIdYes], "Duplicate txIdYes");
+    // require(!usedTxIds[txIdNo], "Duplicate txIdNo");
 
+    // // A txId is only marked as used when it is completely wiped out (qty fully consumed).
+    // // The matched quantity is min(qtyScaledYes, qtyScaledNo).
+    // // If qtyScaledYes <= qtyScaledNo, the YES side is fully consumed.
+    // // If qtyScaledNo <= qtyScaledYes, the NO side is fully consumed.
+    // // If they are equal, both are fully consumed.
+    // if (qtyScaledYes <= qtyScaledNo) {
+    //   usedTxIds[txIdYes] = true;
+    // }
+    // if (qtyScaledNo <= qtyScaledYes) {
+    //   usedTxIds[txIdNo] = true;
+    // }
+
+    // calculate the lower collateral amount:
     uint256 collateralUsdAbsScaled_lower = 0; // the lower of the two collateral amounts
     if (collateralUsdAbsScaledYes > collateralUsdAbsScaledNo) {
       collateralUsdAbsScaled_lower = collateralUsdAbsScaledYes;
-      usedTxIds[txIdNo] = true; // mark the lower side (NO) as used
     } else {
       collateralUsdAbsScaled_lower = collateralUsdAbsScaledNo; // always transfer the lower amount of collateral (partial match)
-      usedTxIds[txIdYes] = true; // mark the lower side (YES) as used
-    }
-    if (collateralUsdAbsScaledYes == collateralUsdAbsScaledNo) { // edge case - exact match - both txIds should be marked as used
-      usedTxIds[txIdYes] = true;
-      usedTxIds[txIdNo] = true;
     }
 
     uint256 qty_lower = 0; // the lower of the two qty amounts
@@ -177,8 +184,8 @@ contract Prism {
     yesTokens[marketId][signerYes] += qty_lower;                    // 1:1 mapping of collateral qty to position tokens
     noTokens[marketId][signerNo]   += qty_lower;                    // 1:1 mapping of collateral qty to position tokens
 
-    emit PositionTokensPurchased(marketId, signerYes, collateralUsdAbsScaled_lower, priceUsdAbsScaledYes);
-    emit PositionTokensPurchased(marketId, signerNo, collateralUsdAbsScaled_lower, priceUsdAbsScaledNo);
+    emit PositionTokensPurchased(marketId, signerYes, collateralUsdAbsScaled_lower, qtyScaledYes);
+    emit PositionTokensPurchased(marketId, signerNo, collateralUsdAbsScaled_lower, qtyScaledNo);
 
     return (yesTokens[marketId][signerYes] , noTokens[marketId][signerYes], yesTokens[marketId][signerNo] , noTokens[marketId][signerNo]); // return current balances
   }

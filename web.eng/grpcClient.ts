@@ -1,13 +1,27 @@
 import { GrpcWebFetchTransport } from '@protobuf-ts/grpcweb-transport'
 import { ClobPublicClient } from './gen/clob.client.ts'
-import { ApiServicePublicClient } from './gen/api.client'
+import { ApiAuthClient, ApiServicePublicClient } from './gen/api.client'
 
 const transport = new GrpcWebFetchTransport({
   // baseUrl: 'http://127.0.0.1:8080',
   // baseUrl: 'https://dev.prism.market:443', // https => grpc-web
   baseUrl: '/', // access via the proxy on port 8090
   
-  fetchInit: { credentials: 'include' }
+  fetchInit: { 
+    credentials: 'include'
+  },
+  interceptor: {
+    intercept(request, invoker) {
+      request.init = {
+        ...request.init,
+        headers: {
+          ...(request.init?.headers || {}),
+          'Authorization': `Bearer ${localStorage.getItem('jwt') || ''}`
+        }
+      }
+      return invoker(request)
+    }
+  }
 
   // fetchInit: { credentials: 'include' }
   // withCredentials: true, // improbable - https://github.com/improbable-eng/grpc-web/blob/master/client/grpc-web/docs/transport.md
@@ -30,8 +44,10 @@ const transport = new GrpcWebFetchTransport({
 })
 const clobClient = new ClobPublicClient(transport)
 const apiClient = new ApiServicePublicClient(transport)
+const authClient = new ApiAuthClient(transport)
 
 export {
   clobClient,
-  apiClient
+  apiClient,
+  authClient
 }

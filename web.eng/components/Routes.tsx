@@ -5,6 +5,7 @@ import Admin from './Admin'
 import Explore from './Explore'
 import CreateMarket from './CreateMarket'
 import Portfolio from './Portfolio'
+import Login from './Login'
 
 const Routes = () => {
   return (
@@ -16,6 +17,7 @@ const Routes = () => {
         <Route path='/explore' element={<Explore />} />
         <Route path='/admin' element={<Admin />} />
         <Route path='/portfolio' element={<Portfolio />} />
+        <Route path='/login' element={<Login />} />
       </Routing>
     </div>
   )

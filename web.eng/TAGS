@@ -99,3 +99,6 @@ web - correct constuction of predictionIntentRequest object
 
 0.4.21
 web - update order entry panel Buy/Sell to Yes/No
+
+0.4.22
+sync with latest protobufs. Resolved frontend signing issue.

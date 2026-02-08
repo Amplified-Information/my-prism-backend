@@ -139,6 +139,16 @@ func (ns *NatsService) HandleOrderMatches() error {
 		// 	return "", ns.log.Log(ERROR, "User's USDC balance ($USD%.2f) is less than the allowance ($USD%.2f)", currentUserBalanceUsdc, spenderAllowanceUsd)
 		// }
 
+		// assert that orderRequestClobTuple[0].priceUsd > 0 and orderRequestClobTuple[1].priceUsd < 0 (i.e. one is a bid and the other is an ask)
+		if orderRequestClobTuple[0].PriceUsd < 0.0 {
+			ns.log.Log(ERROR, "PROBLEM: orderRequestClobTuple[0].PriceUsd(%f) MUST be greater than 0 (txid=%s).", orderRequestClobTuple[0].PriceUsd, orderRequestClobTuple[0].TxId)
+			return
+		}
+		if orderRequestClobTuple[1].PriceUsd > 0.0 {
+			ns.log.Log(ERROR, "PROBLEM: orderRequestClobTuple[1].PriceUsd(%f) MUST be less than 0 (txid=%s).", orderRequestClobTuple[1].PriceUsd, orderRequestClobTuple[1].TxId)
+			return
+		}
+
 		// OK
 
 		/////

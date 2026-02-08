@@ -81,3 +81,18 @@ user positions endpoint (active and pending orders)
 
 0.3.7
 restored functionality of user positions
+
+0.3.8
+new smart contract interface - calc collateralUsdc off-chain
+
+0.3.9
+added a guard to ensure the correct ordering of MATCH events
+
+0.3.10
+fix assertion bug
+
+0.3.11
+preserve rounding when doing float to bigInt (scaled) calclations
+
+0.3.12
+enhancements for login and auth and JWT issuing (sig verification working)

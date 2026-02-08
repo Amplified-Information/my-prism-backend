@@ -123,8 +123,8 @@ const Balances = () => {
               ${(Object.values(userPortfolio.positions).reduce((acc, pos) => {
                 return (
                   acc +
-                  Number(pos.yes) * pos.priceUsd +
-                  Number(pos.no) * (1 - pos.priceUsd)
+                  Number(pos.position.yes) * pos.priceUsd +
+                  Number(pos.position.no) * (1 - pos.priceUsd)
                 )
               }, 0) * ( 1 / 10 ** usdcNdecimals)).toFixed(2) }
             </a>

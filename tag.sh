@@ -1,4 +1,12 @@
-#!/bin/bash
+# ...existing code...
+IMAGE_LINE=$(yq -r ".services | to_entries[] | select(.key == \"${SERVICE}\") | .value.image" "$FILE" 2>/dev/null)
+echo "Checking $FILE: $IMAGE_LINE"
+IMAGE_TAG=$(echo "$IMAGE_LINE" | grep -oE '[^:]+$')
+if [ "$IMAGE_TAG" = "$TAG_DST" ]; then
+  FOUND_TAG=true
+  break
+fi
+# ...existing code...#!/bin/bash
 
 ####
 # part 1 - prompt user input
@@ -47,18 +55,43 @@ fi
 FOUND_TAG=false
 for FILE in docker-compose-*.yml; do
   [ -f "$FILE" ] || continue
-  IMAGE_LINE=$(yq -r ".services.${SERVICE}.image" "$FILE" 2>/dev/null)
-  echo "Checking $FILE: $IMAGE_LINE"
-  IMAGE_TAG=$(echo "$IMAGE_LINE" | grep -oE '[^:]+$')
-  if [ "$IMAGE_TAG" = "$TAG_DST" ]; then
-    FOUND_TAG=true
-    break
-  fi
+  IMAGE_LINE=$(yq -r '.services[]?.image' "$FILE" 2>/dev/null)
+  while read -r LINE; do
+    echo "Checking $FILE: $LINE"
+    IMAGE_NAME=$(echo "$LINE" | cut -d':' -f1)
+    IMAGE_TAG=$(echo "$LINE" | cut -d':' -f2)
+    if [[ "$IMAGE_NAME" == *"${SERVICE}"* && "$IMAGE_TAG" == "$TAG_DST" ]]; then
+      FOUND_TAG=true
+      break 2
+    fi
+  done <<< "$IMAGE_LINE"
 done
 if [ "$FOUND_TAG" = false ]; then
-  echo "ERROR: Tag '${TAG_DST}' not found in any docker-compose-*.yml under services.${SERVICE}.image"
+  echo "ERROR: Tag '${TAG_DST}' not found in any docker-compose-*.yml for image containing '${SERVICE}'"
   exit 1
 fi
+# FOUND_TAG=false
+# for FILE in docker-compose-*.yml; do
+#   [ -f "$FILE" ] || continue
+#   IMAGE_LINE=$(yq -r ".services | to_entries[] | select(.key == \"${SERVICE}\") | .value.image" "$FILE" 2>/dev/null)
+#   echo "Checking $FILE: $IMAGE_LINE"
+#   IMAGE_TAG=$(echo "$IMAGE_LINE" | grep -oE '[^:]+$')
+#   if [ "$IMAGE_TAG" = "$TAG_DST" ]; then
+#     FOUND_TAG=true
+#     break
+#   fi
+#   # IMAGE_LINE=$(yq -r ".services.${SERVICE}.image" "$FILE" 2>/dev/null)
+#   # echo "Checking $FILE: $IMAGE_LINE"
+#   # IMAGE_TAG=$(echo "$IMAGE_LINE" | grep -oE '[^:]+$')
+#   # if [ "$IMAGE_TAG" = "$TAG_DST" ]; then
+#   #   FOUND_TAG=true
+#   #   break
+#   # fi
+# done
+# if [ "$FOUND_TAG" = false ]; then
+#   echo "ERROR: Tag '${TAG_DST}' not found in any docker-compose-*.yml under services.${SERVICE}.image"
+#   exit 1
+# fi
 
 echo "OK. Found the version specified in the TAG file. Proceeding..."
 sleep 1

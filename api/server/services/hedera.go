@@ -325,16 +325,16 @@ func (hs *HederaService) BuyPositionTokens(sideYes *pb_clob.CreateOrderRequestCl
 		return false, hs.log.Log(ERROR, "invalid USDC_DECIMALS: %v", err)
 	}
 	// For signature verification, we need seperate reconstruction of the payloads for YES and NO positions, including collateralUsd
-	// const collateralUsd_abs_scaled = floatToBigIntScaledDecimals(Math.abs(predictionIntentRequest.priceUsd * predictionIntentRequest.qty), usdcDecimals).toString()
-	// collateralUsdAbsScaledYes, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideYes.PriceUsd*sideYes.QtyOrig /* N.B. use QtyOrig and not Qty (remaining amount) */), int(usdcDecimals))
-	// if err != nil {
-	// 	return false, hs.log.Log(ERROR, "failed to scale collateralUsdAbsYes: %v", err)
-	// }
+	// const collateralUsd_abs_scaled = floatToBigIntScaledDecimals(Math.abs(predictionIntentRequest.priceUsd*predictionIntentRequest.qty), usdcDecimals).toString()
+	collateralUsdAbsScaledYes, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideYes.PriceUsd*sideYes.QtyOrig /* N.B. use QtyOrig and not Qty (remaining amount) */), int(usdcDecimals))
+	if err != nil {
+		return false, hs.log.Log(ERROR, "failed to scale collateralUsdAbsYes: %v", err)
+	}
 
-	// collateralUsdAbsScaledNo, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideNo.PriceUsd*sideNo.QtyOrig /* N.B. use QtyOrig and not Qty (remaining amount) */), int(usdcDecimals))
-	// if err != nil {
-	// 	return false, hs.log.Log(ERROR, "failed to scale collateralUsdAbsNo: %v", err)
-	// }
+	collateralUsdAbsScaledNo, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideNo.PriceUsd*sideNo.QtyOrig /* N.B. use QtyOrig and not Qty (remaining amount) */), int(usdcDecimals))
+	if err != nil {
+		return false, hs.log.Log(ERROR, "failed to scale collateralUsdAbsNo: %v", err)
+	}
 
 	qtyScaledYesBig, err := lib.FloatToBigIntScaledDecimals(sideYes.QtyOrig, int(usdcDecimals))
 	if err != nil {
@@ -346,15 +346,15 @@ func (hs *HederaService) BuyPositionTokens(sideYes *pb_clob.CreateOrderRequestCl
 		return false, hs.log.Log(ERROR, "failed to calculate qtyScaledNoBig: %v", err)
 	}
 
-	priceUsdAbsScaledYesBig, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideYes.PriceUsd), int(usdcDecimals))
-	if err != nil {
-		return false, hs.log.Log(ERROR, "failed to calculate priceUsdAbsScaledYesBig: %v", err)
-	}
+	// priceUsdAbsScaledYesBig, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideYes.PriceUsd), int(usdcDecimals))
+	// if err != nil {
+	// 	return false, hs.log.Log(ERROR, "failed to calculate priceUsdAbsScaledYesBig: %v", err)
+	// }
 
-	priceUsdAbsScaledNoBig, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideNo.PriceUsd), int(usdcDecimals))
-	if err != nil {
-		return false, hs.log.Log(ERROR, "failed to calculate priceUsdAbsScaledNoBig: %v", err)
-	}
+	// priceUsdAbsScaledNoBig, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideNo.PriceUsd), int(usdcDecimals))
+	// if err != nil {
+	// 	return false, hs.log.Log(ERROR, "failed to calculate priceUsdAbsScaledNoBig: %v", err)
+	// }
 
 	sigYes, err := base64.StdEncoding.DecodeString(sideYes.Sig) // Sig is base64-encoded
 	if err != nil {
@@ -441,15 +441,15 @@ func (hs *HederaService) BuyPositionTokens(sideYes *pb_clob.CreateOrderRequestCl
 	// submit to the smart contract :)
 	/////
 	params := hiero.NewContractFunctionParameters()
-	params.AddUint128BigInt(marketIdBig)  // marketId
-	params.AddAddress(sideYes.EvmAddress) // signerYes
-	params.AddAddress(sideNo.EvmAddress)  // signerNo
-	// params.AddUint256BigInt(collateralUsdAbsScaledYes) // collateralUsdAbsScaledYes
-	// params.AddUint256BigInt(collateralUsdAbsScaledNo)  // collateralUsdAbsScaledNo
+	params.AddUint128BigInt(marketIdBig)               // marketId
+	params.AddAddress(sideYes.EvmAddress)              // signerYes
+	params.AddAddress(sideNo.EvmAddress)               // signerNo
+	params.AddUint256BigInt(collateralUsdAbsScaledYes) // collateralUsdAbsScaledYes
+	params.AddUint256BigInt(collateralUsdAbsScaledNo)  // collateralUsdAbsScaledNo
 	params.AddUint256BigInt(qtyScaledYesBig)
 	params.AddUint256BigInt(qtyScaledNoBig)
-	params.AddUint256BigInt(priceUsdAbsScaledYesBig)
-	params.AddUint256BigInt(priceUsdAbsScaledNoBig)
+	// params.AddUint256BigInt(priceUsdAbsScaledYesBig)
+	// params.AddUint256BigInt(priceUsdAbsScaledNoBig)
 	params.AddUint128BigInt(txIdYesBig) // txIdYes
 	params.AddUint128BigInt(txIdNoBig)  // txIdNo
 	params.AddBytes(sigObjYes)          // sigObjYes

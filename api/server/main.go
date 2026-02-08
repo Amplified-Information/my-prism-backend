@@ -15,6 +15,7 @@ import (
 	repositories "api/server/repositories"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 
 	cron "github.com/robfig/cron/v3"
 )
@@ -140,6 +141,64 @@ func (s *server) GetChallenge(ctx context.Context, req *pb_api.ChallengeRequest)
 	}, err
 }
 
+func (s *server) VerifyChallenge(ctx context.Context, req *pb_api.VerifyChallengeRequest) (*pb_api.StdResponse, error) {
+	isValid, err := s.authService.VerifyChallenge(req.ChallengeRequest.AccountId, req.ChallengeRequest.Network, req.ChallengeResponseBase64, req.Payload)
+	if err != nil {
+		return &pb_api.StdResponse{
+			ErrorCode: 1,
+			Message:   "Error verifying challenge",
+		}, err
+	}
+
+	if isValid {
+		s.logService.Log(services.INFO, "Challenge verified successfully for accountId: %s on network: %s", req.ChallengeRequest.AccountId, req.ChallengeRequest.Network)
+
+		// N.B. generate a new challenge for the next authentication attempt to prevent replay attacks (even if the current attempt is successful, we want to invalidate the current challenge so it can't be reused):
+		_, err := s.authService.UpdateChallenge(req.ChallengeRequest.AccountId, req.ChallengeRequest.Network)
+		if err != nil {
+			return &pb_api.StdResponse{
+				ErrorCode: 1,
+				Message:   "Error updating challenge",
+			}, err
+		}
+
+		// look up the user's roles on the database:
+		userRoles, err := s.authService.GetRoles(ctx, req.ChallengeRequest.AccountId, req.ChallengeRequest.Network)
+		if err != nil {
+			return &pb_api.StdResponse{
+				ErrorCode: 1,
+				Message:   "Error getting user's roles",
+			}, err
+		}
+
+		// Generate JWT token
+		claims := map[string]interface{}{
+			"accountId": req.ChallengeRequest.AccountId,
+			"roles":     userRoles,
+		}
+		jwtToken, err := lib.GenerateJWT(os.Getenv("JWT_SECRET"), claims)
+		if err != nil {
+			return &pb_api.StdResponse{
+				ErrorCode: 1,
+				Message:   "Error generating JWT token",
+			}, err
+		}
+
+		// Inject the JWT token into response header
+		grpc.SendHeader(ctx, metadata.Pairs("Authorization", "Bearer "+jwtToken))
+
+		return &pb_api.StdResponse{
+			ErrorCode: 0,
+			Message:   "Challenge verified successfully",
+		}, nil
+	}
+
+	return &pb_api.StdResponse{
+		ErrorCode: 1,
+		Message:   "Invalid challenge response",
+	}, nil
+}
+
 func (s *server) GetAllMatches(ctx context.Context, req *pb_api.LimitOffsetRequest) (*pb_api.MatchesResponse, error) {
 	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
 		return nil, s.logService.Log(services.ERROR, "unauthorized: ADMIN role required")
@@ -230,12 +289,14 @@ func main() {
 		"MAINNET_TOKEN",
 		"MIN_ORDER_SIZE_USD",
 		"CRON_STR",
+		"JWT_EXPIRY_HOURS",
 		// secrets:
 		"DB_PWORD",
 		"PREVIEWNET_HEDERA_OPERATOR_KEY",
 		"TESTNET_HEDERA_OPERATOR_KEY",
 		"MAINNET_HEDERA_OPERATOR_KEY",
 		"SMTP_PWORD",
+		"JWT_SECRET",
 	}
 	vals := make(map[string]string)
 
@@ -457,7 +518,7 @@ func main() {
 	}
 	c.Start()
 	defer c.Stop()
-	cronService.KickOutOrderIntentsNotBackedByFunds()
+	// cronService.KickOutOrderIntentsNotBackedByFunds()
 
 	// Start a HTTP health check server on port 8889
 	go func() {

@@ -70,10 +70,11 @@ message ChallengeRequest {
 }
 
 message VerifyChallengeRequest {
-  string challenge_response = 1          [json_name = "challengeResponse", (validate.rules).string = {min_len: 10, max_len: 2048}]; // the signature of the challenge string, signed by the client and sent back to the server for verification
-  string public_key = 2                  [json_name = "publicKey",         (validate.rules).string = {pattern: "^(04|03|02)[0-9a-fA-F]{32,256}$"} /* uncompressed (04...) or compressed (02... or 03...) public key (ed25519, ecdsa, etc.) in hex format */];
-  uint32 key_type = 3                    [json_name = "keyType",           (validate.rules).uint32 = {in: [1, 2]} /* 1 = ed25519, 2 = ecdsa_secp256k1 */];
-  ChallengeRequest challenge_request = 4 [json_name = "challengeRequest"]; // include the original ChallengeRequest for stateless verification
+  string challenge_response_base64 = 1   [json_name = "challengeResponseBase64", (validate.rules).string = {pattern: "^[A-Za-z0-9+/=]{10,}$"}]; // base64 chars only, min 10 chars
+  // string public_key = 2                  [json_name = "publicKey",         (validate.rules).string = {pattern: "^(04|03|02)[0-9a-fA-F]{32,256}$"} /* uncompressed (04...) or compressed (02... or 03...) public key (ed25519, ecdsa, etc.) in hex format */];
+  // uint32 key_type = 3                    [json_name = "keyType",           (validate.rules).uint32 = {in: [1, 2]} /* 1 = ed25519, 2 = ecdsa_secp256k1 */];
+  string payload = 2                     [json_name = "payload",           (validate.rules).string = {min_len: 5, max_len: 256}]; // min 5 chars, max 256 chars
+  ChallengeRequest challenge_request = 3 [json_name = "challengeRequest"]; // echo back the original challenge request for correlation
 }
 
 message MacroMetadataResponse {

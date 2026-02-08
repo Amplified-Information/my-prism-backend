@@ -73,3 +73,24 @@ func (urr *UserRoleRepository) UpdateUserChallenge(accountId string, network str
 	}
 	return true, nil
 }
+
+func (urr *UserRoleRepository) GetRolesByUserAndNetwork(accountId string, network string) ([]string, error) {
+	if urr.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	q := sqlc.New(urr.db)
+	results, err := q.GetRolesByUserAndNetwork(context.Background(), sqlc.GetRolesByUserAndNetworkParams{
+		WalletID: accountId,
+		Network:  network,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get roles by user and network: %v", err)
+	}
+
+	var roles []string
+	for _, r := range results {
+		roles = append(roles, r)
+	}
+	return roles, nil
+}

@@ -69,10 +69,10 @@ const Market = () => {
           My positions:
           <br/>
           <span className="ml-2 font-bold text-green-600 dark:text-green-400">
-            Yes ${(Number(userPortfolio.positions[marketId!]?.yes) / (10 ** usdcNdecimals)).toFixed(2)}
+            Yes ${(Number(userPortfolio.positions[marketId!]?.position.yes) / (10 ** usdcNdecimals)).toFixed(2)}
           </span>
           <span className="ml-4 font-bold text-red-600 dark:text-red-400">
-            No ${(Number(userPortfolio.positions[marketId!]?.no) / (10 ** usdcNdecimals)).toFixed(2)}
+            No ${(Number(userPortfolio.positions[marketId!]?.position.no) / (10 ** usdcNdecimals)).toFixed(2)}
           </span>
         </div>
         <button
