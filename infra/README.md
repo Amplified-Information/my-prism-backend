@@ -41,7 +41,9 @@ The following resources (static - not to be deleted) should be created manually 
 - DNS hosted zone on Route 53 (AWS)
 - AWS certificates
 - EBS (elastic block storage) for persistent data storage
-- S3 bucket - a landing zone for deploying docker-compose* files
+- S3 bucket (prismlabs-deployment) - a landing zone for deploying docker-compose* files
+- S3 bucket (pl-deployment-badges) - a landing zone to store status badges (.svg) about the current deployment
+- S3 bucket (prismlabs-images) - a place which serves uploaded market image files
 - AWS SES service
 - ~~EIP (elastic IP address)~~
 
@@ -73,7 +75,7 @@ hosted zone ID: `Z07868573V3HLWHKP9WV6`
 
 **backed up*
 
-## S3 bucket
+## S3 bucket (prismlabs-deployment)
 
 | Environent |  Name                | arn                                | region    | url                                                       |
 | -----------|----------------------|------------------------------------|-----------|-----------------------------------------------------------|
@@ -117,6 +119,151 @@ Now create a new policy called `s3-landing-zone-policy` (so github Actions can a
 - Retrieve the access key (`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` for the user `github-actions-s3-writer`) from the AWS IAM web UI
 - Add `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` to github "Repository secrets" https://github.com/PrismMarketLabs/Hedera-Prediction/settings/secrets/actions
 - the github action `s3-upload.yml` should now run
+
+
+
+## S3 bucket (pl-deployment-badges)
+
+--> Step 1
+
+One-time setup (clickops via S3 page on AWS web UI). Create a new S3 bucket:
+
+- **allow** all public access
+- ACLs disabled (AWS IAM is used for access)
+- Enable bucket key
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    // allow public read access to pl-deployment-badges:
+    {
+      "Sid": "AllowPublicRead",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::pl-deployment-badges/*"
+    },
+  ]
+}
+```
+
+--> Step 2
+
+The EC2 box should be able to upload images to "pl-deployment-badges/*"
+
+Add the following to the infra/main.tf (allow EC2 box to upload a .svg image):
+
+```bash
+resource "aws_iam_policy" "combined_policy" {
+  ...
+  Statement = [
+      ...
+    // terraform applies this at the EC2 box level (role {ENV}-combined-policy)
+    ...
+    {
+       "Sid": "AllowWriteToSpecificBucket",
+       "Effect": "Allow",
+       "Action": [
+         "s3:PutObject",
+         "s3:PutObjectAcl",
+         "s3:AbortMultipartUpload",
+         "s3:ListBucket"
+       ],
+       "Resource": [
+         "arn:aws:s3:::pl-deployment-badges",
+         "arn:aws:s3:::pl-deployment-badges/*"
+       ]
+    }
+```
+
+## S3 bucket (prismlabs-images) 
+
+One-time setup (clickops):
+
+--> Step 1 (AWS web UI for S3):
+
+Create a new S3 bucket as follows:
+
+- **allow** all public access
+- ACLs disabled
+- Enable bucket key
+
+Add the following policy to the S3 bucket (AWS web UI):
+
+```json
+// public read access to the S3 bucket called prismlabs-images/*
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "AllowPublicRead",
+            "Effect": "Allow",
+            "Principal": "*",
+            "Action": "s3:GetObject",
+            "Resource": "arn:aws:s3:::prismlabs-images/*"
+        }
+    ]
+}
+```
+
+--> Step 2:
+
+Add the following to the infra/main.tf:
+
+```bash
+resource "aws_iam_policy" "combined_policy" {
+  ...
+  Statement = [
+      ...
+      // EC2 box has S3 WRITE access to s3://prismlabs-images":
+      {
+        Effect = "Allow",
+        Action = [
+          "s3:PutObject",
+          "s3:PutObjectAcl",
+          "s3:AbortMultipartUpload",
+          "s3:ListBucket"
+        ],
+        Resource = [
+          "arn:aws:s3:::prismlabs-images",
+          "arn:aws:s3:::prismlabs-images/*"
+        ]
+      }
+      ...
+```
+
+Apply it:
+
+`terraform apply`
+
+There's an aws_iam_policy called `ENV-combined-policy` which is attached to the EC2 box's role
+
+Test with:
+
+```bash
+echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X2ZcAAAAASUVORK5CYII=" | base64 -d > x.png
+aws s3 cp x.png "s3://prismlabs-images/dev/x.png" --content-type image/png
+```
+
+Should be able to access the image at:
+
+https://prismlabs-images.s3.amazonaws.com/dev/x.png
+
+It should also work inside the docker container on the EC2 box:
+
+`docker exec -it 3241217a46a2 /bin/bash`
+
+```bash
+apt-get update
+
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+./aws/install
+
+echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X2ZcAAAAASUVORK5CYII=" | base64 -d > x.png
+aws s3 cp x.png "s3://prismlabs-images/dev/x.png" --content-type image/png
+```
 
 ### EC2 boxes accessing the files on S3
 

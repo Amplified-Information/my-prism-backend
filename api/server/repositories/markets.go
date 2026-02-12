@@ -12,8 +12,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-
-	pb_api "api/gen"
 )
 
 type MarketsRepository struct {
@@ -84,25 +82,25 @@ func (marketsRepository *MarketsRepository) GetMarkets(limit int32, offset int32
 	return markets, nil
 }
 
-func (marketsRepository *MarketsRepository) CreateMarket(req *pb_api.CreateMarketRequest, smartContractId string) (*sqlc.Market, error) {
+func (marketsRepository *MarketsRepository) CreateMarket(marketId string, _net string, _imageUrl string, _statement string, _closesAt string, _description string, smartContractId string) (*sqlc.Market, error) {
 	if marketsRepository.db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
 
-	marketUUID, err := uuid.Parse(req.MarketId)
+	marketUUID, err := uuid.Parse(marketId)
 	if err != nil {
 		return nil, fmt.Errorf("invalid marketId uuid: %v", err)
 	}
 
-	net := strings.ToLower(req.Net)
+	net := strings.ToLower(_net)
 	isValid := lib.IsValidNetwork(net)
 	if !isValid {
 		return nil, fmt.Errorf("invalid network: %s", net)
 	}
 
-	imageUrl := strings.TrimSpace(req.ImageUrl)
+	imageUrl := strings.TrimSpace(_imageUrl)
 
-	statement := strings.TrimSpace(req.Statement)
+	statement := strings.TrimSpace(_statement)
 
 	isValidSmartContractId := lib.IsValidAccountId(smartContractId)
 	if !isValidSmartContractId {
@@ -110,13 +108,15 @@ func (marketsRepository *MarketsRepository) CreateMarket(req *pb_api.CreateMarke
 	}
 
 	closesAt := time.Now().Add(30 * 24 * time.Hour) // default: 30 days from now
-	if req.ClosesAt != nil {                        // the optional param is not set
-		closesAtTime, err := time.Parse(time.RFC3339, *req.ClosesAt)
+	if _closesAt != "" {                            // the optional param is not set
+		closesAtTime, err := time.Parse(time.RFC3339, _closesAt)
 		if err != nil {
-			return nil, fmt.Errorf("invalid closesAt time format: %v", err)
+			return nil, fmt.Errorf("invalid closesAt time format (must be RFC3339): %v", err)
 		}
 		closesAt = closesAtTime
 	}
+
+	description := strings.TrimSpace(_description)
 
 	// OK
 	// Start a transaction
@@ -134,6 +134,7 @@ func (marketsRepository *MarketsRepository) CreateMarket(req *pb_api.CreateMarke
 		ImageUrl:        sql.NullString{String: imageUrl, Valid: imageUrl != ""},
 		SmartContractID: smartContractId,
 		ClosesAt:        closesAt,
+		Description:     description,
 	})
 	if err != nil {
 		tx.Rollback() // Rollback the transaction on error
@@ -148,29 +149,6 @@ func (marketsRepository *MarketsRepository) CreateMarket(req *pb_api.CreateMarke
 	log.Printf("Created new market in database: %s", market.MarketID.String())
 	return &market, nil
 }
-
-// func (dbRepository *DbRepository) GetPricesByMarketInRange(marketId string, ts1 time.Time, ts2 time.Time) ([]sqlc.GetPricesByMarketInRangeRow, error) {
-// 	if dbRepository.db == nil {
-// 		return nil, fmt.Errorf("database not initialized")
-// 	}
-
-// 	marketUUID, err := uuid.Parse(marketId)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("invalid marketId uuid: %v", err)
-// 	}
-
-// 	q := sqlc.New(dbRepository.db)
-// 	priceHistory, err := q.GetPricesByMarketInRange(context.Background(), sqlc.GetPricesByMarketInRangeParams{
-// 		MarketID: marketUUID,
-// 		Ts:       ts1,
-// 		Ts_2:     ts2,
-// 	})
-// 	if err != nil {
-// 		return nil, fmt.Errorf("GetPricesByMarketSince failed: %v", err)
-// 	}
-
-//		return priceHistory, nil
-//	}
 
 func (marketsRepository *MarketsRepository) CountUnresolvedMarkets() (int64, error) {
 	if marketsRepository.db == nil {

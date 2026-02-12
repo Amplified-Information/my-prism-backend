@@ -2,19 +2,62 @@
 
 This project is divided into a number of folders:
 
-- `scs`: on-chain smart contracts
+deployable services:
+
 - `clob`: an off-chain CLOB which matches cryptographically signed buy/sell order intents
-- `infra`: infrastructure-as-code (AWS-orientated)
-- `mw`: middleware for web app (server-side control of preview links across social media platforms)
-- `web`: prism web front-end (a git **submodule** to a separate front-end)
+- `api`: an API backend
+- `web`: [`prism-front-end`](https://github.com/PrismMarketLabs/prism-front-end) - the main Lovable web app (Note: this is a git **submodule** to a *separate* front-end repo)
 - `web.lp`: a landing page
 - `web.eng`: an engineering front-end
 - `web.uat`: a web app for the uat environment
-- `api`: an API backend
 - `proxy`: a proxy to marshall traffic
 - `eventbus`: event bus for pub/sub message communication
+- `mw`: middleware for web app (server-side control of preview links across social media platforms)
+
+modular components:
+
+- `scs`: on-chain smart contracts
+- `infra`: infrastructure-as-code (AWS-orientated)
 - `resources`: a version-controlled area to store artifacts, design files, images, etc.
 - `scripts`: some general usage scripts
+
+## build status (live):
+
+https://github.com/PrismMarketLabs/prism/actions
+
+![api](https://github.com/PrismMarketLabs/prism/actions/workflows/build-api.yml/badge.svg)
+![clob](https://github.com/PrismMarketLabs/prism/actions/workflows/build-clob.yml/badge.svg)
+![db](https://github.com/PrismMarketLabs/prism/actions/workflows/build-db.yml/badge.svg)
+![eventbus](https://github.com/PrismMarketLabs/prism/actions/workflows/build-eventbus.yml/badge.svg)
+![mw](https://github.com/PrismMarketLabs/prism/actions/workflows/build-mw.yml/badge.svg)
+![proxy](https://github.com/PrismMarketLabs/prism/actions/workflows/build-proxy.yml/badge.svg)
+![web](https://github.com/PrismMarketLabs/prism/actions/workflows/build-web__submodule__.yml/badge.svg)
+![web.eng](https://github.com/PrismMarketLabs/prism/actions/workflows/build-web.eng.yml/badge.svg)
+![web.lp](https://github.com/PrismMarketLabs/prism/actions/workflows/build-web.lp.yml/badge.svg)
+
+## currently released (live):
+
+To release a new version of a service, follow the release procedure here: https://github.com/PrismMarketLabs/prism?tab=readme-ov-file#release-procedure
+
+`dev`
+
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1770842594) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1770842594) | [data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1770842594) |
+|---|---|---|
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1770842594) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1770842594) | ![data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1770842594) |
+
+`uat`
+
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1770842594) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1770842594) | [data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1770842594) |
+|---|---|---|
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1770842594) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1770842594) | ![data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1770842594) |
+
+`prod`
+
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1770842594) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1770842594) | [data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1770842594) |
+|---|---|---|
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1770842594) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1770842594) | ![data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1770842594) |
+
+*Note: see .git/hooks/pre-commit to see how to update the cache-busting nonce*
 
 ## Quickstart
 
@@ -102,6 +145,9 @@ ssh-add ~/Desktop/uat.pem
 ssh-add ~/Desktop/prod-bastion.pem
 ssh-add ~/Desktop/prod.pem
 
+#remove all keys with:
+ssh-add -D
+
 # You can now connect to a remote box using `ssh -A ...` and the ssh agent will automatically use the appropriate key you loaded into the ssh agent using the ssh-add command above
 
 # example of setting up the tunnel for a remote db connection:
@@ -175,7 +221,7 @@ https://github.com/orgs/PrismMarketLabs/packages
 
 Create a PAT here: https://github.com/settings/tokens/new - check `read:packages`, `write:packages` and `delete:packages`
 
-Call the token "ghcr"
+Call the token "PACKAGE_RW"
 
 ```bash
  export PAT=ghp_...
@@ -255,17 +301,21 @@ There is an **intentional separation** between **configuration** (`.config.ENV`)
 2. update the TAGS file
 3. update the docker-compose-<SERVICE>.<ENV>.yml file
 4. push the source code
-5. login to the box (via bastion) and refresh the running image
+5. login to the box (via bastion) and refresh the running image(s)
 
 ### 1. tag the image
 
 View all the images here: https://github.com/orgs/PrismMarketLabs/packages
 
-**Please do NOT push tagged images that were built locally/manually**
+**Please do NOT push tagged images that were built locally/manually - only tag those images that were built via github Actions**
 
-On your local machine, pull the image you want to tag:
+On your local machine, pull the image you want to tag (new: run `./tags.sh` to do this automatically):
 
 ```bash
+## **Please note**: there is now a script to peform this more quickly:
+# ./tag.sh
+# follow the prompts
+
 # first set these three env vars:
 export IMAGE_SRC=ghcr.io/prismmarketlabs/web # web.eng
 export IMAGE_DST=$IMAGE_SRC # ghcr.io/prismmarketlabs/web
@@ -289,12 +339,9 @@ docker push $IMAGE_DST:$VER_DST
 
 Update the VERSION file with a short description of the change
 
-*Note: never add a TAGS to web.eng*
+### 3. update the docker-compose-SERVICE.ENV.yml file
 
-
-### 3. update the docker-compose-<SERVICE>.<ENV>.yml file
-
-And update the docker-compose-<SERVICE>.<ENV>.yml with the new version.
+And update the docker-compose-SERVICE.ENV.yml with the new version.
 
 ### 4. push the source code
 

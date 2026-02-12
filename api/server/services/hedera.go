@@ -551,19 +551,19 @@ func (hs *HederaService) BuyPositionTokens(sideYes *pb_clob.CreateOrderRequestCl
 	return true, nil
 }
 
-func (hs *HederaService) CreateNewMarket(req *pb_api.CreateMarketRequest) (uint64, error) {
+func (hs *HederaService) CreateNewMarket(marketId string, statement string, net string) (uint64, error) {
 	// call the smart contract function createNewMarket(uint128 marketId, string memory _statement)
-	marketIdBig, err := lib.Uuid7_to_bigint(req.MarketId)
+	marketIdBig, err := lib.Uuid7_to_bigint(marketId)
 	if err != nil {
 		return 0, hs.log.Log(ERROR, "failed to convert marketId to bigint: %v", err)
 	}
 	params := hiero.NewContractFunctionParameters()
 	params.AddUint128BigInt(marketIdBig) // marketId
-	params.AddString(req.Statement)      // statement
+	params.AddString(statement)          // statement
 
 	// YES, use the X_SMART_CONTRACT_ID that's loaded in the env var (new market creation always uses the current one)
 	contractID, err := hiero.ContractIDFromString(
-		os.Getenv(fmt.Sprintf("%s_SMART_CONTRACT_ID", strings.ToUpper(req.Net))),
+		os.Getenv(fmt.Sprintf("%s_SMART_CONTRACT_ID", strings.ToUpper(net))),
 	)
 	if err != nil {
 		return 0, hs.log.Log(ERROR, "invalid smart contract ID: %v", err)
@@ -574,17 +574,17 @@ func (hs *HederaService) CreateNewMarket(req *pb_api.CreateMarketRequest) (uint6
 		SetContractID(contractID).
 		SetGas(2_000_000). // TODO - can this be lowered?
 		SetFunction("createNewMarket", params).
-		Execute(hs.hedera_clients[req.Net])
+		Execute(hs.hedera_clients[net])
 	if err != nil {
 		return 0, hs.log.Log(ERROR, "failed to execute contract: %v", err)
 	}
 
-	record, err := result.GetRecord(hs.hedera_clients[req.Net])
+	record, err := result.GetRecord(hs.hedera_clients[net])
 	if err != nil {
 		return 0, hs.log.Log(ERROR, "CreateNewMarket - tx failed (could not get transaction record). Hedera txId = %s. %v", result.TransactionID.String(), err)
 	}
 
-	// receipt, err := result.GetReceipt(hs.hedera_clients[req.Net])
+	// receipt, err := result.GetReceipt(hs.hedera_clients[net])
 	// if err != nil {
 	// 	return fmt.Errorf("failed to get transaction receipt: %v", err)
 	// }

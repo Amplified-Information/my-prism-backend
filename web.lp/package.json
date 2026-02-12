@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "build:dev": "vite build --mode development",
-    "gen": "rm -rf gen && mkdir -p gen && ./node_modules/.bin/protoc -I=../api/proto -I=../clob/proto --ts_out=gen ../api/proto/*.proto ../clob/proto/*.proto",
+    "gen": "rm -rf gen && mkdir -p gen && ./node_modules/.bin/protoc -I=../clob/proto --ts_out=gen ../clob/proto/*.proto",
     "lint": "eslint .",
     "preview": "vite preview"
   },

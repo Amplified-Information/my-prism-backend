@@ -96,3 +96,6 @@ preserve rounding when doing float to bigInt (scaled) calclations
 
 0.3.12
 enhancements for login and auth and JWT issuing (sig verification working)
+
+0.3.13
+more auth/authz changes

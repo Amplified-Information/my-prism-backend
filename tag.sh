@@ -1,3 +1,10 @@
+# Check if authenticated with Docker registry
+# if ! docker pull ghcr.io/prismmarketlabs/api:nonexistent-tag-for-auth-test 2>&1 | grep -q 'pull access denied'; then
+#   echo "ERROR: Not authenticated with ghcr.io. Please run: echo \$PAT | docker login ghcr.io -u zoikhash --password-stdin"
+#   echo "ERROR: Create a PAT here: https://github.com/settings/tokens/new - check \`read:packages\`, \`write:packages\` and \`delete:packages\`"
+#   exit 1
+# fi
+
 # ...existing code...
 IMAGE_LINE=$(yq -r ".services | to_entries[] | select(.key == \"${SERVICE}\") | .value.image" "$FILE" 2>/dev/null)
 echo "Checking $FILE: $IMAGE_LINE"

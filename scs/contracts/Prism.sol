@@ -156,7 +156,7 @@ contract Prism {
 
     // calculate the lower collateral amount:
     uint256 collateralUsdAbsScaled_lower = 0; // the lower of the two collateral amounts
-    if (collateralUsdAbsScaledYes > collateralUsdAbsScaledNo) {
+    if (collateralUsdAbsScaledYes < collateralUsdAbsScaledNo) {
       collateralUsdAbsScaled_lower = collateralUsdAbsScaledYes;
     } else {
       collateralUsdAbsScaled_lower = collateralUsdAbsScaledNo; // always transfer the lower amount of collateral (partial match)

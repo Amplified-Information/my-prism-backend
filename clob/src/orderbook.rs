@@ -248,7 +248,7 @@ impl OrderBook {
                 if incoming_order.qty <= existing_order.qty {
                     // FULL match!
                     existing_order.qty -= incoming_order.qty;
-                    if existing_order.qty == 0.0 {
+                    if existing_order.qty.abs() < 1e-3 { // small EPSILON to account for floating point precision
                         opposite_orders.remove(i);
                     }
 

@@ -84,6 +84,11 @@ func (s *server) CreateMarket(ctx context.Context, req *pb_api.CreateMarketReque
 	return result, err
 }
 
+func (s *server) CreateMarketv2(ctx context.Context, req *pb_api.CreateMarketv2Request) (*pb_api.CreateMarketResponse, error) {
+	result, err := s.marketsService.CreateMarketv2(req)
+	return result, err
+}
+
 func (s *server) PriceHistory(ctx context.Context, req *pb_api.PriceHistoryRequest) (*pb_api.PriceHistoryResponse, error) {
 	result, err := s.marketsService.PriceHistory(req)
 	return result, err
@@ -142,6 +147,7 @@ func (s *server) GetChallenge(ctx context.Context, req *pb_api.ChallengeRequest)
 }
 
 func (s *server) VerifyChallenge(ctx context.Context, req *pb_api.VerifyChallengeRequest) (*pb_api.StdResponse, error) {
+	s.logService.Log(services.INFO, "Verifying challenge for accountId: %s on network: %s, payload: %s, sigBase64: %s", req.ChallengeRequest.AccountId, req.ChallengeRequest.Network, req.Payload, req.ChallengeResponseBase64)
 	isValid, err := s.authService.VerifyChallenge(req.ChallengeRequest.AccountId, req.ChallengeRequest.Network, req.ChallengeResponseBase64, req.Payload)
 	if err != nil {
 		return &pb_api.StdResponse{
@@ -290,6 +296,7 @@ func main() {
 		"MIN_ORDER_SIZE_USD",
 		"CRON_STR",
 		"JWT_EXPIRY_HOURS",
+		"S3_BUCKET_NAME",
 		// secrets:
 		"DB_PWORD",
 		"PREVIEWNET_HEDERA_OPERATOR_KEY",

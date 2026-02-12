@@ -232,7 +232,7 @@ const Index = () => {
 
       <footer className="relative z-10 pb-8 text-center">
         <p className="text-sm text-muted-foreground">
-          © 2025 Prism.Market
+          © {new Date().getFullYear()} Prism.Market
         </p>
       </footer>
     </div>

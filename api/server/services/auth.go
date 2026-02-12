@@ -7,8 +7,13 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"os"
+	"strings"
+	"time"
 
+	"github.com/golang-jwt/jwt/v4"
 	hiero "github.com/hiero-ledger/hiero-sdk-go/v2/sdk"
+	"google.golang.org/grpc/metadata"
 )
 
 type AuthService struct {
@@ -93,62 +98,80 @@ func (as *AuthService) VerifyChallenge(walletIdStr string, network string, sigBa
 
 	// only return true if the signature is valid
 	if isOK {
+		as.log.Log(INFO, "sig OK - walletId: %s, network: %s", walletIdStr, network)
 		return true, nil
 	}
 
 	return false, as.log.Log(ERROR, "invalid signature - unknown reason")
-	// var publicKeyHex = "03b6e6702057a1b8be59b567314abecf4c2c3a7492ceb289ca0422b18edbac0787"
-	// // var sigHex = "c16d1016ab110e4c8ad33cfa10d334dadc192dedf39df15af79c3f64bbd217a334444e7ac3821f9271492d98a425fc55f0bc833ace3a2275c123dfeaaf227a1e"
-	// var sigBase64 = "wW0QFqsRDkyK0zz6ENM02twZLe3znfFa95w/ZLvSF6M0RE56w4IfknFJLZikJfxV8LyDOs46InXBI9/qryJ6Hg=="
-	// // var payload = ""
-	// // var keccakHex = "0x9824e68c38df027394be5abb0d396def93d09589fd8073d1757858b5da88eba3"
-
-	// publicKey, err := hiero.PublicKeyFromStringECDSA(publicKeyHex)
-	// if err != nil {
-	// 	log.Fatalf("Failed to parse public key: %v", err)
-	// }
-
-	// var payloadHex = fmt.Sprintf("%x", "1770462418776")
-	// log.Printf("payloadHex: %s", payloadHex)
-
-	// // payload, err := lib.Hex2utf8("1770462418776")
-	// // keccak := lib.Keccak256([]byte(payload))
-	// // log.Printf("keccak (hex) calc'd on back-end: %x", keccak)
-	// // log.Printf(keccakHex)
-
-	// result, err := lib.VerifySig(&publicKey, payloadHex, sigBase64)
-	// log.Printf("Signature valid: %v, error: %v", result, err)
-
-	// retrieve the challenge for the walletId and network from the database
-	// challenge, err := as.userRoleRepository.GetUserChallenge(walletIdStr, network)
-	// if err != nil {
-	// 	return false, as.log.Log(ERROR, "failed to get user challenge: %v", err)
-	// }
-
-	// // verify the signature of the challenge using the public key
-	// // Convert int64 challenge to []byte
-	// challengeBytes := make([]byte, 8)
-	// binary.BigEndian.PutUint64(challengeBytes, uint64(challenge))
-	// as.log.Log(INFO, "Verifying signature (%s) for walletId: %s on network: %s with challenge: %d", sig, walletIdStr, network, challenge)
-	// sigUtf8, err := lib.Hex2utf8(sig)
-	// if err != nil {
-	// 	return false, as.log.Log(ERROR, "failed to decode signature: %v", err)
-	// }
-	// isValid := publicKey.VerifySignedMessage(challengeBytes, []byte(sigUtf8))
-	// if !isValid {
-	// 	return false, as.log.Log(ERROR, "invalid signature")
-	// }
-
-	// // return true if the signature is valid, false otherwise
-	// return true, nil
 }
 
 func (as *AuthService) HasRole(ctx context.Context, role lib.RolesType) bool {
-	// TODO
-	// Extract the JWT token from the context
-	// Parse the token and extract the user's roles
-	// Validate the token and check if it is expired
-	// Check if the required role is in the user's roles
+	md, ok := metadata.FromIncomingContext(ctx)
+	if ok {
+		authHeaders := md.Get("authorization")
+		if len(authHeaders) > 0 {
+			token := authHeaders[0] // "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+			// 0. Extract the JWT token from the context
+			var tokenString = ""
+			parts := strings.Split(token, " ")
+			if len(parts) == 2 && parts[0] == "Bearer" {
+				tokenString = parts[1]
+			} else {
+				as.log.Log(ERROR, "invalid authorization header format")
+				return false
+			}
+
+			// 1. Validate sig and parse the token and extract the user's claims
+			// fmt.Println("JWT_SECRET env:", os.Getenv("JWT_SECRET")) // Debug
+			claims := jwt.MapClaims{}
+			tok, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+				// fmt.Println("Verifying with secret:", os.Getenv("JWT_SECRET")) // Debug
+				// fmt.Println("tokenSting: ", tokenString)                       // Debug
+				return []byte(os.Getenv("JWT_SECRET")), nil
+			})
+			if err != nil || !tok.Valid {
+				as.log.Log(ERROR, "invalid JWT token: %v", err)
+				return false
+			}
+
+			// 3. Validate the token and check if it is expired
+			as.log.Log(INFO, "JWT claims: %+v", claims)
+			exp, ok := claims["exp"].(float64)
+			if !ok {
+				as.log.Log(ERROR, "invalid exp claim in JWT token")
+				return false
+			}
+
+			now := float64(time.Now().Unix())
+			if exp < now {
+				as.log.Log(ERROR, "JWT token has expired")
+				return false
+			}
+
+			// 4. Check if the required role is in the user's roles
+			rolesClaim, ok := claims["roles"].([]interface{})
+			if !ok {
+				as.log.Log(ERROR, "invalid roles claim in JWT token")
+				return false
+			}
+
+			for _, r := range rolesClaim {
+				if roleStr, ok := r.(string); ok && roleStr == string(role) {
+					return true
+				}
+			}
+			as.log.Log(ERROR, "required role %s not found in user's roles", role)
+
+			// 5. Let's also check the database for the user's role (e.g. revoked tokens won't work)
+			// TODO - may not be needed - sig check sufficient
+			// as.userRoleRepository.Get(claims["sub"].(string), claims["network"].(string))
+
+			as.log.Log(INFO, "User logged in OK %s", claims["accountId"].(string))
+			return true
+		}
+	}
+
 	return false
 }
 

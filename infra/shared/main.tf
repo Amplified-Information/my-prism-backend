@@ -319,14 +319,41 @@ docker compose -f "$BASE_FILE" -f "$ENV_FILE" up -d # daemon mode
 # List running containers:
 docker ps
 
+
+
+### svg deployment badge generation and upload (for rendering on README.md):
+
+lines=$(docker compose ps --format "table {{.Service}}\t{{.Image}}" 2>/dev/null | tail -n +2 | while read svc img; do
+   tag=$(echo "$img" | awk -F: '{print $2}')
+   echo "$svc $tag"
+done)
+
+count=$(echo "$lines" | wc -l)
+height=$((40 + 20 * count))
+
+echo "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"300\" height=\"$height\" style=\"font-family:monospace\">" > "$MACHINE.svg"
+echo "<text x=\"10\" y=\"20\" font-size=\"16\" fill=\"green\">$MACHINE</text>" >> "$MACHINE.svg"
+
+y=40
+echo "$lines" | while read svc tag; do
+  echo "<text x=\"30\" y=\"$y\" font-size=\"14\"><tspan fill=\"blue\">$svc</tspan>:<tspan fill=\"purple\">$tag</tspan></text>" >> "$MACHINE.svg"
+  y=$((y + 20))
+done
+
+echo "</svg>" >> "$MACHINE.svg"
+
+echo "Uploading svg to s3://pl-deployment-badges/$ENVIRONMENT/$MACHINE.svg..."
+aws s3 cp "$MACHINE.svg" "s3://pl-deployment-badges/$ENVIRONMENT/$MACHINE.svg" --content-type image/svg+xml
+aws s3 cp "s3://pl-deployment-badges/$ENVIRONMENT/$MACHINE.svg" "s3://pl-deployment-badges/$ENVIRONMENT/$MACHINE.svg" --metadata-directive REPLACE --content-type image/svg+xml --cache-control "no-cache, no-store, must-revalidate"
+rm "$MACHINE.svg"
+
+echo "svg badge uploaded successfully."
+
 SCRIPT
 
 # Make the 2_dockerComposeUp.sh script executable
 chown admin:admin /home/admin/2_dockerComposeUp.sh
 chmod +x /home/admin/2_dockerComposeUp.sh
-
-
-
 
 
 
@@ -902,7 +929,16 @@ resource "aws_iam_policy" "combined_policy" {
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
-      // S3 read access
+      // EC2 box has ssm read access
+      {
+        Effect = "Allow",
+        Action = "ssm:GetParameter",
+        Resource = [
+          "arn:aws:ssm:us-east-1:063088900305:parameter/read_ghcr",
+          "arn:aws:ssm:us-east-1:063088900305:parameter/*"    # TODO reduce scope for /prod/*
+        ]
+      },
+      // EC2 box has S3 READ access to "prismlabs-deployment"
       {
         Effect = "Allow",
         Action = [
@@ -914,18 +950,38 @@ resource "aws_iam_policy" "combined_policy" {
           "arn:aws:s3:::prismlabs-deployment/*"
         ]
       },
-      // ssm read access
+      // EC2 box has S3 WRITE access to s3://pl-deployment-badges":
       {
         Effect = "Allow",
-        Action = "ssm:GetParameter",
+        Action = [
+          "s3:PutObject",
+          "s3:PutObjectAcl",
+          "s3:AbortMultipartUpload",
+          "s3:ListBucket"
+        ],
         Resource = [
-          "arn:aws:ssm:us-east-1:063088900305:parameter/read_ghcr",
-          "arn:aws:ssm:us-east-1:063088900305:parameter/*"    # TODO reduce scope for /prod/*
+          "arn:aws:s3:::pl-deployment-badges",
+          "arn:aws:s3:::pl-deployment-badges/*"
+        ]
+      },
+      // EC2 box has S3 WRITE access to s3://prismlabs-images":
+      {
+        Effect = "Allow",
+        Action = [
+          "s3:PutObject",
+          "s3:PutObjectAcl",
+          "s3:AbortMultipartUpload",
+          "s3:ListBucket"
+        ],
+        Resource = [
+          "arn:aws:s3:::prismlabs-images",
+          "arn:aws:s3:::prismlabs-images/*"
         ]
       }
     ]
   })
 }
+
 
 resource "aws_iam_role_policy_attachment" "combined_policy_attach" {
   role       = aws_iam_role.combined_role.name

@@ -4,7 +4,7 @@
 # docker compose -f docker-compose-data.yml -f docker-compose-data.dev.yml up -d
 services:
   db:
-    image: ghcr.io/prismmarketlabs/db:0.1.1
+    image: ghcr.io/prismmarketlabs/db:0.1.2
     # pull_policy: always
     restart: always
     volumes:

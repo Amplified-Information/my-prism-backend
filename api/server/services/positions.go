@@ -52,12 +52,14 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 	for _, userPosition := range userPositions {
 		priceUsd, err := ps.priceService.GetLatestPriceByMarket(userPosition.MarketID.String())
 		if err != nil {
-			return nil, ps.log.Log(ERROR, "failed to get latest price for market %s: %v", userPosition.MarketID.String(), err)
+			ps.log.Log(WARN, "skipping market %s: failed to get latest price: %v", userPosition.MarketID.String(), err)
+			continue // skip to next userPosition
 		}
 
 		market, err := ps.marketsRepository.GetMarketById(userPosition.MarketID.String())
 		if err != nil {
-			return nil, ps.log.Log(ERROR, "failed to get market %s: %v", userPosition.MarketID.String(), err)
+			ps.log.Log(WARN, "skipping market %s: failed to get market: %v", userPosition.MarketID.String(), err)
+			continue // skip to next userPosition
 		}
 
 		position := &pb_api.Position{

@@ -1,4 +1,4 @@
-import { authClient } from '../grpcClient'
+import { apiClient, authClient, authHeaders } from '../grpcClient'
 import { useEffect, useState } from 'react'
 import { useAppContext } from '../AppProvider'
 import { keccak256 } from 'ethers'
@@ -32,7 +32,7 @@ const Login = () => {
   }, [signerZero, networkSelected])
   
   return (
-    <div className="flex items-center justify-center">
+    <div className="">
       <h1 className="text-4xl font-bold">Login Page</h1>
 
       { isWalletConnected ? (
@@ -56,6 +56,7 @@ const Login = () => {
 
 
             // verify the challenge:
+            console.log('challenge: ', challenge.toString())
             const result = await authClient.verifyChallenge({
               challengeResponseBase64: Buffer.from(sig).toString('base64'),
               payload: challenge.toString(),
@@ -64,13 +65,12 @@ const Login = () => {
                 network: networkSelected.toString().toLowerCase()
               }
             })
+            
+            // receive the auth token:
             console.log('verifyChallenge result (headers)', result.headers)
             console.log('verifyChallenge result (response)', result.response)
 
-            // // receive the auth token:
-
-
-            
+            localStorage.setItem('jwt', result.headers['authorization'] as string)            
           } catch (error) {
             console.error('Error signing challenge:', error)
           }
@@ -79,7 +79,40 @@ const Login = () => {
       ) : (
         <p className="mt-4 text-red-600">No wallet connected</p>
       )}
+
+
+      &nbsp;&nbsp;
+      <button onClick={async () => {
+        // try an authenticated:
+        console.log('logout')
+        localStorage.removeItem('jwt')
+      }}>logout</button>
      
+
+      <br/>
+      <br/>
+      <div>
+        <button onClick={async () => {
+          // try an authenticated:
+          const test = await apiClient.getAllMatches({limit: 100, offset: 0}, authHeaders())
+          console.log(test.response)
+        }}>getAllMatches</button>
+
+        <br/>
+        <button onClick={async () => {
+          // try an authenticated:
+          const test = await apiClient.getAllPositions({limit: 100, offset: 0}, authHeaders())
+          console.log(test.response)
+        }}>getAllPositions</button>
+
+        <br/>
+        <button onClick={async () => {
+          // try an authenticated:
+          const test = await apiClient.getAllPredictionIntents({limit: 100, offset: 0}, authHeaders())
+          console.log(test.response)
+        }}>getAllPredictionIntents</button>
+
+      </div>
     </div>
   )
 }

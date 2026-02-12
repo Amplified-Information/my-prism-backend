@@ -88,7 +88,7 @@ func (ms *MarketsService) CreateMarket(req *pb_api.CreateMarketRequest) (*pb_api
 
 	// Step 1:
 	// create a market on the **smart contract** - return with error if it fails
-	remainingAllowance, err := ms.hederaService.CreateNewMarket(req)
+	remainingAllowance, err := ms.hederaService.CreateNewMarket(req.MarketId, req.Statement, req.Net)
 	if err != nil {
 		return nil, ms.log.Log(ERROR, "failed to create new market (marketId=%s) on Hedera: %v", req.MarketId, err)
 	}
@@ -106,7 +106,59 @@ func (ms *MarketsService) CreateMarket(req *pb_api.CreateMarketRequest) (*pb_api
 		// YES, use the current X_SMART_CONTRACT_ID loaded from env vars - we're creating a new market
 		os.Getenv(fmt.Sprintf("%s_SMART_CONTRACT_ID", strings.ToUpper(req.Net))),
 	)
-	market, err := ms.marketsRepository.CreateMarket(req, contractID.String())
+	market, err := ms.marketsRepository.CreateMarket(req.MarketId, req.Net, req.ImageUrl, req.Statement, *req.ClosesAt, req.Description, contractID.String())
+	if err != nil {
+		return nil, ms.log.Log(ERROR, "failed to create a new market row (marketId=%s) on the db: %v", req.MarketId, err)
+	}
+
+	/////
+	// Output: map the result to MarketResponse
+	/////
+	marketResponse, err := ms.mapMarketToMarketResponse(market)
+	if err != nil {
+		return nil, ms.log.Log(ERROR, "failed to map market to market response: %v", err)
+	}
+	return &pb_api.CreateMarketResponse{
+		MarketResponse:     marketResponse,
+		RemainingAllowance: remainingAllowance,
+	}, nil
+}
+
+func (ms *MarketsService) CreateMarketv2(req *pb_api.CreateMarketv2Request) (*pb_api.CreateMarketResponse, error) {
+	// guards
+	// protobuf validation does a great job sofar ;)
+
+	/////
+	// OK - 3 steps to create a new market
+	/////
+
+	// save the image to S3
+	imgUrl, err := lib.SaveImageToS3(req.ImgChunk, req.ImgFileName, req.ImgMimeType)
+	if err != nil {
+		return nil, ms.log.Log(ERROR, "failed to save image to S3: %v", err)
+	}
+
+	// Step 1:
+	// create a market on the **smart contract** - return with error if it fails
+	remainingAllowance, err := ms.hederaService.CreateNewMarket(req.MarketId, req.Statement, req.Net)
+	if err != nil {
+		return nil, ms.log.Log(ERROR, "failed to create new market (marketId=%s) on Hedera: %v", req.MarketId, err)
+	}
+
+	// Step 2:
+	// create market on the **CLOB**
+	err = lib.CreateMarketOnClob(req.MarketId)
+	if err != nil {
+		return nil, ms.log.Log(ERROR, "failed to create new market (marketId=%s) on CLOB: %v", req.MarketId, err)
+	}
+
+	// Step 3:
+	// now record the tx on the **db**
+	contractID, err := hiero.ContractIDFromString(
+		// YES, use the current X_SMART_CONTRACT_ID loaded from env vars - we're creating a new market
+		os.Getenv(fmt.Sprintf("%s_SMART_CONTRACT_ID", strings.ToUpper(req.Net))),
+	)
+	market, err := ms.marketsRepository.CreateMarket(req.MarketId, req.Net, imgUrl, req.Statement, *req.ClosesAt, req.Description, contractID.String())
 	if err != nil {
 		return nil, ms.log.Log(ERROR, "failed to create a new market row (marketId=%s) on the db: %v", req.MarketId, err)
 	}

@@ -4,7 +4,7 @@
 # docker compose -f docker-compose-monolith.yml -f docker-compose-monolith.dev.yml up -d
 services:
   api:
-    image: ghcr.io/prismmarketlabs/api:0.3.12
+    image: ghcr.io/prismmarketlabs/api:0.3.13
     # pull_policy: always
     restart: always
     ports:
@@ -54,6 +54,7 @@ services:
       MIN_ORDER_SIZE_USD: ${MIN_ORDER_SIZE_USD}
       CRON_STR: ${CRON_STR}
       JWT_EXPIRY_HOURS: ${JWT_EXPIRY_HOURS}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME}
       # secrets:
       DB_PWORD: ${DB_PWORD}
       PREVIEWNET_HEDERA_OPERATOR_KEY: ${PREVIEWNET_HEDERA_OPERATOR_KEY}
@@ -63,7 +64,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
 
   clob:
-    image: ghcr.io/prismmarketlabs/clob:0.2.10
+    image: ghcr.io/prismmarketlabs/clob:0.2.11
     # pull_policy: always
     restart: always
     depends_on:
@@ -91,7 +92,7 @@ services:
   #     # secrets:
   #     HTPASSWD: ${HTPASSWD}
   web:
-    image: ghcr.io/prismmarketlabs/web.eng:0.4.22
+    image: ghcr.io/prismmarketlabs/web:0.6.5
     # pull_policy: always
     restart: always
     ports:

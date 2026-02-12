@@ -30,3 +30,6 @@ Updates to CLOB to support clob recreation from power failure
 
 0.2.10
 Update CLOB to ensure correct ordering of match events
+
+0.2.11
+added a floating point precision epsilon for full match

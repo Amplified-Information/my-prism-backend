@@ -26,6 +26,10 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 type HTTPMethod string
@@ -324,4 +328,44 @@ func CreateMarketOnClob(marketId string) error {
 	}
 
 	return nil
+}
+
+func SaveImageToS3(imageData []byte, fileName string, mimeType string) (string, error) {
+	// guards
+	if len(imageData) == 0 {
+		return "", fmt.Errorf("image data is empty")
+	}
+	if fileName == "" {
+		return "", fmt.Errorf("file name is empty")
+	}
+	if mimeType == "" {
+		return "", fmt.Errorf("MIME type is empty")
+	}
+
+	s3BucketName := os.Getenv("S3_BUCKET_NAME")
+	if s3BucketName == "" {
+		return "", fmt.Errorf("S3_BUCKET_NAME environment variable is not set")
+	}
+
+	// OK now we can save the image to S3 and return the URL
+	// Load AWS config (N.B. uses IAM role if running on EC2/ECS)
+	cfg, err := config.LoadDefaultConfig(context.TODO())
+	if err != nil {
+		return "", fmt.Errorf("unable to load AWS config: %w", err)
+	}
+
+	client := s3.NewFromConfig(cfg)
+
+	_, err = client.PutObject(context.TODO(), &s3.PutObjectInput{
+		Bucket:      aws.String(s3BucketName),
+		Key:         aws.String(fileName),
+		Body:        bytes.NewReader(imageData),
+		ContentType: aws.String(mimeType),
+		ACL:         "public-read", // Optional: make public if you want public access
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to upload to S3: %w", err)
+	}
+
+	return fmt.Sprintf("https://%s.s3.amazonaws.com/%s", s3BucketName, fileName), nil
 }

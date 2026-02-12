@@ -109,6 +109,21 @@ easyrpc c -a localhost:8090 -w -i ./api/proto -p api.proto -d '{"marketId":"","n
 easyrpc c -a localhost:8888 -i ./api/proto -p api.proto -d '{"accountId":"0.0.7090546","network":"testnet"}' api.ApiAuth.GetChallenge
 
 
+# Create market with image upload:
+
+echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X2ZcAAAAASUVORK5CYII=" | base64 -d > x.png
+BASE64_STR=$(base64 -w 0 x.png)
+echo $BASE64_STR
+
+sudo apt-get install pipx
+pipx install uuid7
+UUID7=$(uuid7)
+echo $UUID7
+
+easyrpc c -a localhost:8888 -i ./api/proto -p api.proto -d '{"marketId":"","net":"testnet","statement":"some statement","description":"some description","img_chunk":"'$BASE64_STR'","img_file_name":"imgFn.png","img_mime_type":"image/png"}' api.ApiServicePublic.CreateMarketv2
+
+
+
 
 ### OLD grpcurl commands
 ###

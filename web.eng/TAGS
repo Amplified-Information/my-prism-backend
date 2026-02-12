@@ -102,3 +102,6 @@ web - update order entry panel Buy/Sell to Yes/No
 
 0.4.22
 sync with latest protobufs. Resolved frontend signing issue.
+
+0.4.23
+new changes for auth/authz
