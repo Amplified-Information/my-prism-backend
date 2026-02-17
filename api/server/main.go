@@ -6,7 +6,6 @@ import (
 	"api/server/services"
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -38,7 +37,6 @@ type server struct {
 	commentsService          services.CommentsService
 	cronService              services.CronService
 	hederaService            services.HederaService
-	logService               services.LogService
 	marketsService           services.MarketsService
 	matchesService           services.MatchesService
 	natsService              services.NatsService
@@ -147,7 +145,7 @@ func (s *server) GetChallenge(ctx context.Context, req *pb_api.ChallengeRequest)
 }
 
 func (s *server) VerifyChallenge(ctx context.Context, req *pb_api.VerifyChallengeRequest) (*pb_api.StdResponse, error) {
-	s.logService.Log(services.INFO, "Verifying challenge for accountId: %s on network: %s, payload: %s, sigBase64: %s", req.ChallengeRequest.AccountId, req.ChallengeRequest.Network, req.Payload, req.ChallengeResponseBase64)
+	lib.Log(lib.LOG_INFO, "Verifying challenge for accountId: %s on network: %s, payload: %s, sigBase64: %s", req.ChallengeRequest.AccountId, req.ChallengeRequest.Network, req.Payload, req.ChallengeResponseBase64)
 	isValid, err := s.authService.VerifyChallenge(req.ChallengeRequest.AccountId, req.ChallengeRequest.Network, req.ChallengeResponseBase64, req.Payload)
 	if err != nil {
 		return &pb_api.StdResponse{
@@ -157,7 +155,7 @@ func (s *server) VerifyChallenge(ctx context.Context, req *pb_api.VerifyChalleng
 	}
 
 	if isValid {
-		s.logService.Log(services.INFO, "Challenge verified successfully for accountId: %s on network: %s", req.ChallengeRequest.AccountId, req.ChallengeRequest.Network)
+		lib.Log(lib.LOG_INFO, "Challenge verified successfully for accountId: %s on network: %s", req.ChallengeRequest.AccountId, req.ChallengeRequest.Network)
 
 		// N.B. generate a new challenge for the next authentication attempt to prevent replay attacks (even if the current attempt is successful, we want to invalidate the current challenge so it can't be reused):
 		_, err := s.authService.UpdateChallenge(req.ChallengeRequest.AccountId, req.ChallengeRequest.Network)
@@ -207,7 +205,7 @@ func (s *server) VerifyChallenge(ctx context.Context, req *pb_api.VerifyChalleng
 
 func (s *server) GetAllMatches(ctx context.Context, req *pb_api.LimitOffsetRequest) (*pb_api.MatchesResponse, error) {
 	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
-		return nil, s.logService.Log(services.ERROR, "unauthorized: ADMIN role required")
+		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
 	}
 
 	allMatches, err := s.matchesService.GetAllMatches(req.Limit, req.Offset)
@@ -222,7 +220,7 @@ func (s *server) GetAllMatches(ctx context.Context, req *pb_api.LimitOffsetReque
 
 func (s *server) GetAllPositions(ctx context.Context, req *pb_api.LimitOffsetRequest) (*pb_api.PositionsResponse, error) {
 	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
-		return nil, s.logService.Log(services.ERROR, "unauthorized: ADMIN role required")
+		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
 	}
 
 	positions, err := s.positionsService.GetAllPositions(req.Limit, req.Offset)
@@ -237,7 +235,7 @@ func (s *server) GetAllPositions(ctx context.Context, req *pb_api.LimitOffsetReq
 
 func (s *server) GetAllPredictionIntents(ctx context.Context, req *pb_api.LimitOffsetRequest) (*pb_api.PredictionIntentsResponse, error) {
 	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
-		return nil, s.logService.Log(services.ERROR, "unauthorized: ADMIN role required")
+		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
 	}
 
 	predictionIntents, err := s.predictionIntentsService.GetAllPredictionIntents(req.Limit, req.Offset)
@@ -251,6 +249,12 @@ func (s *server) GetAllPredictionIntents(ctx context.Context, req *pb_api.LimitO
 }
 
 func main() {
+	lib.InitZapLogger(lib.LOG_INFO)
+	fatal := func(msg string, args ...interface{}) {
+		lib.Log(lib.LOG_ERROR, msg, args...)
+		os.Exit(1)
+	}
+
 	// check env vars are available (.config.ENV and .secrets.ENV are loaded):
 	vars := []string{
 		// keep in sync with main.go, docker-compose-monolith.yml, .config and .secrets and the run command in Dockerfile
@@ -317,7 +321,7 @@ func main() {
 	}
 
 	if len(missing) > 0 {
-		log.Fatalf("Missing required environment variables: %v", missing)
+		fatal("Missing required environment variables: %v", missing)
 	}
 
 	var err error
@@ -329,128 +333,126 @@ func main() {
 	commentsRepository := repositories.CommentsRepository{}
 	err = commentsRepository.InitDb()
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		fatal("Failed to initialize database: %v", err)
 	}
 	defer commentsRepository.CloseDb()
 
 	dbRepository := repositories.DbRepository{}
 	err = dbRepository.InitDb()
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		fatal("Failed to initialize database: %v", err)
 	}
 	defer dbRepository.CloseDb()
 
 	marketsRepository := repositories.MarketsRepository{}
 	err = marketsRepository.InitDb()
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		fatal("Failed to initialize database: %v", err)
 	}
 	defer marketsRepository.CloseDb()
 
 	positionsRepository := repositories.PositionsRepository{}
 	err = positionsRepository.InitDb()
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		fatal("Failed to initialize database: %v", err)
 	}
 	defer positionsRepository.CloseDb()
 
 	predictionIntentsRepository := repositories.PredictionIntentsRepository{}
 	err = predictionIntentsRepository.InitDb()
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		fatal("Failed to initialize database: %v", err)
 	}
 	defer predictionIntentsRepository.CloseDb()
 
 	priceRepository := repositories.PriceRepository{}
 	err = priceRepository.InitDb()
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		fatal("Failed to initialize database: %v", err)
 	}
 	defer priceRepository.CloseDb()
 
 	matchesRepository := repositories.MatchesRepository{}
 	err = matchesRepository.InitDb()
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		fatal("Failed to initialize database: %v", err)
 	}
 	defer matchesRepository.CloseDb()
 
 	userRoleRepository := repositories.UserRoleRepository{}
 	err = userRoleRepository.InitDb()
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		fatal("Failed to initialize database: %v", err)
 	}
 	defer userRoleRepository.CloseDb()
 
 	/////
 	// service layer
 	/////
-	// initialize Log service
-	logService := services.LogService{}
-	logService.InitLogger(services.INFO)
+	// logger initialized above
 
 	// initialize Hedera service
 	hederaService := services.HederaService{}
-	err = hederaService.InitHedera(&logService, &dbRepository, &priceRepository, &marketsRepository, &matchesRepository, &positionsRepository)
+	err = hederaService.InitHedera(&dbRepository, &priceRepository, &marketsRepository, &matchesRepository, &positionsRepository)
 	if err != nil {
-		log.Fatalf("Failed to initialize Hedera service: %v", err)
+		fatal("Failed to initialize Hedera service: %v", err)
 	}
 	// TODO: defer hederaService cleanup
 
 	// initialize Auth service
 	authService := services.AuthService{}
-	err = authService.Init(&logService, &userRoleRepository, &hederaService)
+	err = authService.Init(&userRoleRepository, &hederaService)
 	if err != nil {
-		log.Fatalf("Failed to initialize Auth service: %v", err)
+		fatal("Failed to initialize Auth service: %v", err)
 	}
 
 	// initialize price service
 	priceService := services.PriceService{}
-	err = priceService.InitPriceService(&logService, &priceRepository)
+	err = priceService.InitPriceService(&priceRepository)
 	if err != nil {
-		log.Fatalf("Failed to initialize Price service: %v", err)
+		fatal("Failed to initialize Price service: %v", err)
 	}
 
 	// initialize Markets service
 	marketsService := services.MarketsService{}
-	err = marketsService.Init(&logService, &marketsRepository, &hederaService, &priceService)
+	err = marketsService.Init(&marketsRepository, &hederaService, &priceService)
 	if err != nil {
-		log.Fatalf("Failed to initialize Markets service: %v", err)
+		fatal("Failed to initialize Markets service: %v", err)
 	}
 
 	// initialize Matches service
 	matchesService := services.MatchesService{}
-	err = matchesService.Init(&logService, &matchesRepository)
+	err = matchesService.Init(&matchesRepository)
 	if err != nil {
-		log.Fatalf("Failed to initialize Matches service: %v", err)
+		fatal("Failed to initialize Matches service: %v", err)
 	}
 
 	// initialize Comments service
 	commentsService := services.CommentsService{}
-	err = commentsService.Init(&logService, &commentsRepository)
+	err = commentsService.Init(&commentsRepository)
 	if err != nil {
-		log.Fatalf("Failed to initialize Comments service: %v", err)
+		fatal("Failed to initialize Comments service: %v", err)
 	}
 
 	// initialize Newsletter service
 	newsletterService := services.NewsletterService{}
-	err = newsletterService.Init(&logService, &dbRepository)
+	err = newsletterService.Init(&dbRepository)
 	if err != nil {
-		log.Fatalf("Failed to initialize Newsletter service: %v", err)
+		fatal("Failed to initialize Newsletter service: %v", err)
 	}
 
 	// initialize Positions service
 	positionsService := services.PositionsService{}
-	err = positionsService.Init(&logService, &positionsRepository, &marketsRepository, &predictionIntentsRepository, &priceService)
+	err = positionsService.Init(&positionsRepository, &marketsRepository, &predictionIntentsRepository, &priceService)
 	if err != nil {
-		log.Fatalf("Failed to initialize Positions service: %v", err)
+		fatal("Failed to initialize Positions service: %v", err)
 	}
 
 	// initialize NATS
 	natsService := services.NatsService{}
-	err = natsService.InitNATS(&logService, &hederaService, &dbRepository, &matchesRepository, &predictionIntentsRepository)
+	err = natsService.InitNATS(&hederaService, &dbRepository, &matchesRepository, &predictionIntentsRepository)
 	if err != nil {
-		log.Fatalf("Failed to initialize NATS: %v", err)
+		fatal("Failed to initialize NATS: %v", err)
 	}
 	defer natsService.CloseNATS()
 	// NATS start listening for matches
@@ -458,34 +460,34 @@ func main() {
 
 	// initialize PredictionIntents service
 	predictionIntentsService := services.PredictionIntentsService{}
-	err = predictionIntentsService.Init(&logService, &dbRepository, &marketsRepository, &natsService, &hederaService, &predictionIntentsRepository)
+	err = predictionIntentsService.Init(&dbRepository, &marketsRepository, &natsService, &hederaService, &predictionIntentsRepository)
 	if err != nil {
-		log.Fatalf("Failed to initialize PredictionIntents service: %v", err)
+		fatal("Failed to initialize PredictionIntents service: %v", err)
 	}
 
 	cronService := services.CronService{}
-	err = cronService.Init(&logService, &marketsRepository, &predictionIntentsRepository, &hederaService, &predictionIntentsService)
+	err = cronService.Init(&marketsRepository, &predictionIntentsRepository, &hederaService, &predictionIntentsService)
 	if err != nil {
-		log.Fatalf("Failed to initialize Cron service: %v", err)
+		fatal("Failed to initialize Cron service: %v", err)
 	}
 
 	// initialize prism service
 	prismService := services.Prism{}
-	err = prismService.InitPrism(&logService, &dbRepository, &marketsRepository, &matchesRepository, &natsService, &hederaService, &marketsService, &predictionIntentsService)
+	err = prismService.InitPrism(&dbRepository, &marketsRepository, &matchesRepository, &natsService, &hederaService, &marketsService, &predictionIntentsService)
 	if err != nil {
-		log.Fatalf("Failed to initialize Prism service: %v", err)
+		fatal("Failed to initialize Prism service: %v", err)
 	}
 	// TODO: defer prismService cleanup
 
 	// Now start gRPC service
 	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%s", os.Getenv("API_SELF_HOST"), os.Getenv("API_SELF_PORT")))
 	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
+		fatal("Failed to listen: %v", err)
 	}
 
-	log.Printf("Smart contract ID (previewnet): %s", os.Getenv("PREVIEWNET_SMART_CONTRACT_ID"))
-	log.Printf("Smart contract ID (testnet): %s", os.Getenv("TESTNET_SMART_CONTRACT_ID"))
-	log.Printf("Smart contract ID (mainnet): %s", os.Getenv("MAINNET_SMART_CONTRACT_ID"))
+	lib.Log(lib.LOG_INFO, "Smart contract ID (previewnet): %s", os.Getenv("PREVIEWNET_SMART_CONTRACT_ID"))
+	lib.Log(lib.LOG_INFO, "Smart contract ID (testnet): %s", os.Getenv("TESTNET_SMART_CONTRACT_ID"))
+	lib.Log(lib.LOG_INFO, "Smart contract ID (mainnet): %s", os.Getenv("MAINNET_SMART_CONTRACT_ID"))
 
 	grpcServer := grpc.NewServer()
 	sharedServer := &server{
@@ -502,7 +504,6 @@ func main() {
 		commentsService:          commentsService,
 		cronService:              cronService,
 		hederaService:            hederaService,
-		logService:               logService,
 		marketsService:           marketsService,
 		matchesService:           matchesService,
 		natsService:              natsService,
@@ -521,7 +522,7 @@ func main() {
 	c := cron.New(cron.WithSeconds())
 	_, err = c.AddFunc(os.Getenv("CRON_STR"), cronService.CronJob)
 	if err != nil {
-		log.Fatalf("Failed to schedule cron job: %v", err)
+		fatal("Failed to schedule cron job: %v", err)
 	}
 	c.Start()
 	defer c.Stop()
@@ -533,15 +534,15 @@ func main() {
 			w.WriteHeader(200)
 			w.Write([]byte("200"))
 		})
-		log.Printf("✅ HTTP health endpoint running on %s:%s/health", os.Getenv("API_SELF_HOST"), os.Getenv("API_SELF_PORT_HEALTH"))
+		lib.Log(lib.LOG_INFO, "HTTP health endpoint running on %s:%s/health", os.Getenv("API_SELF_HOST"), os.Getenv("API_SELF_PORT_HEALTH"))
 		if err := http.ListenAndServe(fmt.Sprintf("%s:%s", os.Getenv("API_SELF_HOST"), os.Getenv("API_SELF_PORT_HEALTH")), nil); err != nil {
-			log.Fatalf("Failed to start HTTP health endpoint: %v", err)
+			fatal("Failed to start HTTP health endpoint: %v", err)
 		}
 	}()
 
-	log.Printf("✅ gRPC server running on %s:%s", os.Getenv("API_SELF_HOST"), os.Getenv("API_SELF_PORT"))
+	lib.Log(lib.LOG_INFO, "gRPC server running on %s:%s", os.Getenv("API_SELF_HOST"), os.Getenv("API_SELF_PORT"))
 	if err := grpcServer.Serve(lis); err != nil {
-		log.Fatalf("Failed to serve: %v", err)
+		fatal("Failed to serve: %v", err)
 	}
 	// TODO: defer grpcService cleanup
 }

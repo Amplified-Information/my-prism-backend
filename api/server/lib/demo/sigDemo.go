@@ -190,7 +190,7 @@ func HexToUTF8(hexStr string) (string, error) {
 	// Decode the hex string into bytes
 	bytes, err := hex.DecodeString(hexStr)
 	if err != nil {
-		return "", fmt.Errorf("failed to decode hex string: %w", err)
+		return "", lib.ErrorLog("failed to decode hex string", "error", err)
 	}
 
 	// Convert bytes to a UTF-8 string

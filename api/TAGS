@@ -99,3 +99,12 @@ enhancements for login and auth and JWT issuing (sig verification working)
 
 0.3.13
 more auth/authz changes
+
+0.3.14
+rationalised logging. fixed bug with order not being marked as matched on db.
+
+0.3.15
+more logging rationalisation.
+
+0.3.16
+macrometadata updates. global table

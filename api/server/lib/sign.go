@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"math"
 	"math/big"
 	"os"
@@ -31,23 +30,23 @@ import (
 * @returns a long string conforming to the format
  */
 func AssemblePayloadHexForSigning(req *pb_api.PredictionIntentRequest, usdcDecimals uint64) (string, error) {
-	log.Printf("%v", req)
+	Info("prediction intent request", "request", req)
 
 	collateralUsdAbs := math.Abs(req.PriceUsd * req.Qty)
 	collateralUsdAbsScaled, err := FloatToBigIntScaledDecimals(collateralUsdAbs, int(usdcDecimals))
 	if err != nil {
-		return "", fmt.Errorf("failed to scale collateralUsdAbs: %v", err)
+		return "", ErrorLog("failed to scale collateralUsdAbs", "error", err, "priceUsd", req.PriceUsd, "qty", req.Qty)
 	}
-	log.Printf("collateralUsdAbsScaled: %s", collateralUsdAbsScaled.String())
+	Debug("collateralUsdAbsScaled", "value", collateralUsdAbsScaled.String())
 
 	marketIdBigInt, err := Uuid7_to_bigint(req.MarketId)
 	if err != nil {
-		return "", fmt.Errorf("failed to convert MarketId: %v", err)
+		return "", ErrorLog("failed to convert MarketId", "error", err, "marketId", req.MarketId)
 	}
 
 	txIdBigInt, err := Uuid7_to_bigint(req.TxId)
 	if err != nil {
-		return "", fmt.Errorf("failed to convert TxId: %v", err)
+		return "", ErrorLog("failed to convert TxId", "error", err, "txId", req.TxId)
 	}
 
 	evmAddressBigInt := new(big.Int)
@@ -93,7 +92,7 @@ func Uuid7_to_bigint(uuid7 string) (*big.Int, error) {
 	bigIntValue := new(big.Int)
 	_, success := bigIntValue.SetString(hexString, 0) // Base 0 auto-detects the prefix
 	if !success {
-		return nil, fmt.Errorf("failed to convert UUID7 to big.Int: %s", uuid7)
+		return nil, ErrorLog("failed to convert UUID7 to big.Int", "uuid7", uuid7)
 	}
 
 	return bigIntValue, nil
@@ -158,7 +157,7 @@ func BuildSignatureMap(publicKey *hiero.PublicKey, signatureBytes []byte, keyTyp
 			SigPair: []*services.SignaturePair{sigPair},
 		}
 	default:
-		return nil, fmt.Errorf("unsupported keyType: %d", keyType)
+		return nil, ErrorLog("unsupported keyType", "keyType", keyType)
 	}
 
 	bytes, err := protobuf.Marshal(sigMap)
@@ -184,7 +183,7 @@ func FloatToBigIntScaledDecimals(value float64, nDecimals int) (*big.Int, error)
 		fractionalPart = parts[1]
 	}
 	if len(parts) > 2 {
-		return nil, fmt.Errorf("invalid float value: %f", value)
+		return nil, ErrorLog("invalid float value", "value", value)
 	}
 
 	// Pad or truncate the fractional part to nDecimals
@@ -198,7 +197,7 @@ func FloatToBigIntScaledDecimals(value float64, nDecimals int) (*big.Int, error)
 	scaledValueBigInt := new(big.Int)
 	_, ok := scaledValueBigInt.SetString(scaledValueStr, 10)
 	if !ok {
-		return nil, fmt.Errorf("failed to convert scaled value to big.Int: %s", scaledValueStr)
+		return nil, ErrorLog("failed to convert scaled value to big.Int", "scaledValueStr", scaledValueStr)
 	}
 
 	return scaledValueBigInt, nil
@@ -207,18 +206,18 @@ func FloatToBigIntScaledDecimals(value float64, nDecimals int) (*big.Int, error)
 func VerifySig(publicKey *hiero.PublicKey, payloadHex string, sigBase64 string) (bool, error) {
 	sigBytes, err := base64.StdEncoding.DecodeString(sigBase64)
 	if err != nil {
-		return false, fmt.Errorf("failed to decode signature: %w", err)
+		return false, ErrorLog("failed to decode signature", "error", err, "sigBase64Length", len(sigBase64))
 	}
 	sigHex := fmt.Sprintf("%x", sigBytes)
 	sig := make([]byte, len(sigHex)/2)
 	_, err = hex.Decode(sig, []byte(sigHex))
 	if err != nil {
-		return false, fmt.Errorf("Error decoding signature hex: %v", err)
+		return false, ErrorLog("error decoding signature hex", "error", err)
 	}
 
 	payload, err := Hex2utf8(payloadHex)
 	keccak := Keccak256([]byte(payload))
-	log.Printf("keccak (hex) calc'd on back-end: %x", keccak)
+	Debug("keccak calculated on back-end", "keccakHex", fmt.Sprintf("%x", keccak))
 
 	// JavaScript equivalent (see: test.ts:55):
 
@@ -230,7 +229,7 @@ func VerifySig(publicKey *hiero.PublicKey, payloadHex string, sigBase64 string) 
 	if isValid {
 		return true, nil
 	}
-	return false, fmt.Errorf("Invalid signature")
+	return false, ErrorLog("invalid signature")
 }
 
 func GenerateJWT(secret string, claims map[string]interface{}) (string, error) {

@@ -4,12 +4,17 @@
 # docker compose -f docker-compose-monolith.yml -f docker-compose-monolith.dev.yml up -d
 services:
   api:
-    image: ghcr.io/prismmarketlabs/api:0.3.13
+    image: ghcr.io/prismmarketlabs/api:0.3.16
     # pull_policy: always
     restart: always
     ports:
       - "8888:8888"
       - "8889:8889" # /health
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: "{{.Name}}"
     environment:
       # keep in sync with main.go, docker-compose-monolith.yml, .config and .secrets and the run command in Dockerfile
       API_SELF_HOST: ${API_SELF_HOST}
@@ -71,6 +76,11 @@ services:
       - api # API must be running so the clob can re-create orderbooks from the API on startup
     ports:
       - "50051:50051"
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: "{{.Name}}"
     environment:
       # keep in sync with main.rs, docker-compose-monolith.yml, .config and .secrets and the run command in clob Dockerfile
       CLOB_SELF_HOST: ${CLOB_SELF_HOST}
@@ -92,7 +102,7 @@ services:
   #     # secrets:
   #     HTPASSWD: ${HTPASSWD}
   web:
-    image: ghcr.io/prismmarketlabs/web:0.6.5
+    image: ghcr.io/prismmarketlabs/web:0.6.7
     # pull_policy: always
     restart: always
     ports:

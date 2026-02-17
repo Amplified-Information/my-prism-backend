@@ -6,7 +6,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/google/uuid"
@@ -21,7 +20,7 @@ type CommentsRepository struct {
 func (commentsRepository *CommentsRepository) CloseDb() error {
 	var err = commentsRepository.db.Close()
 	if err != nil {
-		return fmt.Errorf("failed to close database: %v", err)
+		return lib.ErrorLog("failed to close database", "error", err)
 	}
 	return nil
 }
@@ -31,26 +30,26 @@ func (commentsRepository *CommentsRepository) InitDb() error {
 
 	var db, err = sql.Open("postgres", connStr)
 	if err != nil {
-		return fmt.Errorf("failed to open database: %v", err)
+		return lib.ErrorLog("failed to open database", "error", err)
 	}
 	commentsRepository.db = db
 
 	// Verify connection
 	if err = db.Ping(); err != nil {
-		return fmt.Errorf("failed to ping database: %v", err)
+		return lib.ErrorLog("failed to ping database", "error", err)
 	}
 
-	log.Println("DB: CommentsRepository connected successfully")
+	lib.Info("repository connected", "repository", "CommentsRepository")
 	return nil
 }
 
 func (commentsRepository *CommentsRepository) GetCommentsByMarketId(marketId string, limit int32, offset int32) (*pb_api.GetCommentsResponse, error) {
 	if commentsRepository.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, lib.ErrorLog("database not initialized")
 	}
 	marketUUID, err := uuid.Parse(marketId)
 	if err != nil {
-		return nil, fmt.Errorf("invalid marketId uuid: %v", err)
+		return nil, lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
 	}
 
 	q := sqlc.New(commentsRepository.db)
@@ -60,7 +59,7 @@ func (commentsRepository *CommentsRepository) GetCommentsByMarketId(marketId str
 		Offset:   offset,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("GetCommentsByMarketId failed: %v", err)
+		return nil, lib.ErrorLog("GetCommentsByMarketId failed", "error", err, "marketId", marketId)
 	}
 
 	var resonseObject pb_api.GetCommentsResponse
@@ -81,16 +80,16 @@ func (commentsRepository *CommentsRepository) GetCommentsByMarketId(marketId str
 
 func (commentsRepository *CommentsRepository) CreateComment(marketId string, accountId string, content string, sig string, publicKey string, keyType uint32) (*sqlc.AddCommentRow, error) {
 	if commentsRepository.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, lib.ErrorLog("database not initialized")
 	}
 
 	marketUUID, err := uuid.Parse(marketId)
 	if err != nil {
-		return nil, fmt.Errorf("invalid marketId uuid: %v", err)
+		return nil, lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
 	}
 
 	if !lib.IsValidAccountId(accountId) {
-		return nil, fmt.Errorf("invalid accountId: %s", accountId)
+		return nil, lib.ErrorLog("invalid accountId", "accountId", accountId)
 	}
 
 	params := sqlc.AddCommentParams{
@@ -105,9 +104,9 @@ func (commentsRepository *CommentsRepository) CreateComment(marketId string, acc
 	q := sqlc.New(commentsRepository.db)
 	row, err := q.AddComment(context.Background(), params)
 	if err != nil {
-		return nil, fmt.Errorf("AddComment failed: %v", err)
+		return nil, lib.ErrorLog("AddComment failed", "error", err, "marketId", marketId, "accountId", accountId)
 	}
 
-	log.Printf("Added comment to database for market %s by account %s", marketId, accountId)
+	lib.Info("comment added", "marketId", marketId, "accountId", accountId)
 	return &row, nil
 }

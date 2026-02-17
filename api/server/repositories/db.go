@@ -1,11 +1,14 @@
 package repositories
 
 import (
+	"api/server/lib"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
-	"log"
 	"os"
+	"strconv"
+	"time"
 
 	sqlc "api/gen/sqlc"
 
@@ -20,7 +23,7 @@ type DbRepository struct {
 func (dbRepository *DbRepository) CloseDb() error {
 	var err = dbRepository.db.Close()
 	if err != nil {
-		return fmt.Errorf("failed to close database: %v", err)
+		return lib.ErrorLog("failed to close database", "error", err)
 	}
 	return nil
 }
@@ -30,35 +33,35 @@ func (dbRepository *DbRepository) InitDb() error {
 
 	var db, err = sql.Open("postgres", connStr)
 	if err != nil {
-		return fmt.Errorf("failed to open database: %v", err)
+		return lib.ErrorLog("failed to open database", "error", err)
 	}
 	dbRepository.db = db
 
 	// Verify connection
 	if err = db.Ping(); err != nil {
-		return fmt.Errorf("failed to ping database: %v", err)
+		return lib.ErrorLog("failed to ping database", "error", err)
 	}
 
-	log.Println("DB: DbRepository connected successfully")
+	lib.Info("repository connected", "repository", "DbRepository")
 	return nil
 }
 
 func (dbRepository *DbRepository) IsDuplicateTxId(txId uuid.UUID) (bool, error) {
 	if dbRepository.db == nil {
-		return false, fmt.Errorf("could not connect to database")
+		return false, lib.ErrorLog("could not connect to database")
 	}
 
 	q := sqlc.New(dbRepository.db)
 	isDuplicate, err := q.IsDuplicateTxId(context.Background(), txId)
 	if err != nil && err != sql.ErrNoRows {
-		return false, fmt.Errorf("failed to check duplicate txId: %v", err)
+		return false, lib.ErrorLog("failed to check duplicate txId", "error", err, "txId", txId.String())
 	}
 	return isDuplicate == true, nil
 }
 
 func (dbRepository *DbRepository) CreateNewsletterSubscription(email string, ipAddress string, userAgent string) error {
 	if dbRepository.db == nil {
-		return fmt.Errorf("database not initialized")
+		return lib.ErrorLog("database not initialized")
 	}
 
 	params := sqlc.CreateNewsletterSubscriptionParams{
@@ -70,38 +73,132 @@ func (dbRepository *DbRepository) CreateNewsletterSubscription(email string, ipA
 	q := sqlc.New(dbRepository.db)
 	err := q.CreateNewsletterSubscription(context.Background(), params)
 	if err != nil {
-		return fmt.Errorf("CreateNewsletterSubscription failed: %v", err)
+		return lib.ErrorLog("CreateNewsletterSubscription failed", "error", err, "email", email)
 	}
 
-	log.Printf("Created newsletter subscription for email: %s", email)
+	lib.Info("newsletter subscription created", "email", email)
 	return nil
 }
 
 func (dbRepository *DbRepository) GetTotalVolumeUsdInTimePeriod(timePeriod string) (float64, error) {
+	// guards
 	if dbRepository.db == nil {
-		return 0, fmt.Errorf("database not initialized")
+		return 0, lib.ErrorLog("database not initialized")
 	}
 
-	// TODO - implement real total volume calculation
-	// q := sqlc.New(dbRepository.db)
-	// totalVolume, err := q.GetTotalVolumeUsdInTimePeriod(context.Background(), timePeriod)
-	// if err != nil {
-	// 	return 0, fmt.Errorf("GetTotalVolumeUsdInTimePeriod failed: %v", err)
-	// }
+	// validate that timePeriod is in: {"1h", "24h", "7d", "30d"}
+	valid := false
+	for _, period := range lib.VolumeResolutionPeriods {
+		if timePeriod == period {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		return 0, lib.ErrorLog("invalid time period", "timePeriod", timePeriod)
+	}
 
-	return 42, nil
+	/////
+	// OK - proceed
+	/////
+	q := sqlc.New(dbRepository.db)
+	params := sqlc.GetTotalVolumeUsdInTimePeriodParams{
+		CreatedAt:   time.Now().Add(0 - lib.ParseDuration(timePeriod)),
+		CreatedAt_2: time.Now(),
+	}
+	totalVolume, err := q.GetTotalVolumeUsdInTimePeriod(context.Background(), params)
+	if err != nil {
+		return 0, fmt.Errorf("GetTotalVolumeUsdInTimePeriod failed: %v", err)
+	}
+
+	totalVolumeFloat, err := strconv.ParseFloat(totalVolume, 64)
+	if err != nil {
+		return 0, lib.ErrorLog("failed to parse total volume to float64", "error", err)
+	}
+
+	return totalVolumeFloat, nil
 }
 
 func (dbRepository *DbRepository) GetNumActiveTraders() (uint32, error) {
 	if dbRepository.db == nil {
-		return 0, fmt.Errorf("database not initialized")
+		return 0, lib.ErrorLog("database not initialized")
 	}
 
 	q := sqlc.New(dbRepository.db)
 	nActiveTraders, err := q.GetNumActiveTradersLast30days(context.Background())
 	if err != nil {
-		return 0, fmt.Errorf("GetNumActiveTraders failed: %v", err)
+		return 0, lib.ErrorLog("GetNumActiveTraders failed", "error", err)
 	}
 
 	return uint32(nActiveTraders), nil
+}
+
+func (dbRepository *DbRepository) GetTotalValuePendingUsd() (float64, error) {
+	if dbRepository.db == nil {
+		return 0, lib.ErrorLog("database not initialized")
+	}
+
+	q := sqlc.New(dbRepository.db)
+	totalValuePendingUsd, err := q.GetTotalValuePendingUsd(context.Background())
+	if err != nil {
+		return 0, lib.ErrorLog("GetTotalValuePendingUsd failed", "error", err)
+	}
+
+	tvlFloat, err := strconv.ParseFloat(totalValuePendingUsd, 64)
+	if err != nil {
+		return 0, lib.ErrorLog("failed to parse TVL to float64", "error", err)
+	}
+
+	return tvlFloat, nil
+}
+
+func (dbRepository *DbRepository) GetTotalValueMatchedUsd() (float64, error) {
+	if dbRepository.db == nil {
+		return 0, lib.ErrorLog("database not initialized")
+	}
+
+	q := sqlc.New(dbRepository.db)
+	totalValueMatchedUsd, err := q.GetTotalValueMatchedUsd(context.Background())
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, nil
+		}
+		return 0, lib.ErrorLog("GetTotalValueMatchedUsd failed", "error", err)
+	}
+
+	return totalValueMatchedUsd, nil
+}
+
+func (dbRepository *DbRepository) GetTvlUsd() (float64, error) {
+	if dbRepository.db == nil {
+		return 0, lib.ErrorLog("database not initialized")
+	}
+
+	// q := sqlc.New(dbRepository.db)
+	// tvlUsd, err := q.GetTvlUsd(context.Background())
+	var tvlUsd float64 = 0.0
+	// if err != nil {
+	// 	return 0, lib.ErrorLog("GetTvlUsd failed", "error", err)
+	// }
+
+	// tvlFloat, err := strconv.ParseFloat(tvlUsd, 64)
+	// if err != nil {
+	// 	return 0, lib.ErrorLog("failed to parse TVL to float64", "error", err)
+	// }
+
+	return tvlUsd, nil
+}
+
+func (dbRepository *DbRepository) UpdateTotalValueMatchedUsd(incrementBy float64) error {
+	if dbRepository.db == nil {
+		return lib.ErrorLog("database not initialized")
+	}
+
+	q := sqlc.New(dbRepository.db)
+	err := q.IncrementTotalValueMatchedUsd(context.Background(), incrementBy)
+	if err != nil {
+		return lib.ErrorLog("UpdateTotalValueMatchedUsd failed", "error", err)
+	}
+
+	return nil
 }

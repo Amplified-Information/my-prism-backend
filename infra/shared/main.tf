@@ -114,6 +114,44 @@ sudo systemctl enable fail2ban
 sudo systemctl start fail2ban
 sudo systemctl status fail2ban
 
+###
+# fluent bit (logging)
+###
+sudo apt-get install -y gpg
+sudo mkdir -p /usr/share/keyrings
+curl -fsSL https://packages.fluentbit.io/fluentbit.key | sudo gpg --dearmor --yes -o /usr/share/keyrings/fluentbit-keyring.gpg
+codename=$(grep -oP '(?<=VERSION_CODENAME=).*' /etc/os-release 2>/dev/null || lsb_release -cs 2>/dev/null)
+echo "deb [signed-by=/usr/share/keyrings/fluentbit-keyring.gpg] https://packages.fluentbit.io/debian/$codename $codename main" | sudo tee /etc/apt/sources.list.d/fluent-bit.list
+sudo apt-get update
+sudo apt-get install -y fluent-bit
+
+
+# want to add the following in the right place in /etc/fluent-bit/fluent-bit.conf:
+# [INPUT]
+#     Name              forward
+#     Listen            0.0.0.0
+#     Port              24224
+
+# append an [INPUT] config right after the last [INPUT] section in /etc/fluent-bit/fluent-bit.conf
+sudo awk '
+/^\[(FILTER|OUTPUT)\]/ && !done {
+  print "[INPUT]"
+  print "    Name              forward"
+  print "    Listen            0.0.0.0"
+  print "    Port              24224"
+  print ""
+  done=1
+}
+{print}
+' /etc/fluent-bit/fluent-bit.conf > /tmp/fb.conf && sudo mv /tmp/fb.conf /etc/fluent-bit/fluent-bit.conf
+
+# restart fluent-bit and enable on reboot:
+sudo systemctl start fluent-bit
+sudo systemctl enable fluent-bit
+sudo systemctl status fluent-bit
+
+
+
 EOF
 }
 
@@ -332,7 +370,7 @@ count=$(echo "$lines" | wc -l)
 height=$((40 + 20 * count))
 
 echo "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"300\" height=\"$height\" style=\"font-family:monospace\">" > "$MACHINE.svg"
-echo "<text x=\"10\" y=\"20\" font-size=\"16\" fill=\"green\">$MACHINE</text>" >> "$MACHINE.svg"
+echo "<text x=\"10\" y=\"20\" font-size=\"16\" fill=\"green\">$ENVIRONMENT.$MACHINE</text>" >> "$MACHINE.svg"
 
 y=40
 echo "$lines" | while read svc tag; do

@@ -41,21 +41,21 @@ To release a new version of a service, follow the release procedure here: https:
 
 `dev`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1770842594) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1770842594) | [data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1770842594) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1771268073) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1771268073) | [data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1771268073) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1770842594) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1770842594) | ![data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1770842594) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1771268073) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1771268073) | ![data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1771268073) |
 
 `uat`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1770842594) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1770842594) | [data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1770842594) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1771268073) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1771268073) | [data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1771268073) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1770842594) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1770842594) | ![data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1770842594) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1771268073) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1771268073) | ![data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1771268073) |
 
 `prod`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1770842594) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1770842594) | [data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1770842594) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1771268073) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1771268073) | [data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1771268073) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1770842594) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1770842594) | ![data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1770842594) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1771268073) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1771268073) | ![data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1771268073) |
 
 *Note: see .git/hooks/pre-commit to see how to update the cache-busting nonce*
 
@@ -309,7 +309,27 @@ View all the images here: https://github.com/orgs/PrismMarketLabs/packages
 
 **Please do NOT push tagged images that were built locally/manually - only tag those images that were built via github Actions**
 
+
+
+### 1. update the TAGS file
+
+Update the VERSION file with a short description of the change
+
 On your local machine, pull the image you want to tag (new: run `./tags.sh` to do this automatically):
+
+
+### 2. update the docker-compose-SERVICE.ENV.yml file
+
+And update the docker-compose-SERVICE.ENV.yml with the new version.
+
+### 3. push the source code
+
+`git add .`
+
+`git commit -m"..."`
+
+`git push`
+
 
 ```bash
 ## **Please note**: there is now a script to peform this more quickly:
@@ -321,11 +341,10 @@ export IMAGE_SRC=ghcr.io/prismmarketlabs/web # web.eng
 export IMAGE_DST=$IMAGE_SRC # ghcr.io/prismmarketlabs/web
 # note: it is comment for IMAGE_SRC and IMAGE_DST to be the same
 export VER_SRC=latest # or, a specific tag
-export VER_DST=0.1.1
+export VER_DST=0.1.1 # this MUST match the latest version in the service's "TAGS" file 
 
 
 docker pull $IMAGE_SRC:$VER_SRC
-# never add a tag to derived namespaces such as web.eng!
 docker tag $IMAGE_SRC:$VER_SRC $IMAGE_DST:$VER_DST
 
 docker images | grep $IMAGE_DST
@@ -335,23 +354,7 @@ docker images | grep $IMAGE_DST
 docker push $IMAGE_DST:$VER_DST
 ```
 
-### 2. update the TAGS file
-
-Update the VERSION file with a short description of the change
-
-### 3. update the docker-compose-SERVICE.ENV.yml file
-
-And update the docker-compose-SERVICE.ENV.yml with the new version.
-
-### 4. push the source code
-
-`git add .`
-
-`git commit -m"..."`
-
-`git push`
-
-### 5. login to the box (via bastion) and refresh the running image
+### 4. login to the box (via bastion) and refresh the running image
 
 ```bash
 ./0_pull_latest.sh

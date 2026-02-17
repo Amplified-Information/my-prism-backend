@@ -45,6 +45,9 @@ The following resources (static - not to be deleted) should be created manually 
 - S3 bucket (pl-deployment-badges) - a landing zone to store status badges (.svg) about the current deployment
 - S3 bucket (prismlabs-images) - a place which serves uploaded market image files
 - AWS SES service
+- TODO: S3 bucket for fluent-bit logs
+- TODO: AWS glacier (permanent record of logs)
+- TODO: AWS Cloudwatch (30 day retention period)
 - ~~EIP (elastic IP address)~~
 
 ## DNS hosted zone
@@ -376,3 +379,57 @@ Tear down AWS resources:
 AWS limits the number of security groups that can be applied to a EC2 resource to 5.
 
 Request an increase here (e.g. to 8): https://us-east-1.console.aws.amazon.com/servicequotas/home/services/vpc/quotas/L-2AFB9258
+
+## logging
+
+fluent-bit is used for logging
+
+See: shared/main.tf ("install_base") to see how it's installed on all EC2 boxs
+
+View log stream:
+
+`journalctl -u fluent-bit -f`
+
+Configure fluent-bit:
+
+`vim /etc/fluent-bit/fluent-bit.conf`
+
+add an [INPUT] for Docker:
+```bash
+[INPUT]
+    Name              forward
+    Listen            0.0.0.0
+    Port              24224
+```
+
+Ensure your `docker-compose*.yml` files have logging enabled:
+
+```yml
+  eventbus:
+    image: ghcr.io/prismmarketlabs/eventbus:0.1.1
+    # pull_policy: always
+    restart: always
+    ports:
+      - "4222:4222"
+      - "6222:6222"
+    # fluentd logging is now enabled:
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: "{{.Name}}"
+```
+
+restart the service:
+
+`sudo systemctl start fluent-bit`
+
+View the logs:
+
+`journalctl -u fluent-bit -f`
+
+`/opt/fluent-bit/bin/fluent-bit -i cpu -o stdout -p format=msgpack -v`
+
+configure the fluent-bit [OUTPUT] section in `/etc/fluent-bit/fluent-bit.conf` to stream to S3, etc.
+
+TODO - [OUTPUT]

@@ -87,9 +87,11 @@ message MacroMetadataResponse {
   uint32 n_markets = 6                        [json_name = "nMarkets"];
   map<string, string> token_ids = 7           [json_name = "tokenIds"];
   double min_order_size_usd = 8               [json_name = "minOrderSizeUsd"];
-  double tvl_usd = 9                          [json_name = "tvlUsd"];
-  map<string, double> total_volume_usd = 10   [json_name = "totalVolumeUsd"];
-  uint32 active_traders = 11                  [json_name = "activeTraders"];
+  double tv_pending_usd = 9                   [json_name = "tvPendingUsd"];
+  double tv_matched_usd = 10                  [json_name = "tvMatchedUsd"];
+  double tvl_usd = 11                         [json_name = "tvlUsd"];
+  map<string, double> total_volume_usd = 12   [json_name = "totalVolumeUsd"];
+  uint32 active_traders = 13                  [json_name = "activeTraders"];
 }
 
 message NewsLetterRequest {

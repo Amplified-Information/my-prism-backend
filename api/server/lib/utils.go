@@ -8,12 +8,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"net/mail"
 	"os"
 	"strings"
+	"time"
 
 	pb "api/gen"
 	pb_clob "api/gen/clob"
@@ -60,13 +60,13 @@ func Fetch(method HTTPMethod, url string, body io.Reader) (*http.Response, error
 func PrettyJSON(input string) string {
 	var obj interface{}
 	if err := json.Unmarshal([]byte(input), &obj); err != nil {
-		log.Println("Invalid JSON:", err)
+		Log(LOG_WARN, "Invalid JSON: %v", err)
 		return input
 	}
 
 	pretty, err := json.MarshalIndent(obj, "", "  ")
 	if err != nil {
-		log.Println("Error pretty printing:", err)
+		Log(LOG_ERROR, "Error pretty printing: %v", err)
 		return input
 	}
 
@@ -116,7 +116,7 @@ func Hex2utf8(hexStr string) (string, error) {
 	// Decode the hex string into bytes
 	bytes, err := hex.DecodeString(hexStr)
 	if err != nil {
-		return "", fmt.Errorf("failed to decode hex string: %w", err)
+		return "", ErrorLog("failed to decode hex string", "error", err, "hexLength", len(hexStr))
 	}
 
 	// Convert bytes to a UTF-8 string
@@ -166,17 +166,17 @@ func PublicKeyForKeyType(publicKeyHex string, keyType HederaKeyType) (*hiero.Pub
 	case 2: // ECDSA
 		result, err := hiero.PublicKeyFromStringECDSA(publicKeyHex)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse publicKeyHex (ECDSA) from bytes: %v", err)
+			return nil, ErrorLog("failed to parse publicKeyHex (ECDSA) from bytes", "error", err)
 		}
 		publicKey = result
 	case 1: // ed25519
 		result, err := hiero.PublicKeyFromStringEd25519(publicKeyHex)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse publicKeyHex (ed25519) from bytes: %v", err)
+			return nil, ErrorLog("failed to parse publicKeyHex (ed25519) from bytes", "error", err)
 		}
 		publicKey = result
 	default:
-		return nil, fmt.Errorf("unsupported keyType: %d", keyType)
+		return nil, ErrorLog("unsupported keyType", "keyType", keyType)
 	}
 
 	return &publicKey, nil
@@ -190,7 +190,7 @@ func PublicKeyForKeyType(publicKeyHex string, keyType HederaKeyType) (*hiero.Pub
 // func (h *HederaService) PublicKeyType(publicKey *hiero.PublicKey) (HederaKeyType, error) {
 // 	decodedKey, err := base64.StdEncoding.DecodeString(publicKey.String())
 // 	if err != nil {
-// 		log.Fatalf("Failed to decode public key: %v", err)
+// 		return -1, err
 // 	}
 
 // 	switch len(decodedKey) {
@@ -256,13 +256,13 @@ func SendEmail(to string, subject string, body string) error {
 	// validate to is a valid email address
 	_, err := mail.ParseAddress(to)
 	if err != nil {
-		log.Printf("Invalid email address: %v", err)
+		Log(LOG_WARN, "Invalid email address: %v", err)
 		return err
 	}
 
 	// don't send email if SEND_EMAIL is not true (e.g. lower environments)
 	if os.Getenv("SEND_EMAIL") != "true" {
-		log.Println("SEND_EMAIL is not set to true. Skipping email sending.")
+		Log(LOG_INFO, "SEND_EMAIL is not set to true. Skipping email sending.")
 		return err
 	}
 
@@ -273,7 +273,7 @@ func SendEmail(to string, subject string, body string) error {
 	smtpPort := 587
 
 	if from == "" || smtpUser == "" || smtpPass == "" {
-		log.Println("Missing required environment variables for email sending.")
+		Log(LOG_ERROR, "Missing required environment variables for email sending.")
 		return err
 	}
 
@@ -289,11 +289,11 @@ func SendEmail(to string, subject string, body string) error {
 
 	// Send the email
 	if err := d.DialAndSend(m); err != nil {
-		log.Printf("Failed to send email: %v", err)
+		Log(LOG_ERROR, "Failed to send email: %v", err)
 		return err
 	}
 
-	log.Println("Email sent successfully.")
+	Log(LOG_INFO, "Email sent successfully.")
 	return nil
 }
 
@@ -312,7 +312,7 @@ func CreateMarketOnClob(marketId string) error {
 
 	conn, err := grpc.NewClient(clobAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		return fmt.Errorf("failed to create new market (marketId=%s) - connect to CLOB gRPC server failed: %w", marketId, err)
+		return ErrorLog("failed to create new market - connect to CLOB gRPC server failed", "error", err, "marketId", marketId, "clobAddr", clobAddr)
 	}
 	defer conn.Close()
 
@@ -324,7 +324,7 @@ func CreateMarketOnClob(marketId string) error {
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("failed to create a market (marketId=%s) on the CLOB (%s): %w", marketId, clobAddr, err)
+		return ErrorLog("failed to create market on CLOB", "error", err, "marketId", marketId, "clobAddr", clobAddr)
 	}
 
 	return nil
@@ -333,25 +333,25 @@ func CreateMarketOnClob(marketId string) error {
 func SaveImageToS3(imageData []byte, fileName string, mimeType string) (string, error) {
 	// guards
 	if len(imageData) == 0 {
-		return "", fmt.Errorf("image data is empty")
+		return "", ErrorLog("image data is empty")
 	}
 	if fileName == "" {
-		return "", fmt.Errorf("file name is empty")
+		return "", ErrorLog("file name is empty")
 	}
 	if mimeType == "" {
-		return "", fmt.Errorf("MIME type is empty")
+		return "", ErrorLog("MIME type is empty")
 	}
 
 	s3BucketName := os.Getenv("S3_BUCKET_NAME")
 	if s3BucketName == "" {
-		return "", fmt.Errorf("S3_BUCKET_NAME environment variable is not set")
+		return "", ErrorLog("S3_BUCKET_NAME environment variable is not set")
 	}
 
 	// OK now we can save the image to S3 and return the URL
 	// Load AWS config (N.B. uses IAM role if running on EC2/ECS)
 	cfg, err := config.LoadDefaultConfig(context.TODO())
 	if err != nil {
-		return "", fmt.Errorf("unable to load AWS config: %w", err)
+		return "", ErrorLog("unable to load AWS config", "error", err)
 	}
 
 	client := s3.NewFromConfig(cfg)
@@ -364,8 +364,23 @@ func SaveImageToS3(imageData []byte, fileName string, mimeType string) (string, 
 		ACL:         "public-read", // Optional: make public if you want public access
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to upload to S3: %w", err)
+		return "", ErrorLog("failed to upload to S3", "error", err, "bucket", s3BucketName, "fileName", fileName)
 	}
 
 	return fmt.Sprintf("https://%s.s3.amazonaws.com/%s", s3BucketName, fileName), nil
+}
+
+func ParseDuration(period string) time.Duration {
+	switch period {
+	case "1h":
+		return 1 * time.Hour
+	case "24h":
+		return 24 * time.Hour
+	case "7d":
+		return 7 * 24 * time.Hour
+	case "30d":
+		return 30 * 24 * time.Hour
+	default:
+		return 0
+	}
 }

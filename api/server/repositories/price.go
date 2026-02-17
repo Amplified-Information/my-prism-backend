@@ -7,7 +7,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"time"
 
@@ -22,7 +21,7 @@ type PriceRepository struct {
 func (priceRepository *PriceRepository) CloseDb() error {
 	var err = priceRepository.db.Close()
 	if err != nil {
-		return fmt.Errorf("failed to close database: %v", err)
+		return lib.ErrorLog("failed to close database", "error", err)
 	}
 	return nil
 }
@@ -32,34 +31,30 @@ func (priceRepository *PriceRepository) InitDb() error {
 
 	var db, err = sql.Open("postgres", connStr)
 	if err != nil {
-		return fmt.Errorf("failed to open database: %v", err)
+		return lib.ErrorLog("failed to open database", "error", err)
 	}
 	priceRepository.db = db
 
 	// Verify connection
 	if err = db.Ping(); err != nil {
-		return fmt.Errorf("failed to ping database: %v", err)
+		return lib.ErrorLog("failed to ping database", "error", err)
 	}
 
-	log.Println("DB: PriceRepository connected successfully")
+	lib.Info("repository connected", "repository", "PriceRepository")
 	return nil
 }
 
 func (priceRepository *PriceRepository) GetPriceHistory(marketId string, from time.Time, to time.Time, limit int32, offset int32) ([]sqlc.GetPriceHistoryEfficientRow, error) { // yes, it returns []string due to - price NUMERIC(18,10)
 	if priceRepository == nil {
-		msg := "ERROR: priceRepository is nil in GetPriceHistory"
-		log.Printf("%s", msg)
-		return nil, fmt.Errorf("%s", msg)
+		return nil, lib.ErrorLog("priceRepository is nil in GetPriceHistory")
 	}
 	if priceRepository.db == nil {
-		msg := "ERROR: database not initialized in GetPriceHistory"
-		log.Printf("%s", msg)
-		return nil, fmt.Errorf("%s", msg)
+		return nil, lib.ErrorLog("database not initialized in GetPriceHistory")
 	}
 
 	marketUUID, err := uuid.Parse(marketId)
 	if err != nil {
-		return nil, fmt.Errorf("invalid marketId uuid: %v", err)
+		return nil, lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
 	}
 
 	q := sqlc.New(priceRepository.db)
@@ -74,7 +69,7 @@ func (priceRepository *PriceRepository) GetPriceHistory(marketId string, from ti
 		if errors.Is(err, sql.ErrNoRows) { // exception, if no rows returned, return empty array
 			return []sqlc.GetPriceHistoryEfficientRow{}, nil
 		}
-		return nil, fmt.Errorf("GetAggregatedPriceHistory failed: %v", err)
+		return nil, lib.ErrorLog("GetAggregatedPriceHistory failed", "error", err, "marketId", marketId)
 	}
 	if rows == nil {
 		return []sqlc.GetPriceHistoryEfficientRow{}, nil
@@ -84,17 +79,17 @@ func (priceRepository *PriceRepository) GetPriceHistory(marketId string, from ti
 
 func (priceRepository *PriceRepository) SavePriceHistory(marketId string, txId string, price float64) error {
 	if priceRepository.db == nil {
-		return fmt.Errorf("database not initialized")
+		return lib.ErrorLog("database not initialized")
 	}
 
 	marketUUID, err := uuid.Parse(marketId)
 	if err != nil {
-		return fmt.Errorf("invalid marketId uuid: %v", err)
+		return lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
 	}
 
 	txUUID, err := uuid.Parse(txId)
 	if err != nil {
-		return fmt.Errorf("invalid txId uuid: %v", err)
+		return lib.ErrorLog("invalid txId uuid", "error", err, "txId", txId)
 	}
 
 	params := sqlc.CreatePriceParams{
@@ -107,7 +102,7 @@ func (priceRepository *PriceRepository) SavePriceHistory(marketId string, txId s
 	q := sqlc.New(priceRepository.db)
 	err = q.CreatePrice(context.Background(), params)
 	if err != nil {
-		return fmt.Errorf("CreatePriceHistory failed: %v", err)
+		return lib.ErrorLog("CreatePriceHistory failed", "error", err, "marketId", marketId, "txId", txId)
 	}
 
 	return nil
@@ -115,12 +110,12 @@ func (priceRepository *PriceRepository) SavePriceHistory(marketId string, txId s
 
 func (priceRepository *PriceRepository) GetLatestPriceByMarket(marketId string) (string, error) {
 	if priceRepository.db == nil {
-		return "", fmt.Errorf("database not initialized")
+		return "", lib.ErrorLog("database not initialized")
 	}
 
 	marketUUID, err := uuid.Parse(marketId)
 	if err != nil {
-		return "", fmt.Errorf("invalid marketId uuid: %v", err)
+		return "", lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
 	}
 
 	q := sqlc.New(priceRepository.db)
@@ -129,7 +124,7 @@ func (priceRepository *PriceRepository) GetLatestPriceByMarket(marketId string) 
 		if errors.Is(err, sql.ErrNoRows) { // if no rows found, return the mid-market price
 			return fmt.Sprintf("%f", lib.MID_MARKET_PRICE), nil
 		}
-		return "", fmt.Errorf("GetLatestPriceByMarket failed: %v", err)
+		return "", lib.ErrorLog("GetLatestPriceByMarket failed", "error", err, "marketId", marketId)
 	}
 
 	return priceRow.Price, nil

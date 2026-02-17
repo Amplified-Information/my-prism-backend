@@ -11,6 +11,11 @@ services:
       - /mnt/external/postgresdata:/var/lib/postgresql
     ports:
       - "5432:5432"
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: "{{.Name}}"
     environment:
       POSTGRES_USER: ${DB_UNAME}
       POSTGRES_DB: ${DB_NAME}
@@ -24,3 +29,8 @@ services:
     ports:
       - "4222:4222"
       - "6222:6222"
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: "{{.Name}}"

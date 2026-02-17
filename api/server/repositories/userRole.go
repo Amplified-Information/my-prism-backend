@@ -2,10 +2,10 @@ package repositories
 
 import (
 	sqlc "api/gen/sqlc"
+	"api/server/lib"
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
 
 	_ "github.com/lib/pq"
@@ -18,7 +18,7 @@ type UserRoleRepository struct {
 func (urr *UserRoleRepository) CloseDb() error {
 	var err = urr.db.Close()
 	if err != nil {
-		return fmt.Errorf("failed to close database: %v", err)
+		return lib.ErrorLog("failed to close database", "error", err)
 	}
 	return nil
 }
@@ -28,22 +28,22 @@ func (urr *UserRoleRepository) InitDb() error {
 
 	var db, err = sql.Open("postgres", connStr)
 	if err != nil {
-		return fmt.Errorf("failed to open database: %v", err)
+		return lib.ErrorLog("failed to open database", "error", err)
 	}
 	urr.db = db
 
 	// Verify connection
 	if err = db.Ping(); err != nil {
-		return fmt.Errorf("failed to ping database: %v", err)
+		return lib.ErrorLog("failed to ping database", "error", err)
 	}
 
-	log.Println("DB: UserRoleRepository connected successfully")
+	lib.Info("repository connected", "repository", "UserRoleRepository")
 	return nil
 }
 
 func (urr *UserRoleRepository) GetUserChallenge(accountId string, network string) (int64, error) {
 	if urr.db == nil {
-		return 0, fmt.Errorf("database not initialized")
+		return 0, lib.ErrorLog("database not initialized")
 	}
 
 	q := sqlc.New(urr.db)
@@ -52,14 +52,14 @@ func (urr *UserRoleRepository) GetUserChallenge(accountId string, network string
 		Network:  network,
 	})
 	if err != nil {
-		return 0, fmt.Errorf("failed to get user challenge: %v", err)
+		return 0, lib.ErrorLog("failed to get user challenge", "error", err, "accountId", accountId, "network", network)
 	}
 	return int64(result), nil
 }
 
 func (urr *UserRoleRepository) UpdateUserChallenge(accountId string, network string, challenge int64) (bool, error) {
 	if urr.db == nil {
-		return false, fmt.Errorf("database not initialized")
+		return false, lib.ErrorLog("database not initialized")
 	}
 
 	q := sqlc.New(urr.db)
@@ -69,14 +69,14 @@ func (urr *UserRoleRepository) UpdateUserChallenge(accountId string, network str
 		Column1:  challenge, // int64
 	})
 	if err != nil {
-		return false, fmt.Errorf("failed to update user challenge: %v", err)
+		return false, lib.ErrorLog("failed to update user challenge", "error", err, "accountId", accountId, "network", network)
 	}
 	return true, nil
 }
 
 func (urr *UserRoleRepository) GetRolesByUserAndNetwork(accountId string, network string) ([]string, error) {
 	if urr.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, lib.ErrorLog("database not initialized")
 	}
 
 	q := sqlc.New(urr.db)
@@ -85,7 +85,7 @@ func (urr *UserRoleRepository) GetRolesByUserAndNetwork(accountId string, networ
 		Network:  network,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get roles by user and network: %v", err)
+		return nil, lib.ErrorLog("failed to get roles by user and network", "error", err, "accountId", accountId, "network", network)
 	}
 
 	var roles []string

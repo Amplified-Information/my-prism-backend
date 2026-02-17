@@ -42,6 +42,22 @@ COMMENT ON EXTENSION pg_partman IS 'Extension to manage partitioned tables by ti
 
 
 --
+-- Name: update_global_data_updated_at(); Type: FUNCTION; Schema: public; Owner: your_db_user
+--
+
+CREATE FUNCTION public.update_global_data_updated_at() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+	 NEW.updated_at = NOW();
+	 RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION public.update_global_data_updated_at() OWNER TO your_db_user;
+
+--
 -- Name: update_updated_at_column(); Type: FUNCTION; Schema: public; Owner: your_db_user
 --
 
@@ -184,6 +200,41 @@ ALTER SEQUENCE public.comments_comment_id_seq OWNER TO your_db_user;
 --
 
 ALTER SEQUENCE public.comments_comment_id_seq OWNED BY public.comments.comment_id;
+
+
+--
+-- Name: global_data; Type: TABLE; Schema: public; Owner: your_db_user
+--
+
+CREATE TABLE public.global_data (
+    id integer NOT NULL,
+    tv_matched double precision DEFAULT 0.0 NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.global_data OWNER TO your_db_user;
+
+--
+-- Name: global_data_id_seq; Type: SEQUENCE; Schema: public; Owner: your_db_user
+--
+
+CREATE SEQUENCE public.global_data_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.global_data_id_seq OWNER TO your_db_user;
+
+--
+-- Name: global_data_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: your_db_user
+--
+
+ALTER SEQUENCE public.global_data_id_seq OWNED BY public.global_data.id;
 
 
 --
@@ -827,6 +878,13 @@ ALTER TABLE ONLY public.comments ALTER COLUMN comment_id SET DEFAULT nextval('pu
 
 
 --
+-- Name: global_data id; Type: DEFAULT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.global_data ALTER COLUMN id SET DEFAULT nextval('public.global_data_id_seq'::regclass);
+
+
+--
 -- Name: matches id; Type: DEFAULT; Schema: public; Owner: your_db_user
 --
 
@@ -890,6 +948,14 @@ ALTER TABLE ONLY public.categories
 
 ALTER TABLE ONLY public.comments
     ADD CONSTRAINT comments_pkey PRIMARY KEY (comment_id);
+
+
+--
+-- Name: global_data global_data_pkey; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.global_data
+    ADD CONSTRAINT global_data_pkey PRIMARY KEY (id);
 
 
 --

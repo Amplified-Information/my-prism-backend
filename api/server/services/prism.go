@@ -14,7 +14,6 @@ import (
 )
 
 type Prism struct {
-	log               *LogService
 	dbRepository      *repositories.DbRepository
 	marketsRepository *repositories.MarketsRepository
 	matchesRepository *repositories.MatchesRepository
@@ -25,9 +24,8 @@ type Prism struct {
 	predictionIntentsService *PredictionIntentsService
 }
 
-func (p *Prism) InitPrism(log *LogService, dbRepository *repositories.DbRepository, marketsRepository *repositories.MarketsRepository, matchesRepository *repositories.MatchesRepository, natsService *NatsService, hederaService *HederaService, marketsService *MarketsService, predictionIntentsService *PredictionIntentsService) error {
+func (p *Prism) InitPrism(dbRepository *repositories.DbRepository, marketsRepository *repositories.MarketsRepository, matchesRepository *repositories.MatchesRepository, natsService *NatsService, hederaService *HederaService, marketsService *MarketsService, predictionIntentsService *PredictionIntentsService) error {
 	// inject deps:
-	p.log = log
 	p.dbRepository = dbRepository
 	p.marketsRepository = marketsRepository
 	p.matchesRepository = matchesRepository
@@ -37,7 +35,7 @@ func (p *Prism) InitPrism(log *LogService, dbRepository *repositories.DbReposito
 	p.marketsService = marketsService
 	p.predictionIntentsService = predictionIntentsService
 
-	p.log.Log(INFO, "Service: Prism service initialized successfully, %p", p)
+	lib.Log(lib.LOG_INFO, "Service: Prism service initialized successfully, %p", p)
 	return nil
 }
 
@@ -69,11 +67,11 @@ func (p *Prism) MacroMetadata() (*pb_api.MacroMetadataResponse, error) {
 	marketCreationFeeUsdc := os.Getenv("MARKET_CREATION_FEE_USDC")
 	// Validate MARKET_CREATION_FEE_USDC is not empty and is a valid number
 	if marketCreationFeeUsdc == "" {
-		return nil, p.log.Log(ERROR, "MARKET_CREATION_FEE_USDC environment variable is empty")
+		return nil, lib.LogAndError(lib.LOG_ERROR, "MARKET_CREATION_FEE_USDC environment variable is empty")
 	}
 	marketCreationFeeScaledUsdc, err := strconv.ParseUint(marketCreationFeeUsdc, 10, 64)
 	if err != nil {
-		return nil, p.log.Log(ERROR, "MARKET_CREATION_FEE_USDC environment variable is not a valid float: %v", err)
+		return nil, lib.LogAndError(lib.LOG_ERROR, "MARKET_CREATION_FEE_USDC environment variable is not a valid float: %v", err)
 	}
 
 	tokenIdsMap := make(map[string]string)
@@ -89,23 +87,38 @@ func (p *Prism) MacroMetadata() (*pb_api.MacroMetadataResponse, error) {
 	minOrderSizeUsdEnv := os.Getenv("MIN_ORDER_SIZE_USD")
 	minOrderSizeUsd, err := strconv.ParseFloat(minOrderSizeUsdEnv, 64)
 	if err != nil {
-		return nil, p.log.Log(ERROR, "MIN_ORDER_SIZE_USD environment variable is not a valid float: %v", err)
+		return nil, lib.LogAndError(lib.LOG_ERROR, "MIN_ORDER_SIZE_USD environment variable is not a valid float: %v", err)
 	}
 
 	totalVolumeUsd := make(map[string]float64)
-	resolutionPeriods := []string{"1h", "24h", "7d", "30d"}
-	for _, period := range resolutionPeriods {
+
+	for _, period := range lib.VolumeResolutionPeriods {
 		period := strings.ToLower(strings.TrimSpace(period))
 		volume, err := p.dbRepository.GetTotalVolumeUsdInTimePeriod(period)
 		if err != nil {
-			return nil, p.log.Log(ERROR, "failed to get total volume USD for network %s: %v", period, err)
+			return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get total volume USD for network %s: %v", period, err)
 		}
 		totalVolumeUsd[period] = volume
 	}
 
 	nActiveTraders, err := p.dbRepository.GetNumActiveTraders()
 	if err != nil {
-		return nil, p.log.Log(ERROR, "failed to get number of active traders: %v", err)
+		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get number of active traders: %v", err)
+	}
+
+	tvPendingUsd, err := p.dbRepository.GetTotalValuePendingUsd()
+	if err != nil {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get TVL USD: %v", err)
+	}
+
+	tvMatchedUsd, err := p.dbRepository.GetTotalValueMatchedUsd()
+	if err != nil {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get TVL USD: %v", err)
+	}
+
+	tvlUsd, err := p.dbRepository.GetTvlUsd()
+	if err != nil {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get TVL USD: %v", err)
 	}
 
 	response := &pb_api.MacroMetadataResponse{
@@ -117,8 +130,10 @@ func (p *Prism) MacroMetadata() (*pb_api.MacroMetadataResponse, error) {
 		NMarkets:                    p.marketsService.GetNumMarkets(),
 		TokenIds:                    tokenIdsMap,
 		MinOrderSizeUsd:             minOrderSizeUsd,
-		TvlUsd:                      1234567.89,     // TODO - implement real TVL calculation
-		TotalVolumeUsd:              totalVolumeUsd, // TODO - implement a real total volume
+		TvPendingUsd:                tvPendingUsd,
+		TvMatchedUsd:                tvMatchedUsd,
+		TvlUsd:                      tvlUsd,
+		TotalVolumeUsd:              totalVolumeUsd,
 		ActiveTraders:               nActiveTraders,
 	}
 
@@ -126,10 +141,10 @@ func (p *Prism) MacroMetadata() (*pb_api.MacroMetadataResponse, error) {
 }
 
 func (p *Prism) TriggerRecreateClob() (bool, error) {
-	p.log.Log(INFO, "TriggerRecreateClob called on Prism instance: %p", p)
+	lib.Log(lib.LOG_INFO, "TriggerRecreateClob called on Prism instance: %p", p)
 
 	if p.dbRepository == nil {
-		return false, p.log.Log(ERROR, "dbRepository is not initialized")
+		return false, lib.LogAndError(lib.LOG_ERROR, "dbRepository is not initialized")
 	}
 
 	// OK
@@ -137,7 +152,7 @@ func (p *Prism) TriggerRecreateClob() (bool, error) {
 	// retrieve all unresolved markets from the database:
 	markets, err := p.marketsRepository.GetAllUnresolvedMarkets()
 	if err != nil {
-		return false, p.log.Log(ERROR, "failed to get unresolved markets: %v", err)
+		return false, lib.LogAndError(lib.LOG_ERROR, "failed to get unresolved markets: %v", err)
 	}
 
 	// loop through each unresolved market:
@@ -146,10 +161,10 @@ func (p *Prism) TriggerRecreateClob() (bool, error) {
 		/////
 		// step 1 - create the market on the CLOB:
 		/////
-		p.log.Log(INFO, "- marketId: %s", market.MarketID.String())
+		lib.Log(lib.LOG_INFO, "- marketId: %s", market.MarketID.String())
 		err = lib.CreateMarketOnClob(market.MarketID.String())
 		if err != nil {
-			return false, p.log.Log(ERROR, "failed to create new market (marketId=%s) on CLOB: %v", market.MarketID.String(), err)
+			return false, lib.LogAndError(lib.LOG_ERROR, "failed to create new market (marketId=%s) on CLOB: %v", market.MarketID.String(), err)
 		}
 
 		/////
@@ -158,19 +173,19 @@ func (p *Prism) TriggerRecreateClob() (bool, error) {
 		// Marshal the CLOB req: *pb_api.PredictionIntentRequest to JSON
 		allPredictionIntents, err := p.predictionIntentsService.GetAllOpenPredictionIntentsByMarketId(market.MarketID.String())
 		if err != nil {
-			return false, p.log.Log(ERROR, "failed to GetAllOpenPredictionIntentsByMarketId(marketId=%s): %v", market.MarketID.String(), err)
+			return false, lib.LogAndError(lib.LOG_ERROR, "failed to GetAllOpenPredictionIntentsByMarketId(marketId=%s): %v", market.MarketID.String(), err)
 		}
-		p.log.Log(INFO, "--> Found %d open PredictionIntents on marketId %s", len(*allPredictionIntents), market.MarketID.String())
+		lib.Log(lib.LOG_INFO, "--> Found %d open PredictionIntents on marketId %s", len(*allPredictionIntents), market.MarketID.String())
 
 		n := 0
 		for _, predictionIntent := range *allPredictionIntents {
-			p.log.Log(INFO, "\t - txId: %s", predictionIntent.TxID.String())
+			lib.Log(lib.LOG_INFO, "\t - txId: %s", predictionIntent.TxID.String())
 
 			// calculate "qtyRemaining" to be placed on CLOB (may not exist)
 			var qtyRemaining float64 = predictionIntent.Qty // set to Qty by default
 
 			allMatches, err := p.matchesRepository.GetAllMatchesForMarketIdTxId(predictionIntent.MarketID, predictionIntent.TxID)
-			p.log.Log(INFO, "\t - allMatches for txId %s on marketId %s: %v", predictionIntent.TxID.String(), predictionIntent.MarketID.String(), allMatches)
+			lib.Log(lib.LOG_INFO, "\t - allMatches for txId %s on marketId %s: %v", predictionIntent.TxID.String(), predictionIntent.MarketID.String(), allMatches)
 			if err != nil || len(allMatches) == 0 {
 				// no matches for this predictionIntent qty found: qtyRemaining = req.Qty (default)
 				// qtyRemaining is predictionIntent.Qty - OK
@@ -183,7 +198,7 @@ func (p *Prism) TriggerRecreateClob() (bool, error) {
 				// at the end of the loop, if qtyRemaining is > 0, continue to add the order to the CLOB
 				// otherwise, don't add anything to the clob
 				for _, match := range allMatches {
-					p.log.Log(INFO, "\t row on 'match': %v", match)
+					lib.Log(lib.LOG_INFO, "\t row on 'match': %v", match)
 					// Each match has a Qty field that represents the amount matched for this TxID
 					if match.TxId1 == predictionIntent.TxID {
 						// log.Print("%s", match.Qty1)
@@ -219,10 +234,10 @@ func (p *Prism) TriggerRecreateClob() (bool, error) {
 			}
 			clobRequestJSON, err := json.Marshal(clobRequestObj)
 			if err != nil {
-				return false, p.log.Log(ERROR, "failed to marshal CLOB request: %v", err)
+				return false, lib.LogAndError(lib.LOG_ERROR, "failed to marshal CLOB request: %v", err)
 			}
 
-			p.log.Log(INFO, "\tre-creating tx (qty=%f, qtyOrig=%f): %v", clobRequestObj.Qty, clobRequestObj.QtyOrig, clobRequestObj)
+			lib.Log(lib.LOG_INFO, "\tre-creating tx (qty=%f, qtyOrig=%f): %v", clobRequestObj.Qty, clobRequestObj.QtyOrig, clobRequestObj)
 
 			/////
 			// And push to CLOB via NATS
@@ -230,22 +245,22 @@ func (p *Prism) TriggerRecreateClob() (bool, error) {
 			subject := lib.SUBJECT_CLOB_ORDERS
 			err = p.natsService.Publish(subject, clobRequestJSON)
 			if err != nil {
-				return false, p.log.Log(ERROR, "failed to publish to NATS subject %s: %v", subject, err)
+				return false, lib.LogAndError(lib.LOG_ERROR, "failed to publish to NATS subject %s: %v", subject, err)
 			}
-			p.log.Log(INFO, "\tCLOB notified.")
+			lib.Log(lib.LOG_INFO, "\tCLOB notified.")
 
 			/////
 			// finally, mark the PredictionIntent as 'regenerated' in the database
 			/////
 			err = p.dbRepository.MarkPredictionIntentAsRegenerated(predictionIntent.TxID.String())
 			if err != nil {
-				return false, p.log.Log(ERROR, "failed to MarkPredictionIntentAsRegenerated(txId=%s): %v", predictionIntent.TxID.String(), err)
+				return false, lib.LogAndError(lib.LOG_ERROR, "failed to MarkPredictionIntentAsRegenerated(txId=%s): %v", predictionIntent.TxID.String(), err)
 			}
 
 			n = n + 1
 		}
 
-		p.log.Log(INFO, "--> Done. Added %d orders to CLOB for marketId %s", n, market.MarketID.String())
+		lib.Log(lib.LOG_INFO, "--> Done. Added %d orders to CLOB for marketId %s", n, market.MarketID.String())
 	}
 
 	return true, nil

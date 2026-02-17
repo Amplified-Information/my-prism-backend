@@ -6,7 +6,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"time"
@@ -21,7 +20,7 @@ type MarketsRepository struct {
 func (marketsRepository *MarketsRepository) CloseDb() error {
 	var err = marketsRepository.db.Close()
 	if err != nil {
-		return fmt.Errorf("failed to close database: %v", err)
+		return lib.ErrorLog("failed to close database", "error", err)
 	}
 	return nil
 }
@@ -31,42 +30,42 @@ func (marketsRepository *MarketsRepository) InitDb() error {
 
 	var db, err = sql.Open("postgres", connStr)
 	if err != nil {
-		return fmt.Errorf("failed to open database: %v", err)
+		return lib.ErrorLog("failed to open database", "error", err)
 	}
 	marketsRepository.db = db
 
 	// Verify connection
 	if err = db.Ping(); err != nil {
-		return fmt.Errorf("failed to ping database: %v", err)
+		return lib.ErrorLog("failed to ping database", "error", err)
 	}
 
-	log.Println("DB: MarketsRepository connected successfully")
+	lib.Info("repository connected", "repository", "MarketsRepository")
 	return nil
 }
 
 func (marketsRepository *MarketsRepository) GetMarketById(marketId string) (*sqlc.Market, error) {
 	if marketsRepository.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, lib.ErrorLog("database not initialized")
 	}
 
 	marketUUID, err := uuid.Parse(marketId)
 	if err != nil {
-		return nil, fmt.Errorf("invalid marketId uuid: %v", err)
+		return nil, lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
 	}
 
 	q := sqlc.New(marketsRepository.db)
 	market, err := q.GetMarket(context.Background(), marketUUID)
 	if err != nil {
-		return nil, fmt.Errorf("GetMarket failed: %v", err)
+		return nil, lib.ErrorLog("GetMarket failed", "error", err, "marketId", marketId)
 	}
 
-	// log.Printf("Fetched market from database: %s", market.MarketID.String())
+	// debug: fetched market from database
 	return &market, nil
 }
 
 func (marketsRepository *MarketsRepository) GetMarkets(limit int32, offset int32) ([]sqlc.Market, error) {
 	if marketsRepository.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, lib.ErrorLog("database not initialized")
 	}
 
 	q := sqlc.New(marketsRepository.db)
@@ -75,27 +74,27 @@ func (marketsRepository *MarketsRepository) GetMarkets(limit int32, offset int32
 		Offset: offset,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("GetMarkets failed: %v", err)
+		return nil, lib.ErrorLog("GetMarkets failed", "error", err, "limit", limit, "offset", offset)
 	}
 
-	// log.Printf("Fetched %d markets from database", len(markets))
+	// debug: fetched markets from database
 	return markets, nil
 }
 
 func (marketsRepository *MarketsRepository) CreateMarket(marketId string, _net string, _imageUrl string, _statement string, _closesAt string, _description string, smartContractId string) (*sqlc.Market, error) {
 	if marketsRepository.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, lib.ErrorLog("database not initialized")
 	}
 
 	marketUUID, err := uuid.Parse(marketId)
 	if err != nil {
-		return nil, fmt.Errorf("invalid marketId uuid: %v", err)
+		return nil, lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
 	}
 
 	net := strings.ToLower(_net)
 	isValid := lib.IsValidNetwork(net)
 	if !isValid {
-		return nil, fmt.Errorf("invalid network: %s", net)
+		return nil, lib.ErrorLog("invalid network", "network", net)
 	}
 
 	imageUrl := strings.TrimSpace(_imageUrl)
@@ -104,14 +103,14 @@ func (marketsRepository *MarketsRepository) CreateMarket(marketId string, _net s
 
 	isValidSmartContractId := lib.IsValidAccountId(smartContractId)
 	if !isValidSmartContractId {
-		return nil, fmt.Errorf("invalid smart contract ID: %s", smartContractId)
+		return nil, lib.ErrorLog("invalid smart contract ID", "smartContractId", smartContractId)
 	}
 
 	closesAt := time.Now().Add(30 * 24 * time.Hour) // default: 30 days from now
 	if _closesAt != "" {                            // the optional param is not set
 		closesAtTime, err := time.Parse(time.RFC3339, _closesAt)
 		if err != nil {
-			return nil, fmt.Errorf("invalid closesAt time format (must be RFC3339): %v", err)
+			return nil, lib.ErrorLog("invalid closesAt time format (must be RFC3339)", "error", err, "closesAt", _closesAt)
 		}
 		closesAt = closesAtTime
 	}
@@ -122,7 +121,7 @@ func (marketsRepository *MarketsRepository) CreateMarket(marketId string, _net s
 	// Start a transaction
 	tx, err := marketsRepository.db.Begin()
 	if err != nil {
-		return nil, fmt.Errorf("failed to begin transaction: %v", err)
+		return nil, lib.ErrorLog("failed to begin transaction", "error", err)
 	}
 
 	// Use the transaction with the query builder
@@ -138,27 +137,27 @@ func (marketsRepository *MarketsRepository) CreateMarket(marketId string, _net s
 	})
 	if err != nil {
 		tx.Rollback() // Rollback the transaction on error
-		return nil, fmt.Errorf("CreateMarket failed: %v", err)
+		return nil, lib.ErrorLog("CreateMarket failed", "error", err, "marketId", marketId)
 	}
 
 	// Commit the transaction
 	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("failed to commit transaction: %v", err)
+		return nil, lib.ErrorLog("failed to commit transaction", "error", err)
 	}
 
-	log.Printf("Created new market in database: %s", market.MarketID.String())
+	lib.Info("market created", "marketId", market.MarketID.String())
 	return &market, nil
 }
 
 func (marketsRepository *MarketsRepository) CountUnresolvedMarkets() (int64, error) {
 	if marketsRepository.db == nil {
-		return 0, fmt.Errorf("database not initialized")
+		return 0, lib.ErrorLog("database not initialized")
 	}
 
 	q := sqlc.New(marketsRepository.db)
 	count, err := q.CountUnresolvedMarkets(context.Background())
 	if err != nil {
-		return 0, fmt.Errorf("CountUnresolvedMarkets failed: %v", err)
+		return 0, lib.ErrorLog("CountUnresolvedMarkets failed", "error", err)
 	}
 
 	return count, nil
@@ -166,13 +165,13 @@ func (marketsRepository *MarketsRepository) CountUnresolvedMarkets() (int64, err
 
 func (marketsRepository *MarketsRepository) GetAllUnresolvedMarkets() ([]sqlc.Market, error) {
 	if marketsRepository.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, lib.ErrorLog("database not initialized")
 	}
 
 	q := sqlc.New(marketsRepository.db)
 	markets, err := q.GetAllUnresolvedMarkets(context.Background())
 	if err != nil {
-		return nil, fmt.Errorf("GetUnresolvedMarkets failed: %v", err)
+		return nil, lib.ErrorLog("GetUnresolvedMarkets failed", "error", err)
 	}
 
 	return markets, nil

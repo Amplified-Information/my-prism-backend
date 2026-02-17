@@ -3,28 +3,27 @@ package services
 import (
 	pb_api "api/gen"
 	sqlc "api/gen/sqlc"
+	"api/server/lib"
 	repositories "api/server/repositories"
 	"context"
 	"time"
 )
 
 type PositionsService struct {
-	log                         *LogService
 	positionsRepository         *repositories.PositionsRepository
 	marketsRepository           *repositories.MarketsRepository
 	predictionIntentsRepository *repositories.PredictionIntentsRepository
 	priceService                *PriceService
 }
 
-func (ps *PositionsService) Init(log *LogService, positionsRepository *repositories.PositionsRepository, marketsRepository *repositories.MarketsRepository, predictionIntentsRepository *repositories.PredictionIntentsRepository, priceService *PriceService) error {
+func (ps *PositionsService) Init(positionsRepository *repositories.PositionsRepository, marketsRepository *repositories.MarketsRepository, predictionIntentsRepository *repositories.PredictionIntentsRepository, priceService *PriceService) error {
 	// and inject the deps:
-	ps.log = log
 	ps.positionsRepository = positionsRepository
 	ps.marketsRepository = marketsRepository
 	ps.predictionIntentsRepository = predictionIntentsRepository
 	ps.priceService = priceService
 
-	ps.log.Log(INFO, "Service: Positions service initialized successfully")
+	lib.Log(lib.LOG_INFO, "Service: Positions service initialized successfully")
 	return nil
 }
 
@@ -41,7 +40,7 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 		userPositions, err = ps.positionsRepository.GetUserPositionsByMarketId(req.EvmAddress, *req.MarketId)
 	}
 	if err != nil {
-		return nil, ps.log.Log(ERROR, "failed to get user portfolio: %v", err)
+		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get user portfolio: %v", err)
 	}
 
 	response := &pb_api.UserPortfolioResponse{
@@ -52,13 +51,13 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 	for _, userPosition := range userPositions {
 		priceUsd, err := ps.priceService.GetLatestPriceByMarket(userPosition.MarketID.String())
 		if err != nil {
-			ps.log.Log(WARN, "skipping market %s: failed to get latest price: %v", userPosition.MarketID.String(), err)
+			lib.Log(lib.LOG_WARN, "skipping market %s: failed to get latest price: %v", userPosition.MarketID.String(), err)
 			continue // skip to next userPosition
 		}
 
 		market, err := ps.marketsRepository.GetMarketById(userPosition.MarketID.String())
 		if err != nil {
-			ps.log.Log(WARN, "skipping market %s: failed to get market: %v", userPosition.MarketID.String(), err)
+			lib.Log(lib.LOG_WARN, "skipping market %s: failed to get market: %v", userPosition.MarketID.String(), err)
 			continue // skip to next userPosition
 		}
 
@@ -85,7 +84,7 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 	// response.OrderbookPositions = make(map[string]*pb_api.Position) // REMOVE this line, already initialized above as map[string][]*pb_api.Position
 	predictionIntents, err := ps.predictionIntentsRepository.GetAllOpenPredictionIntentsByEvmAddress(req.EvmAddress)
 	if err != nil {
-		return nil, ps.log.Log(ERROR, "failed to get open prediction intents for account with evm address %s: %v", req.EvmAddress, err)
+		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get open prediction intents for account with evm address %s: %v", req.EvmAddress, err)
 	}
 	// loop through each predictionIntents and add to OrderbookPositions
 	for _, pi := range predictionIntents {
@@ -130,7 +129,7 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 func (ps *PositionsService) GetAllPositions(limit int32, offset int32) ([]*pb_api.Position, error) {
 	positionsResp, err := ps.positionsRepository.GetAllPositions(context.Background(), int(limit), int(offset))
 	if err != nil {
-		return nil, ps.log.Log(ERROR, "failed to get all positions: %v", err)
+		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get all positions: %v", err)
 	}
 
 	var apiPositions []*pb_api.Position

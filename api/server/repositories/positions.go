@@ -2,10 +2,10 @@ package repositories
 
 import (
 	sqlc "api/gen/sqlc"
+	"api/server/lib"
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/google/uuid"
@@ -19,7 +19,7 @@ type PositionsRepository struct {
 func (positionsRepository *PositionsRepository) CloseDb() error {
 	var err = positionsRepository.db.Close()
 	if err != nil {
-		return fmt.Errorf("failed to close database: %v", err)
+		return lib.ErrorLog("failed to close database", "error", err)
 	}
 	return nil
 }
@@ -29,22 +29,22 @@ func (positionsRepository *PositionsRepository) InitDb() error {
 
 	var db, err = sql.Open("postgres", connStr)
 	if err != nil {
-		return fmt.Errorf("failed to open database: %v", err)
+		return lib.ErrorLog("failed to open database", "error", err)
 	}
 	positionsRepository.db = db
 
 	// Verify connection
 	if err = db.Ping(); err != nil {
-		return fmt.Errorf("failed to ping database: %v", err)
+		return lib.ErrorLog("failed to ping database", "error", err)
 	}
 
-	log.Println("DB: PositionsRepository connected successfully")
+	lib.Info("repository connected", "repository", "PositionsRepository")
 	return nil
 }
 
 func (positionsRepository *PositionsRepository) GetUserPositions(evmAddress string) ([]sqlc.GetUserPositionsRow, error) {
 	if positionsRepository.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, lib.ErrorLog("database not initialized")
 	}
 
 	q := sqlc.New(positionsRepository.db)
@@ -54,12 +54,12 @@ func (positionsRepository *PositionsRepository) GetUserPositions(evmAddress stri
 
 func (positionsRepository *PositionsRepository) GetUserPositionsByMarketId(evmAddress string, marketId string) ([]sqlc.GetUserPositionsRow, error) {
 	if positionsRepository.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, lib.ErrorLog("database not initialized")
 	}
 
 	marketIdUUID, err := uuid.Parse(marketId)
 	if err != nil {
-		return nil, fmt.Errorf("invalid marketId uuid: %v", err)
+		return nil, lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
 	}
 
 	q := sqlc.New(positionsRepository.db)
@@ -77,7 +77,7 @@ func (positionsRepository *PositionsRepository) GetUserPositionsByMarketId(evmAd
 
 func (positionsRepository *PositionsRepository) UpsertUserPositions(evmAddress string, marketId string, nYesTokens int64, nNoTokens int64) (*sqlc.Position, error) {
 	if positionsRepository.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, lib.ErrorLog("database not initialized")
 	}
 
 	q := sqlc.New(positionsRepository.db)
@@ -89,16 +89,16 @@ func (positionsRepository *PositionsRepository) UpsertUserPositions(evmAddress s
 		NNo:        nNoTokens,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("UpsertUserPositions failed: %v", err)
+		return nil, lib.ErrorLog("UpsertUserPositions failed", "error", err, "evmAddress", evmAddress, "marketId", marketId)
 	}
 
-	log.Printf("Updated user position tokens: %+v", result)
+	lib.Info("user positions updated", "evmAddress", evmAddress, "marketId", marketId)
 	return &result, nil
 }
 
 func (positionsRepository *PositionsRepository) GetAllPositions(ctx context.Context, limit int, offset int) ([]sqlc.Position, error) {
 	if positionsRepository.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, lib.ErrorLog("database not initialized")
 	}
 
 	q := sqlc.New(positionsRepository.db)
@@ -108,7 +108,7 @@ func (positionsRepository *PositionsRepository) GetAllPositions(ctx context.Cont
 		Offset: int32(offset),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("GetAllPositions failed: %v", err)
+		return nil, lib.ErrorLog("GetAllPositions failed", "error", err, "limit", limit, "offset", offset)
 	}
 
 	return result, nil

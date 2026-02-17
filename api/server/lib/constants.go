@@ -8,3 +8,12 @@ const (
 	NATS_CLOB_MATCHES_WILDCARD = "clob.matches.*"
 	NATS_CLOB_CANCEL_ORDERS    = "clob.orders.cancel"
 )
+
+const (
+	LOG_DEBUG = iota
+	LOG_INFO
+	LOG_WARN
+	LOG_ERROR
+)
+
+var VolumeResolutionPeriods = []string{"1h", "24h", "7d", "30d"}

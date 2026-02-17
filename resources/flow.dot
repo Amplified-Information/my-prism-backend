@@ -1,0 +1,28 @@
+digraph PrismFlow {
+  node [shape=box];
+
+  "User connects wallet to prism.market" [style=bold, color=blue, penwidth=3, shape=oval];
+  "Market settles" [style=bold, color=blue, penwidth=3];
+
+  "User connects wallet to prism.market" -> 
+  "User provides allowance (collateral token - USDC) to Prism smart contract" -> 
+  "User creates order intent on Prism.market" -> 
+  "User signs order intent" ->
+  "User submits order intent" -> 
+  "Prism API validates order intent" ->
+  "Prism API submits order intent to CLOB" -> 
+  "CLOB accepts valid order intent" ->
+  "Order sits on the CLOB" -> 
+  "Hi performance CLOB matches order intent with an equal and opposite order" ->
+  "CLOB emits a match event. Order intent is removed from CLOB." -> 
+  "API accepts the match event - validates the signature" ->
+  "API submits the match to the Prism smart contract" -> 
+  "Prism smart contract validates signatures on-chain" ->
+  "Collateral tokens for both the YES and NO side is transferred to the Prism smart contract" -> 
+  "Collateral tokens are held in escrow" ->
+  "Position tokens are issued to YES and NO side users" -> 
+  "Position tokens are owned by the user and can be redeemed for collateral on market settlement" ->
+  "Position tokens can also be traded for collateral tokens on a secondary marketplace prior to the resolution of the market" -> 
+  "Market settles" ->
+  "Users redeem position tokens for collateral tokens based on the outcome of the market";
+}

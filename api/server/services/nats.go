@@ -13,7 +13,6 @@ import (
 )
 
 type NatsService struct {
-	log               *LogService
 	nats              *nats.Conn
 	hederaService     *HederaService
 	dbRepository      *repositories.DbRepository
@@ -21,8 +20,7 @@ type NatsService struct {
 	predictionIntents *repositories.PredictionIntentsRepository
 }
 
-func (ns *NatsService) InitNATS(log *LogService, h *HederaService, d *repositories.DbRepository, m *repositories.MatchesRepository, p *repositories.PredictionIntentsRepository) error {
-	ns.log = log
+func (ns *NatsService) InitNATS(h *HederaService, d *repositories.DbRepository, m *repositories.MatchesRepository, p *repositories.PredictionIntentsRepository) error {
 
 	// connect to NATS
 	natsURL := os.Getenv("NATS_URL")
@@ -31,7 +29,7 @@ func (ns *NatsService) InitNATS(log *LogService, h *HederaService, d *repositori
 	}
 	natsConn, err := nats.Connect(natsURL)
 	if err != nil {
-		return ns.log.Log(ERROR, "failed to connect to NATS: %v", err)
+		return lib.LogAndError(lib.LOG_ERROR, "failed to connect to NATS: %v", err)
 	}
 	ns.nats = natsConn
 
@@ -44,7 +42,7 @@ func (ns *NatsService) InitNATS(log *LogService, h *HederaService, d *repositori
 	// and inject the PredictionIntentsRepository:
 	ns.predictionIntents = p
 
-	ns.log.Log(INFO, "Service: NATS service initialized successfully")
+	lib.Log(lib.LOG_INFO, "Service: NATS service initialized successfully")
 	return nil
 }
 
@@ -57,7 +55,7 @@ func (ns *NatsService) CloseNATS() error {
 
 func (ns *NatsService) Publish(subject string, data []byte) error {
 	if ns.nats == nil {
-		return ns.log.Log(ERROR, "NATS connection not initialized")
+		return lib.LogAndError(lib.LOG_ERROR, "NATS connection not initialized")
 	}
 	if err := ns.nats.Publish(subject, data); err != nil {
 		return err
@@ -67,33 +65,33 @@ func (ns *NatsService) Publish(subject string, data []byte) error {
 
 func (ns *NatsService) Subscribe(subject string, handler nats.MsgHandler) (*nats.Subscription, error) {
 	if ns.nats == nil {
-		return nil, ns.log.Log(ERROR, "NATS connection not initialized")
+		return nil, lib.LogAndError(lib.LOG_ERROR, "NATS connection not initialized")
 	}
 
 	subscription, err := ns.nats.Subscribe(subject, handler)
 	if err != nil {
-		return nil, ns.log.Log(ERROR, "failed to subscribe to subject %s: %v", subject, err)
+		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to subscribe to subject %s: %v", subject, err)
 	}
 
 	return subscription, nil
 }
 
 func (ns *NatsService) HandleOrderMatches() error {
-	ns.log.Log(INFO, "HandleOrderMatches subscription starting...")
+	lib.Log(lib.LOG_INFO, "HandleOrderMatches subscription starting...")
 	_, err := ns.Subscribe(lib.NATS_CLOB_MATCHES_WILDCARD, func(msg *nats.Msg) {
 
-		ns.log.Log(INFO, "NATS %s: %s\n", msg.Subject, string(msg.Data))
+		lib.Log(lib.LOG_INFO, "NATS %s: %s\n", msg.Subject, string(msg.Data))
 
 		// Guards
 		var orderRequestClobTuple [2]*pb_clob.CreateOrderRequestClob
 		if err := json.Unmarshal(msg.Data, &orderRequestClobTuple); err != nil {
-			ns.log.Log(ERROR, "Error parsing order data: %v", err)
+			lib.Log(lib.LOG_ERROR, "Error parsing order data: %v", err)
 			return
 		}
 
 		// assert that [0].marketId and [1].marketId are the same
 		if orderRequestClobTuple[0].MarketId != orderRequestClobTuple[1].MarketId {
-			ns.log.Log(ERROR, "PROBLEM: the marketIds (%s, %s) don't match! (txid=%s).", orderRequestClobTuple[0].MarketId, orderRequestClobTuple[1].MarketId, orderRequestClobTuple[0].TxId)
+			lib.Log(lib.LOG_ERROR, "PROBLEM: the marketIds (%s, %s) don't match! (txid=%s).", orderRequestClobTuple[0].MarketId, orderRequestClobTuple[1].MarketId, orderRequestClobTuple[0].TxId)
 			return
 		}
 
@@ -103,19 +101,19 @@ func (ns *NatsService) HandleOrderMatches() error {
 		// assert that the two priceUsd's cancel each other out
 		// priceDiff := orderRequestClobTuple[0].PriceUsd + orderRequestClobTuple[1].PriceUsd
 		// if priceDiff != 0.0 {
-		// 	log.Printf("PROBLEM: orderRequestClobTuple[0] + orderRequestClobTuple[1] is %f and not 0.0", priceDiff)
+		// 	debug: orderRequestClobTuple[0] + orderRequestClobTuple[1] is non-zero
 		// 	return
 		// }
 
 		// assert that priceUsd is not 0.0
 		if orderRequestClobTuple[0].PriceUsd == 0.0 {
-			ns.log.Log(ERROR, "PROBLEM: priceUsd is 0.0 - this is not allowed (txid=%s).", orderRequestClobTuple[0].TxId)
+			lib.Log(lib.LOG_ERROR, "PROBLEM: priceUsd is 0.0 - this is not allowed (txid=%s).", orderRequestClobTuple[0].TxId)
 			return
 		}
 
 		// assert that the keyType is not 0
 		if orderRequestClobTuple[0].KeyType == 0 || orderRequestClobTuple[1].KeyType == 0 {
-			ns.log.Log(ERROR, "PROBLEM: keyType is 0 - this is not allowed (txid=%s).", orderRequestClobTuple[0].TxId)
+			lib.Log(lib.LOG_ERROR, "PROBLEM: keyType is 0 - this is not allowed (txid=%s).", orderRequestClobTuple[0].TxId)
 			return
 		}
 
@@ -123,29 +121,29 @@ func (ns *NatsService) HandleOrderMatches() error {
 		// ensure user has provided enough of an allowance to the smart contract:
 		// spenderAllowanceUsd, err := ns.hederaService.GetSpenderAllowanceUsd(*_networkSelected, accountId, _smartContractId, usdcAddress, usdcDecimals)
 		// if err != nil {
-		// 	return "", ns.log.Log(ERROR, "failed to get spender allowance: %v", err)
+		// 	return "", lib.LogAndError(lib.LOG_ERROR, "failed to get spender allowance: %v", err)
 		// }
-		// ns.log.Log(INFO, "Spender allowance for account %s on contract %s: $%.2f", accountId.String(), _smartContractId.String(), spenderAllowanceUsd)
+		// lib.Log(lib.LOG_INFO, "Spender allowance for account %s on contract %s: $%.2f", accountId.String(), _smartContractId.String(), spenderAllowanceUsd)
 		// if spenderAllowanceUsd < math.Abs(req.GetPriceUsd()*req.GetQty()) {
-		// 	return "", ns.log.Log(ERROR, "Spender allowance ($USD%.2f USD token = %s) too low for this predictionIntent ($USD%.2f)", spenderAllowanceUsd, usdcAddress.String(), req.GetPriceUsd()*req.GetQty())
+		// 	return "", lib.LogAndError(lib.LOG_ERROR, "Spender allowance ($USD%.2f USD token = %s) too low for this predictionIntent ($USD%.2f)", spenderAllowanceUsd, usdcAddress.String(), req.GetPriceUsd()*req.GetQty())
 		// }
 
 		// // ensure the spenderAllowanceUsd is >= usdc balance currently in the user's wallet
 		// currentUserBalanceUsdc, err := ns.hederaService.GetUsdcBalanceUsd(*_networkSelected, accountId)
 		// if err != nil {
-		// 	return "", ns.log.Log(ERROR, "failed to get user's USDC balance: %v", err)
+		// 	return "", lib.LogAndError(lib.LOG_ERROR, "failed to get user's USDC balance: %v", err)
 		// }
 		// if currentUserBalanceUsdc < spenderAllowanceUsd {
-		// 	return "", ns.log.Log(ERROR, "User's USDC balance ($USD%.2f) is less than the allowance ($USD%.2f)", currentUserBalanceUsdc, spenderAllowanceUsd)
+		// 	return "", lib.LogAndError(lib.LOG_ERROR, "User's USDC balance ($USD%.2f) is less than the allowance ($USD%.2f)", currentUserBalanceUsdc, spenderAllowanceUsd)
 		// }
 
 		// assert that orderRequestClobTuple[0].priceUsd > 0 and orderRequestClobTuple[1].priceUsd < 0 (i.e. one is a bid and the other is an ask)
 		if orderRequestClobTuple[0].PriceUsd < 0.0 {
-			ns.log.Log(ERROR, "PROBLEM: orderRequestClobTuple[0].PriceUsd(%f) MUST be greater than 0 (txid=%s).", orderRequestClobTuple[0].PriceUsd, orderRequestClobTuple[0].TxId)
+			lib.Log(lib.LOG_ERROR, "PROBLEM: orderRequestClobTuple[0].PriceUsd(%f) MUST be greater than 0 (txid=%s).", orderRequestClobTuple[0].PriceUsd, orderRequestClobTuple[0].TxId)
 			return
 		}
 		if orderRequestClobTuple[1].PriceUsd > 0.0 {
-			ns.log.Log(ERROR, "PROBLEM: orderRequestClobTuple[1].PriceUsd(%f) MUST be less than 0 (txid=%s).", orderRequestClobTuple[1].PriceUsd, orderRequestClobTuple[1].TxId)
+			lib.Log(lib.LOG_ERROR, "PROBLEM: orderRequestClobTuple[1].PriceUsd(%f) MUST be less than 0 (txid=%s).", orderRequestClobTuple[1].PriceUsd, orderRequestClobTuple[1].TxId)
 			return
 		}
 
@@ -162,7 +160,7 @@ func (ns *NatsService) HandleOrderMatches() error {
 		// case lib.NATS_CLOB_MATCHES_FULL:
 		// 	isPartial = false
 		// default:
-		// 	ns.log.Log(ERROR, "NATS: Invalid subject")
+		// 	lib.Log(lib.LOG_ERROR, "NATS: Invalid subject")
 		// 	return
 		// }
 
@@ -173,69 +171,69 @@ func (ns *NatsService) HandleOrderMatches() error {
 			"notYetAvailable",
 		)
 		if err != nil {
-			ns.log.Log(ERROR, "Error recording match in database: %v", err)
+			lib.Log(lib.LOG_ERROR, "Error recording match in database: %v", err)
 		}
 
 		/////
 		// Now, for every match (doesn't matter if partial or full), if the qty remaining is <=0; mark the relevant prediction intent (timestamp) as "fully matched" in the db
 		// find out if it's tx1 or tx2 that is fully matched
-		var amountUsdTx0 float64 = orderRequestClobTuple[0].Qty / orderRequestClobTuple[0].PriceUsd
-		var amountUsdTx1 float64 = math.Abs(orderRequestClobTuple[1].Qty / orderRequestClobTuple[1].PriceUsd)
+		var amountUsdTx0Abs float64 = math.Abs(orderRequestClobTuple[0].Qty / orderRequestClobTuple[0].PriceUsd)
+		var amountUsdTx1Abs float64 = math.Abs(orderRequestClobTuple[1].Qty / orderRequestClobTuple[1].PriceUsd)
 
 		markAsMatched := [2]bool{false, false}
-		if amountUsdTx0 < amountUsdTx1 {
+		if amountUsdTx0Abs < amountUsdTx1Abs {
 			markAsMatched[0] = true // mark tx0 for deletion
 		} else {
 			markAsMatched[1] = true // mark tx1 for deletion
 		}
-		if amountUsdTx0 == amountUsdTx1 {
+		if amountUsdTx0Abs == amountUsdTx1Abs {
 			markAsMatched[0] = true // mark both for deletion
 			markAsMatched[1] = true
 		}
 
 		marketId := orderRequestClobTuple[0].MarketId
 		if markAsMatched[0] == true { // mark tx0 for deletion
-			ns.log.Log(INFO, "marking tx0 (%s) as fully matched with tx1 (%s)", orderRequestClobTuple[0].TxId, orderRequestClobTuple[1].TxId)
+			lib.Log(lib.LOG_INFO, "marking tx0 (%s) as fully matched with tx1 (%s)", orderRequestClobTuple[0].TxId, orderRequestClobTuple[1].TxId)
 			err = ns.predictionIntents.MarkPredictionIntentAsFullyMatched(marketId, orderRequestClobTuple[0].TxId)
 			if err != nil {
-				ns.log.Log(ERROR, "Error marking prediction intent as fully matched in database: %v", err)
+				lib.Log(lib.LOG_ERROR, "Error marking prediction intent as fully matched in database: %v", err)
 			}
 		}
 		if markAsMatched[1] == true { // mark tx1 for deletion
-			ns.log.Log(INFO, "marking tx1 (%s) as fully matched with tx0 (%s)", orderRequestClobTuple[1].TxId, orderRequestClobTuple[0].TxId)
-			err = ns.predictionIntents.MarkPredictionIntentAsFullyMatched(marketId, orderRequestClobTuple[0].TxId)
+			lib.Log(lib.LOG_INFO, "marking tx1 (%s) as fully matched with tx0 (%s)", orderRequestClobTuple[1].TxId, orderRequestClobTuple[0].TxId)
+			err = ns.predictionIntents.MarkPredictionIntentAsFullyMatched(marketId, orderRequestClobTuple[1].TxId)
 			if err != nil {
-				ns.log.Log(ERROR, "Error marking prediction intent as fully matched in database: %v", err)
+				lib.Log(lib.LOG_ERROR, "Error marking prediction intent as fully matched in database: %v", err)
 			}
 		}
 
 		// if amountUsdTx0-amountUsdTx1 <= 0 {
 		// 	// check if one side if wiped out:
 		// 	// Only mark as fully matched if the difference is <= 0
-		// 	ns.log.Log(INFO, "Marking txId %s as fully matched in database (amountUsdTx0 - amountUsdTx1 <= 0)", orderRequestClobTuple[0].TxId)
+		// 	lib.Log(lib.LOG_INFO, "Marking txId %s as fully matched in database (amountUsdTx0 - amountUsdTx1 <= 0)", orderRequestClobTuple[0].TxId)
 		// 	err = ns.predictionIntents.MarkPredictionIntentAsFullyMatched(orderRequestClobTuple[0].MarketId, orderRequestClobTuple[0].TxId)
 		// 	if err != nil {
-		// 		ns.log.Log(ERROR, "Error marking prediction intent as fully matched in database: %v", err)
+		// 		lib.Log(lib.LOG_ERROR, "Error marking prediction intent as fully matched in database: %v", err)
 		// 	}
 		// } else if amountUsdTx1-amountUsdTx0 <= 0 {
 		// 	// also must check if the other side is wiped out:
 		// 	// Only mark as fully matched if the difference is <= 0
-		// 	ns.log.Log(INFO, "Marking txId %s as fully matched in database (amountUsdTx1 - amountUsdTx0 <= 0)", orderRequestClobTuple[1].TxId)
+		// 	lib.Log(lib.LOG_INFO, "Marking txId %s as fully matched in database (amountUsdTx1 - amountUsdTx0 <= 0)", orderRequestClobTuple[1].TxId)
 		// 	err = ns.predictionIntents.MarkPredictionIntentAsFullyMatched(orderRequestClobTuple[0].MarketId, orderRequestClobTuple[1].TxId)
 		// 	if err != nil {
-		// 		ns.log.Log(ERROR, "Error marking prediction intent as fully matched in database: %v", err)
+		// 		lib.Log(lib.LOG_ERROR, "Error marking prediction intent as fully matched in database: %v", err)
 		// 	}
 		// } else if amountUsdTx1 == amountUsdTx0 { // full match
 		// 	// also much check if there's an exact match:
 		// 	// exact match - both are fully matched
-		// 	ns.log.Log(INFO, "Marking BOTH txIds %s and %s as fully matched in database (amountUsdTx1 == amountUsdTx0)", orderRequestClobTuple[0].TxId, orderRequestClobTuple[1].TxId)
+		// 	lib.Log(lib.LOG_INFO, "Marking BOTH txIds %s and %s as fully matched in database (amountUsdTx1 == amountUsdTx0)", orderRequestClobTuple[0].TxId, orderRequestClobTuple[1].TxId)
 		// 	err = ns.predictionIntents.MarkPredictionIntentAsFullyMatched(orderRequestClobTuple[0].MarketId, orderRequestClobTuple[0].TxId)
 		// 	if err != nil {
-		// 		ns.log.Log(ERROR, "Error marking prediction intent as fully matched in database: %v", err)
+		// 		lib.Log(lib.LOG_ERROR, "Error marking prediction intent as fully matched in database: %v", err)
 		// 	}
 		// 	err = ns.predictionIntents.MarkPredictionIntentAsFullyMatched(orderRequestClobTuple[0].MarketId, orderRequestClobTuple[1].TxId)
 		// 	if err != nil {
-		// 		ns.log.Log(ERROR, "Error marking prediction intent as fully matched in database: %v", err)
+		// 		lib.Log(lib.LOG_ERROR, "Error marking prediction intent as fully matched in database: %v", err)
 		// 	}
 		// }
 
@@ -249,12 +247,12 @@ func (ns *NatsService) HandleOrderMatches() error {
 		// 	} else if orderRequestClobTuple[1].Qty-orderRequestClobTuple[0].Qty <= 0 {
 		// 		fullyMatchedTxId = orderRequestClobTuple[1].TxId
 		// 	} else {
-		// 		ns.log.Log(ERROR, "invalid fullyMatchTxId")
+		// 		lib.Log(lib.LOG_ERROR, "invalid fullyMatchTxId")
 		// 	}
 
 		// 	// err := ns.predictionIntents.MarkPredictionIntentAsFullyMatched(orderRequestClobTuple[0].MarketId, fullyMatchedTxId)
 		// 	// if err != nil {
-		// 	// 	ns.log.Log(ERROR, "Error marking prediction intent as fully matched in database: %v", err)
+		// 	// 	lib.Log(lib.LOG_ERROR, "Error marking prediction intent as fully matched in database: %v", err)
 		// 	// }
 		// }
 
@@ -266,14 +264,13 @@ func (ns *NatsService) HandleOrderMatches() error {
 
 		isOK, err := ns.hederaService.BuyPositionTokens(orderRequestClobTuple[0], orderRequestClobTuple[1])
 		if err != nil {
-			ns.log.Log(ERROR, "Error submitting match to smart contract: %v ", err)
+			lib.Log(lib.LOG_ERROR, "Error submitting match to smart contract: %v ", err)
 		}
 		if !isOK {
-			ns.log.Log(ERROR, "BuyPositionTokens returned !isOK for txId=%s, txId=%s", orderRequestClobTuple[0].TxId, orderRequestClobTuple[1].TxId)
+			lib.Log(lib.LOG_ERROR, "BuyPositionTokens returned !isOK for txId=%s, txId=%s", orderRequestClobTuple[0].TxId, orderRequestClobTuple[1].TxId)
 		}
 
 		// TODO - handle situation when smart contract fails
-
 	})
 	if err != nil {
 		return err

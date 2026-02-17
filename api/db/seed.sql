@@ -46,6 +46,8 @@ ON CONFLICT DO NOTHING;
 
 
 
+-- set tv_matched to 0.0
+
 
 
 -- Seed data for the markets table

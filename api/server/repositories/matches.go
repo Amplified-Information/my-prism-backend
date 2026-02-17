@@ -2,10 +2,10 @@ package repositories
 
 import (
 	sqlc "api/gen/sqlc"
+	"api/server/lib"
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
 
 	pb_clob "api/gen/clob"
@@ -20,7 +20,7 @@ type MatchesRepository struct {
 func (matchesRepository *MatchesRepository) CloseDb() error {
 	var err = matchesRepository.db.Close()
 	if err != nil {
-		return fmt.Errorf("failed to close database: %v", err)
+		return lib.ErrorLog("failed to close database", "error", err)
 	}
 	return nil
 }
@@ -30,16 +30,16 @@ func (matchesRepository *MatchesRepository) InitDb() error {
 
 	var db, err = sql.Open("postgres", connStr)
 	if err != nil {
-		return fmt.Errorf("failed to open database: %v", err)
+		return lib.ErrorLog("failed to open database", "error", err)
 	}
 	matchesRepository.db = db
 
 	// Verify connection
 	if err = db.Ping(); err != nil {
-		return fmt.Errorf("failed to ping database: %v", err)
+		return lib.ErrorLog("failed to ping database", "error", err)
 	}
 
-	log.Println("DB: MatchesRepository connected successfully")
+	lib.Info("repository connected", "repository", "MatchesRepository")
 	return nil
 }
 
@@ -47,37 +47,37 @@ func (matchesRepository *MatchesRepository) InitDb() error {
 func (matchesRepository *MatchesRepository) CreateMatch(orderRequestClobTuple [2]*pb_clob.CreateOrderRequestClob, txHash string) (*sqlc.Match, error) {
 	// guards
 	if matchesRepository.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, lib.ErrorLog("database not initialized")
 	}
 
 	// txId1 MUST be the YES side (positive priceUsd)
 	// txId2 MUST be the NO side (negative priceUsd)
 	// the CLOB should already be enforcing this on the way in to this function - if not, error here
 	if orderRequestClobTuple[0].PriceUsd < 0 {
-		return nil, fmt.Errorf("txId1 must be the YES side (positive priceUsd), but got negative priceUsd: %f", orderRequestClobTuple[0].PriceUsd)
+		return nil, lib.ErrorLog("txId1 must be the YES side (positive priceUsd)", "txId1", orderRequestClobTuple[0].TxId, "priceUsd", orderRequestClobTuple[0].PriceUsd)
 	}
 	if orderRequestClobTuple[1].PriceUsd > 0 {
-		return nil, fmt.Errorf("txId2 must be the NO side (negative priceUsd), but got positive priceUsd: %f", orderRequestClobTuple[1].PriceUsd)
+		return nil, lib.ErrorLog("txId2 must be the NO side (negative priceUsd)", "txId2", orderRequestClobTuple[1].TxId, "priceUsd", orderRequestClobTuple[1].PriceUsd)
 	}
 
 	// marketIds should match
 	if orderRequestClobTuple[0].MarketId != orderRequestClobTuple[1].MarketId {
-		return nil, fmt.Errorf("marketIds do not match: %s vs %s", orderRequestClobTuple[0].MarketId, orderRequestClobTuple[1].MarketId)
+		return nil, lib.ErrorLog("marketIds do not match", "marketId1", orderRequestClobTuple[0].MarketId, "marketId2", orderRequestClobTuple[1].MarketId)
 	}
 
 	marketId, err := uuid.Parse(orderRequestClobTuple[0].MarketId)
 	if err != nil {
-		return nil, fmt.Errorf("invalid marketId uuid: %v", err)
+		return nil, lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", orderRequestClobTuple[0].MarketId)
 	}
 
 	txId1, err := uuid.Parse(orderRequestClobTuple[0].TxId)
 	if err != nil {
-		return nil, fmt.Errorf("invalid txId1 uuid: %v", err)
+		return nil, lib.ErrorLog("invalid txId1 uuid", "error", err, "txId1", orderRequestClobTuple[0].TxId)
 	}
 
 	txId2, err := uuid.Parse(orderRequestClobTuple[1].TxId)
 	if err != nil {
-		return nil, fmt.Errorf("invalid txId2 uuid: %v", err)
+		return nil, lib.ErrorLog("invalid txId2 uuid", "error", err, "txId2", orderRequestClobTuple[1].TxId)
 	}
 
 	// OK
@@ -94,10 +94,10 @@ func (matchesRepository *MatchesRepository) CreateMatch(orderRequestClobTuple [2
 	q := sqlc.New(matchesRepository.db)
 	match, err := q.CreateMatch(context.Background(), params)
 	if err != nil {
-		return nil, fmt.Errorf("failed to record match for txIds %s and %s: %v", orderRequestClobTuple[0].TxId, orderRequestClobTuple[1].TxId, err)
+		return nil, lib.ErrorLog("failed to record match", "error", err, "txId1", orderRequestClobTuple[0].TxId, "txId2", orderRequestClobTuple[1].TxId)
 	}
 
-	log.Printf("Recorded match on database for txIds: {%s, %s}", orderRequestClobTuple[0].TxId, orderRequestClobTuple[1].TxId)
+	lib.Info("match recorded", "txId1", orderRequestClobTuple[0].TxId, "txId2", orderRequestClobTuple[1].TxId)
 
 	return &match, nil
 }
@@ -148,22 +148,22 @@ func (matchesRepository *MatchesRepository) CreateMatch(orderRequestClobTuple [2
 
 func (matchesRepository *MatchesRepository) UpdateMatchTxHash(marketId string, tx1 string, tx2 string, txHash string) error {
 	if matchesRepository.db == nil {
-		return fmt.Errorf("database not initialized")
+		return lib.ErrorLog("database not initialized")
 	}
 
 	marketUUID, err := uuid.Parse(marketId)
 	if err != nil {
-		return fmt.Errorf("invalid marketId uuid: %v", err)
+		return lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
 	}
 
 	txId1, err := uuid.Parse(tx1)
 	if err != nil {
-		return fmt.Errorf("invalid txId1 uuid: %v", err)
+		return lib.ErrorLog("invalid txId1 uuid", "error", err, "txId1", tx1)
 	}
 
 	txId2, err := uuid.Parse(tx2)
 	if err != nil {
-		return fmt.Errorf("invalid txId2 uuid: %v", err)
+		return lib.ErrorLog("invalid txId2 uuid", "error", err, "txId2", tx2)
 	}
 
 	q := sqlc.New(matchesRepository.db)
@@ -174,17 +174,17 @@ func (matchesRepository *MatchesRepository) UpdateMatchTxHash(marketId string, t
 		TxHash:   txHash,
 	})
 	if err != nil {
-		return fmt.Errorf("UpdateMatchTxHash failed: %v", err)
+		return lib.ErrorLog("UpdateMatchTxHash failed", "error", err, "marketId", marketId, "txId1", tx1, "txId2", tx2)
 	}
 
-	log.Printf("Updated match txHash on database for txIds: {%s, %s}", tx1, tx2)
+	lib.Info("match txHash updated", "txId1", tx1, "txId2", tx2)
 
 	return nil
 }
 
 func (matchesRepository *MatchesRepository) GetAllMatchesForMarketIdTxId(marketID uuid.UUID, txId uuid.UUID) ([]sqlc.Match, error) {
 	if matchesRepository.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, lib.ErrorLog("database not initialized")
 	}
 	q := sqlc.New(matchesRepository.db)
 	matches, err := q.GetAllMatchesForMarketIdTxId(context.Background(), sqlc.GetAllMatchesForMarketIdTxIdParams{
@@ -192,7 +192,7 @@ func (matchesRepository *MatchesRepository) GetAllMatchesForMarketIdTxId(marketI
 		TxId1:    txId,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("GetAllMatchesForMarketIdTxId failed: %v", err)
+		return nil, lib.ErrorLog("GetAllMatchesForMarketIdTxId failed", "error", err, "marketId", marketID.String(), "txId", txId.String())
 	}
 
 	return matches, nil
@@ -200,7 +200,7 @@ func (matchesRepository *MatchesRepository) GetAllMatchesForMarketIdTxId(marketI
 
 func (matchesRepository *MatchesRepository) GetAllMatches(ctx context.Context, limit int, offset int) ([]sqlc.Match, error) {
 	if matchesRepository.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, lib.ErrorLog("database not initialized")
 	}
 	q := sqlc.New(matchesRepository.db)
 	matches, err := q.GetAllMatches(context.Background(), sqlc.GetAllMatchesParams{
@@ -208,7 +208,7 @@ func (matchesRepository *MatchesRepository) GetAllMatches(ctx context.Context, l
 		Offset: int32(offset),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("GetAllMatches failed: %v", err)
+		return nil, lib.ErrorLog("GetAllMatches failed", "error", err, "limit", limit, "offset", offset)
 	}
 
 	return matches, nil

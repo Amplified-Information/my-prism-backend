@@ -1,0 +1,253 @@
+<?xml version="1.0" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="692pt" height="1484pt" viewBox="0.00 0.00 692.28 1484">
+<g id="graph0" class="graph" transform="translate(2.6163897950217,1395.022825708695) scale(0.9036940041404539)" data-name="PrismFlow">
+
+<polygon fill="white" stroke="none" points="-4,4 -4,-1480 688.28,-1480 688.28,4 -4,4"/>
+<!-- Market settles -->
+<g id="node2" class="node" pointer-events="visible" data-name="Market settles">
+
+<polygon fill="none" stroke="blue" stroke-width="3" points="389.56,-108 294.72,-108 294.72,-72 389.56,-72 389.56,-108"/>
+<text text-anchor="middle" x="342.14" y="-85.8" font-family="Times,serif" font-size="14.00">Market settles</text>
+</g>
+<!-- Users redeem position tokens for collateral tokens based on the outcome of the market -->
+<g id="node21" class="node" pointer-events="visible" data-name="Users redeem position tokens for collateral tokens based on the outcome of the market">
+
+<polygon fill="none" stroke="black" points="592.16,-36 92.12,-36 92.12,0 592.16,0 592.16,-36"/>
+<text text-anchor="middle" x="342.14" y="-13.8" font-family="Times,serif" font-size="14.00">Users redeem position tokens for collateral tokens based on the outcome of the market</text>
+</g>
+<!-- Market settles&#45;&gt;Users redeem position tokens for collateral tokens based on the outcome of the market -->
+<g id="edge20" class="edge" data-name="Market settles-&gt;Users redeem position tokens for collateral tokens based on the outcome of the market">
+
+<path fill="none" stroke="black" d="M342.14,-70.61C342.14,-63.51 342.14,-55.22 342.14,-47.39"/>
+<polygon fill="black" stroke="black" points="345.64,-47.58 342.14,-37.58 338.64,-47.58 345.64,-47.58"/>
+</g>
+<!-- User connects wallet to prism.market -->
+<g id="node1" class="node" pointer-events="visible" data-name="User connects wallet to prism.market">
+
+<ellipse fill="none" stroke="blue" stroke-width="3" cx="342.14" cy="-1458" rx="155.08" ry="18"/>
+<text text-anchor="middle" x="342.14" y="-1453.8" font-family="Times,serif" font-size="14.00">User connects wallet to prism.market</text>
+</g>
+<!-- User provides allowance (collateral token &#45; USDC) to Prism smart contract -->
+<g id="node3" class="node" pointer-events="visible" data-name="User provides allowance (collateral token - USDC) to Prism smart contract">
+
+<polygon fill="none" stroke="black" points="560.3,-1404 123.98,-1404 123.98,-1368 560.3,-1368 560.3,-1404"/>
+<text text-anchor="middle" x="342.14" y="-1381.8" font-family="Times,serif" font-size="14.00">User provides allowance (collateral token - USDC) to Prism smart contract</text>
+</g>
+<!-- User connects wallet to prism.market&#45;&gt;User provides allowance (collateral token &#45; USDC) to Prism smart contract -->
+<g id="edge1" class="edge" data-name="User connects wallet to prism.market-&gt;User provides allowance (collateral token - USDC) to Prism smart contract">
+
+<path fill="none" stroke="black" d="M342.14,-1438.61C342.14,-1431.51 342.14,-1423.22 342.14,-1415.39"/>
+<polygon fill="black" stroke="black" points="345.64,-1415.58 342.14,-1405.58 338.64,-1415.58 345.64,-1415.58"/>
+</g>
+<!-- User creates order intent on Prism.market -->
+<g id="node4" class="node" pointer-events="visible" data-name="User creates order intent on Prism.market">
+
+<polygon fill="none" stroke="black" points="466.9,-1332 217.38,-1332 217.38,-1296 466.9,-1296 466.9,-1332"/>
+<text text-anchor="middle" x="342.14" y="-1309.8" font-family="Times,serif" font-size="14.00">User creates order intent on Prism.market</text>
+</g>
+<!-- User provides allowance (collateral token &#45; USDC) to Prism smart contract&#45;&gt;User creates order intent on Prism.market -->
+<g id="edge2" class="edge" data-name="User provides allowance (collateral token - USDC) to Prism smart contract-&gt;User creates order intent on Prism.market">
+
+<path fill="none" stroke="black" d="M342.14,-1367.7C342.14,-1360.41 342.14,-1351.73 342.14,-1343.54"/>
+<polygon fill="black" stroke="black" points="345.64,-1343.62 342.14,-1333.62 338.64,-1343.62 345.64,-1343.62"/>
+</g>
+<!-- User signs order intent -->
+<g id="node5" class="node" pointer-events="visible" data-name="User signs order intent">
+
+<polygon fill="none" stroke="black" points="413.78,-1260 270.5,-1260 270.5,-1224 413.78,-1224 413.78,-1260"/>
+<text text-anchor="middle" x="342.14" y="-1237.8" font-family="Times,serif" font-size="14.00">User signs order intent</text>
+</g>
+<!-- User creates order intent on Prism.market&#45;&gt;User signs order intent -->
+<g id="edge3" class="edge" data-name="User creates order intent on Prism.market-&gt;User signs order intent">
+
+<path fill="none" stroke="black" d="M342.14,-1295.7C342.14,-1288.41 342.14,-1279.73 342.14,-1271.54"/>
+<polygon fill="black" stroke="black" points="345.64,-1271.62 342.14,-1261.62 338.64,-1271.62 345.64,-1271.62"/>
+</g>
+<!-- User submits order intent -->
+<g id="node6" class="node" pointer-events="visible" data-name="User submits order intent">
+
+<polygon fill="none" stroke="black" points="421.06,-1188 263.22,-1188 263.22,-1152 421.06,-1152 421.06,-1188"/>
+<text text-anchor="middle" x="342.14" y="-1165.8" font-family="Times,serif" font-size="14.00">User submits order intent</text>
+</g>
+<!-- User signs order intent&#45;&gt;User submits order intent -->
+<g id="edge4" class="edge" data-name="User signs order intent-&gt;User submits order intent">
+
+<path fill="none" stroke="black" d="M342.14,-1223.7C342.14,-1216.41 342.14,-1207.73 342.14,-1199.54"/>
+<polygon fill="black" stroke="black" points="345.64,-1199.62 342.14,-1189.62 338.64,-1199.62 345.64,-1199.62"/>
+</g>
+<!-- Prism API validates order intent -->
+<g id="node7" class="node" pointer-events="visible" data-name="Prism API validates order intent">
+
+<polygon fill="none" stroke="black" points="440.56,-1116 243.73,-1116 243.73,-1080 440.56,-1080 440.56,-1116"/>
+<text text-anchor="middle" x="342.14" y="-1093.8" font-family="Times,serif" font-size="14.00">Prism API validates order intent</text>
+</g>
+<!-- User submits order intent&#45;&gt;Prism API validates order intent -->
+<g id="edge5" class="edge" data-name="User submits order intent-&gt;Prism API validates order intent">
+
+<path fill="none" stroke="black" d="M342.14,-1151.7C342.14,-1144.41 342.14,-1135.73 342.14,-1127.54"/>
+<polygon fill="black" stroke="black" points="345.64,-1127.62 342.14,-1117.62 338.64,-1127.62 345.64,-1127.62"/>
+</g>
+<!-- Prism API submits order intent to CLOB -->
+<g id="node8" class="node" pointer-events="visible" data-name="Prism API submits order intent to CLOB">
+
+<polygon fill="none" stroke="black" points="465.09,-1044 219.19,-1044 219.19,-1008 465.09,-1008 465.09,-1044"/>
+<text text-anchor="middle" x="342.14" y="-1021.8" font-family="Times,serif" font-size="14.00">Prism API submits order intent to CLOB</text>
+</g>
+<!-- Prism API validates order intent&#45;&gt;Prism API submits order intent to CLOB -->
+<g id="edge6" class="edge" data-name="Prism API validates order intent-&gt;Prism API submits order intent to CLOB">
+
+<path fill="none" stroke="black" d="M342.14,-1079.7C342.14,-1072.41 342.14,-1063.73 342.14,-1055.54"/>
+<polygon fill="black" stroke="black" points="345.64,-1055.62 342.14,-1045.62 338.64,-1055.62 345.64,-1055.62"/>
+</g>
+<!-- CLOB accepts valid order intent -->
+<g id="node9" class="node" pointer-events="visible" data-name="CLOB accepts valid order intent">
+
+<polygon fill="none" stroke="black" points="441.09,-972 243.2,-972 243.2,-936 441.09,-936 441.09,-972"/>
+<text text-anchor="middle" x="342.14" y="-949.8" font-family="Times,serif" font-size="14.00">CLOB accepts valid order intent</text>
+</g>
+<!-- Prism API submits order intent to CLOB&#45;&gt;CLOB accepts valid order intent -->
+<g id="edge7" class="edge" data-name="Prism API submits order intent to CLOB-&gt;CLOB accepts valid order intent">
+
+<path fill="none" stroke="black" d="M342.14,-1007.7C342.14,-1000.41 342.14,-991.73 342.14,-983.54"/>
+<polygon fill="black" stroke="black" points="345.64,-983.62 342.14,-973.62 338.64,-983.62 345.64,-983.62"/>
+</g>
+<!-- Order sits on the CLOB -->
+<g id="node10" class="node" pointer-events="visible" data-name="Order sits on the CLOB">
+
+<polygon fill="none" stroke="black" points="416.91,-900 267.37,-900 267.37,-864 416.91,-864 416.91,-900"/>
+<text text-anchor="middle" x="342.14" y="-877.8" font-family="Times,serif" font-size="14.00">Order sits on the CLOB</text>
+</g>
+<!-- CLOB accepts valid order intent&#45;&gt;Order sits on the CLOB -->
+<g id="edge8" class="edge" data-name="CLOB accepts valid order intent-&gt;Order sits on the CLOB">
+
+<path fill="none" stroke="black" d="M342.14,-935.7C342.14,-928.41 342.14,-919.73 342.14,-911.54"/>
+<polygon fill="black" stroke="black" points="345.64,-911.62 342.14,-901.62 338.64,-911.62 345.64,-911.62"/>
+</g>
+<!-- Hi performance CLOB matches order intent with an equal and opposite order -->
+<g id="node11" class="node" pointer-events="visible" data-name="Hi performance CLOB matches order intent with an equal and opposite order">
+
+<polygon fill="none" stroke="black" points="567.11,-828 117.17,-828 117.17,-792 567.11,-792 567.11,-828"/>
+<text text-anchor="middle" x="342.14" y="-805.8" font-family="Times,serif" font-size="14.00">Hi performance CLOB matches order intent with an equal and opposite order</text>
+</g>
+<!-- Order sits on the CLOB&#45;&gt;Hi performance CLOB matches order intent with an equal and opposite order -->
+<g id="edge9" class="edge" data-name="Order sits on the CLOB-&gt;Hi performance CLOB matches order intent with an equal and opposite order">
+
+<path fill="none" stroke="black" d="M342.14,-863.7C342.14,-856.41 342.14,-847.73 342.14,-839.54"/>
+<polygon fill="black" stroke="black" points="345.64,-839.62 342.14,-829.62 338.64,-839.62 345.64,-839.62"/>
+</g>
+<!-- CLOB emits a match event. Order intent is removed from CLOB. -->
+<g id="node12" class="node" pointer-events="visible" data-name="CLOB emits a match event. Order intent is removed from CLOB.">
+
+<polygon fill="none" stroke="black" points="533.95,-756 150.33,-756 150.33,-720 533.95,-720 533.95,-756"/>
+<text text-anchor="middle" x="342.14" y="-733.8" font-family="Times,serif" font-size="14.00">CLOB emits a match event. Order intent is removed from CLOB.</text>
+</g>
+<!-- Hi performance CLOB matches order intent with an equal and opposite order&#45;&gt;CLOB emits a match event. Order intent is removed from CLOB. -->
+<g id="edge10" class="edge" data-name="Hi performance CLOB matches order intent with an equal and opposite order-&gt;CLOB emits a match event. Order intent is removed from CLOB.">
+
+<path fill="none" stroke="black" d="M342.14,-791.7C342.14,-784.41 342.14,-775.73 342.14,-767.54"/>
+<polygon fill="black" stroke="black" points="345.64,-767.62 342.14,-757.62 338.64,-767.62 345.64,-767.62"/>
+</g>
+<!-- API accepts the match event &#45; validates the signature -->
+<g id="node13" class="node" pointer-events="visible" data-name="API accepts the match event - validates the signature">
+
+<polygon fill="none" stroke="black" points="498.36,-684 185.92,-684 185.92,-648 498.36,-648 498.36,-684"/>
+<text text-anchor="middle" x="342.14" y="-661.8" font-family="Times,serif" font-size="14.00">API accepts the match event - validates the signature</text>
+</g>
+<!-- CLOB emits a match event. Order intent is removed from CLOB.&#45;&gt;API accepts the match event &#45; validates the signature -->
+<g id="edge11" class="edge" data-name="CLOB emits a match event. Order intent is removed from CLOB.-&gt;API accepts the match event - validates the signature">
+
+<path fill="none" stroke="black" d="M342.14,-719.7C342.14,-712.41 342.14,-703.73 342.14,-695.54"/>
+<polygon fill="black" stroke="black" points="345.64,-695.62 342.14,-685.62 338.64,-695.62 345.64,-695.62"/>
+</g>
+<!-- API submits the match to the Prism smart contract -->
+<g id="node14" class="node" pointer-events="visible" data-name="API submits the match to the Prism smart contract">
+
+<polygon fill="none" stroke="black" points="491.43,-612 192.85,-612 192.85,-576 491.43,-576 491.43,-612"/>
+<text text-anchor="middle" x="342.14" y="-589.8" font-family="Times,serif" font-size="14.00">API submits the match to the Prism smart contract</text>
+</g>
+<!-- API accepts the match event &#45; validates the signature&#45;&gt;API submits the match to the Prism smart contract -->
+<g id="edge12" class="edge" data-name="API accepts the match event - validates the signature-&gt;API submits the match to the Prism smart contract">
+
+<path fill="none" stroke="black" d="M342.14,-647.7C342.14,-640.41 342.14,-631.73 342.14,-623.54"/>
+<polygon fill="black" stroke="black" points="345.64,-623.62 342.14,-613.62 338.64,-623.62 345.64,-623.62"/>
+</g>
+<!-- Prism smart contract validates signatures on&#45;chain -->
+<g id="node15" class="node" pointer-events="visible" data-name="Prism smart contract validates signatures on-chain">
+
+<polygon fill="none" stroke="black" points="491.01,-540 193.27,-540 193.27,-504 491.01,-504 491.01,-540"/>
+<text text-anchor="middle" x="342.14" y="-517.8" font-family="Times,serif" font-size="14.00">Prism smart contract validates signatures on-chain</text>
+</g>
+<!-- API submits the match to the Prism smart contract&#45;&gt;Prism smart contract validates signatures on&#45;chain -->
+<g id="edge13" class="edge" data-name="API submits the match to the Prism smart contract-&gt;Prism smart contract validates signatures on-chain">
+
+<path fill="none" stroke="black" d="M342.14,-575.7C342.14,-568.41 342.14,-559.73 342.14,-551.54"/>
+<polygon fill="black" stroke="black" points="345.64,-551.62 342.14,-541.62 338.64,-551.62 345.64,-551.62"/>
+</g>
+<!-- Collateral tokens for both the YES and NO side is transferred to the Prism smart contract -->
+<g id="node16" class="node" pointer-events="visible" data-name="Collateral tokens for both the YES and NO side is transferred to the Prism smart contract">
+
+<polygon fill="none" stroke="black" points="599.47,-468 84.82,-468 84.82,-432 599.47,-432 599.47,-468"/>
+<text text-anchor="middle" x="342.14" y="-445.8" font-family="Times,serif" font-size="14.00">Collateral tokens for both the YES and NO side is transferred to the Prism smart contract</text>
+</g>
+<!-- Prism smart contract validates signatures on&#45;chain&#45;&gt;Collateral tokens for both the YES and NO side is transferred to the Prism smart contract -->
+<g id="edge14" class="edge" data-name="Prism smart contract validates signatures on-chain-&gt;Collateral tokens for both the YES and NO side is transferred to the Prism smart contract">
+
+<path fill="none" stroke="black" d="M342.14,-503.7C342.14,-496.41 342.14,-487.73 342.14,-479.54"/>
+<polygon fill="black" stroke="black" points="345.64,-479.62 342.14,-469.62 338.64,-479.62 345.64,-479.62"/>
+</g>
+<!-- Collateral tokens are held in escrow -->
+<g id="node17" class="node" pointer-events="visible" data-name="Collateral tokens are held in escrow">
+
+<polygon fill="none" stroke="black" points="450.62,-396 233.66,-396 233.66,-360 450.62,-360 450.62,-396"/>
+<text text-anchor="middle" x="342.14" y="-373.8" font-family="Times,serif" font-size="14.00">Collateral tokens are held in escrow</text>
+</g>
+<!-- Collateral tokens for both the YES and NO side is transferred to the Prism smart contract&#45;&gt;Collateral tokens are held in escrow -->
+<g id="edge15" class="edge" data-name="Collateral tokens for both the YES and NO side is transferred to the Prism smart contract-&gt;Collateral tokens are held in escrow">
+
+<path fill="none" stroke="black" d="M342.14,-431.7C342.14,-424.41 342.14,-415.73 342.14,-407.54"/>
+<polygon fill="black" stroke="black" points="345.64,-407.62 342.14,-397.62 338.64,-407.62 345.64,-407.62"/>
+</g>
+<!-- Position tokens are issued to YES and NO side users -->
+<g id="node18" class="node" pointer-events="visible" data-name="Position tokens are issued to YES and NO side users">
+
+<polygon fill="none" stroke="black" points="497.78,-324 186.5,-324 186.5,-288 497.78,-288 497.78,-324"/>
+<text text-anchor="middle" x="342.14" y="-301.8" font-family="Times,serif" font-size="14.00">Position tokens are issued to YES and NO side users</text>
+</g>
+<!-- Collateral tokens are held in escrow&#45;&gt;Position tokens are issued to YES and NO side users -->
+<g id="edge16" class="edge" data-name="Collateral tokens are held in escrow-&gt;Position tokens are issued to YES and NO side users">
+
+<path fill="none" stroke="black" d="M342.14,-359.7C342.14,-352.41 342.14,-343.73 342.14,-335.54"/>
+<polygon fill="black" stroke="black" points="345.64,-335.62 342.14,-325.62 338.64,-335.62 345.64,-335.62"/>
+</g>
+<!-- Position tokens are owned by the user and can be redeemed for collateral on market settlement -->
+<g id="node19" class="node" pointer-events="visible" data-name="Position tokens are owned by the user and can be redeemed for collateral on market settlement">
+
+<polygon fill="none" stroke="black" points="615.01,-252 69.27,-252 69.27,-216 615.01,-216 615.01,-252"/>
+<text text-anchor="middle" x="342.14" y="-229.8" font-family="Times,serif" font-size="14.00">Position tokens are owned by the user and can be redeemed for collateral on market settlement</text>
+</g>
+<!-- Position tokens are issued to YES and NO side users&#45;&gt;Position tokens are owned by the user and can be redeemed for collateral on market settlement -->
+<g id="edge17" class="edge" data-name="Position tokens are issued to YES and NO side users-&gt;Position tokens are owned by the user and can be redeemed for collateral on market settlement">
+
+<path fill="none" stroke="black" d="M342.14,-287.7C342.14,-280.41 342.14,-271.73 342.14,-263.54"/>
+<polygon fill="black" stroke="black" points="345.64,-263.62 342.14,-253.62 338.64,-263.62 345.64,-263.62"/>
+</g>
+<!-- Position tokens can also be traded for collateral tokens on a secondary marketplace prior to the resolution of the market -->
+<g id="node20" class="node" pointer-events="visible" data-name="Position tokens can also be traded for collateral tokens on a secondary marketplace prior to the resolution of the market">
+
+<polygon fill="none" stroke="black" points="684.42,-180 -0.14,-180 -0.14,-144 684.42,-144 684.42,-180"/>
+<text text-anchor="middle" x="342.14" y="-157.8" font-family="Times,serif" font-size="14.00">Position tokens can also be traded for collateral tokens on a secondary marketplace prior to the resolution of the market</text>
+</g>
+<!-- Position tokens are owned by the user and can be redeemed for collateral on market settlement&#45;&gt;Position tokens can also be traded for collateral tokens on a secondary marketplace prior to the resolution of the market -->
+<g id="edge18" class="edge" data-name="Position tokens are owned by the user and can be redeemed for collateral on market settlement-&gt;Position tokens can also be traded for collateral tokens on a secondary marketplace prior to the resolution of the market">
+
+<path fill="none" stroke="black" d="M342.14,-215.7C342.14,-208.41 342.14,-199.73 342.14,-191.54"/>
+<polygon fill="black" stroke="black" points="345.64,-191.62 342.14,-181.62 338.64,-191.62 345.64,-191.62"/>
+</g>
+<!-- Position tokens can also be traded for collateral tokens on a secondary marketplace prior to the resolution of the market&#45;&gt;Market settles -->
+<g id="edge19" class="edge" data-name="Position tokens can also be traded for collateral tokens on a secondary marketplace prior to the resolution of the market-&gt;Market settles">
+
+<path fill="none" stroke="black" d="M342.14,-143.7C342.14,-136.71 342.14,-128.44 342.14,-120.55"/>
+<polygon fill="black" stroke="black" points="345.64,-120.59 342.14,-110.59 338.64,-120.59 345.64,-120.59"/>
+</g>
+</g>
+</svg>

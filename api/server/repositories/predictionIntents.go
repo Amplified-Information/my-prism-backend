@@ -2,10 +2,10 @@ package repositories
 
 import (
 	sqlc "api/gen/sqlc"
+	"api/server/lib"
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
 	"time"
 
@@ -22,7 +22,7 @@ type PredictionIntentsRepository struct {
 func (pir *PredictionIntentsRepository) CloseDb() error {
 	var err = pir.db.Close()
 	if err != nil {
-		return fmt.Errorf("failed to close database: %v", err)
+		return lib.ErrorLog("failed to close database", "error", err)
 	}
 	return nil
 }
@@ -32,38 +32,38 @@ func (pir *PredictionIntentsRepository) InitDb() error {
 
 	var db, err = sql.Open("postgres", connStr)
 	if err != nil {
-		return fmt.Errorf("failed to open database: %v", err)
+		return lib.ErrorLog("failed to open database", "error", err)
 	}
 	pir.db = db
 
 	// Verify connection
 	if err = db.Ping(); err != nil {
-		return fmt.Errorf("failed to ping database: %v", err)
+		return lib.ErrorLog("failed to ping database", "error", err)
 	}
 
-	log.Println("DB: PredictionIntentsRepository connected successfully")
+	lib.Info("repository connected", "repository", "PredictionIntentsRepository")
 	return nil
 }
 
 // SaveOrderRequest saves an order request to the database
 func (pir *PredictionIntentsRepository) CreateOrderIntentRequest(req *pb_api.PredictionIntentRequest) (*sqlc.PredictionIntent, error) {
 	if pir.db == nil {
-		return nil, fmt.Errorf("could not connect to database")
+		return nil, lib.ErrorLog("could not connect to database")
 	}
 
 	txUUID, err := uuid.Parse(req.TxId)
 	if err != nil {
-		return nil, fmt.Errorf("invalid txId uuid: %v", err)
+		return nil, lib.ErrorLog("invalid txId uuid", "error", err, "txId", req.TxId)
 	}
 
 	marketUUID, err := uuid.Parse(req.MarketId)
 	if err != nil {
-		return nil, fmt.Errorf("invalid marketId uuid: %v", err)
+		return nil, lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", req.MarketId)
 	}
 
 	generatedAt, err := time.Parse(time.RFC3339, req.GeneratedAt) // Zulu time (RFC3339)
 	if err != nil {
-		return nil, fmt.Errorf("invalid GeneratedAt timestamp: %v", err)
+		return nil, lib.ErrorLog("invalid GeneratedAt timestamp", "error", err, "generatedAt", req.GeneratedAt)
 	}
 	generatedAt = generatedAt.UTC()
 
@@ -85,79 +85,79 @@ func (pir *PredictionIntentsRepository) CreateOrderIntentRequest(req *pb_api.Pre
 	q := sqlc.New(pir.db)
 	newPredictionIntent, err := q.CreatePredictionIntent(context.Background(), params)
 	if err != nil {
-		return nil, fmt.Errorf("CreatePredictionIntent failed: %v", err)
+		return nil, lib.ErrorLog("CreatePredictionIntent failed", "error", err, "accountId", req.AccountId, "txId", req.TxId)
 	}
 
-	log.Printf("Saved prediction intent to database for account %s", req.AccountId)
+	lib.Info("prediction intent saved", "accountId", req.AccountId, "txId", req.TxId)
 	return &newPredictionIntent, nil
 }
 
 func (pir *PredictionIntentsRepository) CancelPredictionIntent(txId string) error {
 	if pir.db == nil {
-		return fmt.Errorf("database not initialized")
+		return lib.ErrorLog("database not initialized")
 	}
 
 	txUUID, err := uuid.Parse(txId)
 	if err != nil {
-		return fmt.Errorf("invalid txId uuid: %v", err)
+		return lib.ErrorLog("invalid txId uuid", "error", err, "txId", txId)
 	}
 
 	q := sqlc.New(pir.db)
 	err = q.CancelPredictionIntent(context.Background(), txUUID)
 	if err != nil {
-		return fmt.Errorf("CancelPredictionIntent failed: %v", err)
+		return lib.ErrorLog("CancelPredictionIntent failed", "error", err, "txId", txId)
 	}
 
-	log.Printf("Cancelled prediction intent in database for txId: %s", txId)
+	lib.Info("prediction intent cancelled", "txId", txId)
 	return nil
 }
 
 func (pir *PredictionIntentsRepository) GetAllOpenPredictionIntentsByMarketId(marketId string) (*[]sqlc.PredictionIntent, error) {
 	if pir.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, lib.ErrorLog("database not initialized")
 	}
 
 	marketUUID, err := uuid.Parse(marketId)
 	if err != nil {
-		return nil, fmt.Errorf("invalid marketId uuid: %v", err)
+		return nil, lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
 	}
 
 	q := sqlc.New(pir.db)
 	predictionIntents, err := q.GetAllOpenPredictionIntentsByMarketId(context.Background(), marketUUID)
 	if err != nil {
-		return nil, fmt.Errorf("GetAllOpenPredictionIntentsByMarketId failed: %v", err)
+		return nil, lib.ErrorLog("GetAllOpenPredictionIntentsByMarketId failed", "error", err, "marketId", marketId)
 	}
 
-	// log.Printf("Fetched %d prediction intents from database for market ID: %s", len(predictionIntents), marketId)
+	// debug: fetched prediction intents for market
 	return &predictionIntents, nil
 }
 
 func (dbRepository *DbRepository) MarkPredictionIntentAsRegenerated(txId string) error {
 	if dbRepository.db == nil {
-		return fmt.Errorf("database not initialized")
+		return lib.ErrorLog("database not initialized")
 	}
 
 	q := sqlc.New(dbRepository.db)
 	err := q.MarkPredictionIntentAsRegenerated(context.Background(), uuid.MustParse(txId))
 	if err != nil {
-		return fmt.Errorf("MarkPredictionIntentAsRegenerated failed: %v", err)
+		return lib.ErrorLog("MarkPredictionIntentAsRegenerated failed", "error", err, "txId", txId)
 	}
 	return nil
 }
 
 func (pir *PredictionIntentsRepository) MarkPredictionIntentAsFullyMatched(marketId string, txId string) error {
 	if pir.db == nil {
-		return fmt.Errorf("database not initialized")
+		return lib.ErrorLog("database not initialized")
 	}
 
 	marketUUID, err := uuid.Parse(marketId)
 	if err != nil {
-		return fmt.Errorf("invalid marketId uuid: %v", err)
+		return lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
 	}
 
 	txUUID, err := uuid.Parse(txId)
 	if err != nil {
-		return fmt.Errorf("invalid txId uuid: %v", err)
+		return lib.ErrorLog("invalid txId uuid", "error", err, "txId", txId)
 	}
 
 	q := sqlc.New(pir.db)
@@ -166,22 +166,22 @@ func (pir *PredictionIntentsRepository) MarkPredictionIntentAsFullyMatched(marke
 		TxID:     txUUID,
 	})
 	if err != nil {
-		return fmt.Errorf("MarkPredictionIntentAsFullyMatched failed: %v", err)
+		return lib.ErrorLog("MarkPredictionIntentAsFullyMatched failed", "error", err, "marketId", marketId, "txId", txId)
 	}
 
-	log.Printf("Marked prediction intent as fully matched in database for txId: %s", txId)
+	lib.Info("prediction intent fully matched", "marketId", marketId, "txId", txId)
 	return nil
 }
 
 func (pir *PredictionIntentsRepository) GetAllAccountIdsForMarketId(marketId uuid.UUID) ([]string, error) {
 	if pir.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, lib.ErrorLog("database not initialized")
 	}
 
 	q := sqlc.New(pir.db)
 	accountIds, err := q.GetAllAccountIdsForMarketId(context.Background(), marketId)
 	if err != nil {
-		return nil, fmt.Errorf("GetAllAccountIdsForMarketId failed: %v", err)
+		return nil, lib.ErrorLog("GetAllAccountIdsForMarketId failed", "error", err, "marketId", marketId.String())
 	}
 
 	return accountIds, nil
@@ -189,7 +189,7 @@ func (pir *PredictionIntentsRepository) GetAllAccountIdsForMarketId(marketId uui
 
 func (pir *PredictionIntentsRepository) GetAllOpenPredictionIntentsByMarketIdAndAccountId(marketId uuid.UUID, accountId string) ([]sqlc.PredictionIntent, error) {
 	if pir.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, lib.ErrorLog("database not initialized")
 	}
 
 	q := sqlc.New(pir.db)
@@ -198,7 +198,7 @@ func (pir *PredictionIntentsRepository) GetAllOpenPredictionIntentsByMarketIdAnd
 		AccountID: accountId,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("GetAllOpenPredictionIntentsByMarketIdAndAccountId failed: %v", err)
+		return nil, lib.ErrorLog("GetAllOpenPredictionIntentsByMarketIdAndAccountId failed", "error", err, "marketId", marketId.String(), "accountId", accountId)
 	}
 
 	return orderIntents, nil
@@ -206,26 +206,26 @@ func (pir *PredictionIntentsRepository) GetAllOpenPredictionIntentsByMarketIdAnd
 
 func (pir *PredictionIntentsRepository) MarkPredictionIntentAsEvicted(txId uuid.UUID) error {
 	if pir.db == nil {
-		return fmt.Errorf("database not initialized")
+		return lib.ErrorLog("database not initialized")
 	}
 
 	q := sqlc.New(pir.db)
 	err := q.MarkPredictionIntentAsEvicted(context.Background(), txId)
 	if err != nil {
-		return fmt.Errorf("MarkPredictionIntentAsEvicted failed: %v", err)
+		return lib.ErrorLog("MarkPredictionIntentAsEvicted failed", "error", err, "txId", txId.String())
 	}
 	return nil
 }
 
 func (pir *PredictionIntentsRepository) GetAllOpenPredictionIntentsByEvmAddress(evmAddress string) ([]sqlc.PredictionIntent, error) {
 	if pir.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, lib.ErrorLog("database not initialized")
 	}
 
 	q := sqlc.New(pir.db)
 	predictionIntents, err := q.GetAllOpenPredictionIntentsByEvmAddress(context.Background(), evmAddress)
 	if err != nil {
-		return nil, fmt.Errorf("GetAllOpenPredictionIntentsByEvmAddress failed: %v", err)
+		return nil, lib.ErrorLog("GetAllOpenPredictionIntentsByEvmAddress failed", "error", err, "evmAddress", evmAddress)
 	}
 
 	return predictionIntents, nil
@@ -233,7 +233,7 @@ func (pir *PredictionIntentsRepository) GetAllOpenPredictionIntentsByEvmAddress(
 
 func (pir *PredictionIntentsRepository) GetAllPredictionIntents(limit int, offset int) ([]sqlc.PredictionIntent, error) {
 	if pir.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, lib.ErrorLog("database not initialized")
 	}
 
 	q := sqlc.New(pir.db)
@@ -242,7 +242,7 @@ func (pir *PredictionIntentsRepository) GetAllPredictionIntents(limit int, offse
 		Offset: int32(offset),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("GetAllPredictionIntents failed: %v", err)
+		return nil, lib.ErrorLog("GetAllPredictionIntents failed", "error", err, "limit", limit, "offset", offset)
 	}
 
 	return predictionIntents, nil

@@ -24,8 +24,11 @@ FROM matches
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2;
 
-
-
+-- name: GetTotalVolumeUsdInTimePeriod :one
+SELECT COALESCE(SUM(m.qty1 * pi1.price_usd), 0)::numeric AS total_volume_usd
+FROM matches m
+JOIN prediction_intents pi1 ON m.tx_id1 = pi1.tx_id
+WHERE m.created_at >= $1 AND m.created_at <= $2;
 
 
 

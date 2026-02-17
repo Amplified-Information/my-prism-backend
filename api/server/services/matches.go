@@ -2,28 +2,27 @@ package services
 
 import (
 	pb_api "api/gen"
+	"api/server/lib"
 	repositories "api/server/repositories"
 	"context"
 	"time"
 )
 
 type MatchesService struct {
-	log               *LogService
 	matchesRepository *repositories.MatchesRepository
 }
 
-func (ms *MatchesService) Init(log *LogService, matchesRepository *repositories.MatchesRepository) error {
-	ms.log = log
+func (ms *MatchesService) Init(matchesRepository *repositories.MatchesRepository) error {
 	ms.matchesRepository = matchesRepository
 
-	ms.log.Log(INFO, "Service: Matches service initialized successfully")
+	lib.Log(lib.LOG_INFO, "Service: Matches service initialized successfully")
 	return nil
 }
 
 func (ms *MatchesService) GetAllMatches(limit int32, offset int32) ([]*pb_api.Match, error) {
 	matchesResp, err := ms.matchesRepository.GetAllMatches(context.Background(), int(limit), int(offset))
 	if err != nil {
-		return nil, ms.log.Log(ERROR, "failed to get all matches: %v", err)
+		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get all matches: %v", err)
 	}
 
 	var apiMatches []*pb_api.Match
