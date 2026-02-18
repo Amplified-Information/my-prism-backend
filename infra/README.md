@@ -44,6 +44,7 @@ The following resources (static - not to be deleted) should be created manually 
 - S3 bucket (prismlabs-deployment) - a landing zone for deploying docker-compose* files
 - S3 bucket (pl-deployment-badges) - a landing zone to store status badges (.svg) about the current deployment
 - S3 bucket (prismlabs-images) - a place which serves uploaded market image files
+- S3 bucket (prismlabs-fluent-bit) - a place to store application logs (fluent-bit)
 - AWS SES service
 - TODO: S3 bucket for fluent-bit logs
 - TODO: AWS glacier (permanent record of logs)
@@ -180,7 +181,7 @@ resource "aws_iam_policy" "combined_policy" {
     }
 ```
 
-## S3 bucket (prismlabs-images) 
+## S3 bucket (prismlabs-images)
 
 One-time setup (clickops):
 
@@ -266,6 +267,119 @@ unzip awscliv2.zip
 
 echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X2ZcAAAAASUVORK5CYII=" | base64 -d > x.png
 aws s3 cp x.png "s3://prismlabs-images/dev/x.png" --content-type image/png
+```
+
+## S3 bucket (prismlabs-fluent-bit)
+
+One-time setup (clickops):
+
+- create a new S3 bucket called "prismlabs-fluent-bit"
+- Block all public access
+- ACLs disabled (AWS IAM is used for access)
+- Enable bucket key
+
+The following terraform (see: shared/main.tf) allows write access to the bucket:
+
+```bash
+resource "aws_iam_policy" "combined_policy" {
+  name        = "${var.env}-combined-policy"
+  description = "Combined policy"
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+
+      ...
+      {
+        Effect = "Allow",
+        Action = [
+          "s3:PutObject",
+          "s3:PutObjectAcl",
+          "s3:AbortMultipartUpload",
+          "s3:ListBucket"
+        ],
+        Resource = [
+          "arn:aws:s3:::prismlabs-fluent-bit",
+          "arn:aws:s3:::prismlabs-fluent-bit/*"
+        ]
+      }
+      ...
+
+    ]
+  ...
+
+```
+Set up the following S3 lifecycle rule called "retain + glacier" for "prismlabs-fluent-bit" (https://us-east-1.console.aws.amazon.com/s3/management/prismlabs-fluent-bit/lifecycle/create?region=us-east-1):
+
+Prefix: "*"
+
+Minium object size: "1" (byte)
+
+Enable the following checkboxes:
+- "Transition noncurrent versions of objects between storage classes"
+  - noncurrent after 30 days
+  - storage class transition: Glacier Flexible Retrieval (retrieve in minutes -> hours)
+- "Permanently delete noncurrent versions of objects"
+  - Days after object creation: 35
+- 
+
+## Cloudwatch
+
+Use fluent-bit to stream to Amazon Cloudwatch :)
+
+1. enable IAM log write permission from EC2 box
+2. add fluent-bit config
+
+Step 1: Add the following IAM policy:
+
+```bash
+resource "aws_iam_policy" "combined_policy" {
+...
+      
+      // EC2 box has CloudWatch Logs WRITE access (for Fluent Bit cloudwatch_logs output):
+      {
+        Effect = "Allow",
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams"
+        ],
+        Resource = "arn:aws:logs:${var.aws_region}:*:log-group:/prism/${var.env}:*"
+      }
+```
+
+Step 2:  add the following fluent-bit config to your EC2 box:
+
+`vim /etc/fluent-bit/fluent-bit.conf`
+
+```bash
+# note: this is already done in shared/main.tf
+[OUTPUT]
+    Name              cloudwatch_logs
+    Match             *
+    region            ${var.aws_region}
+    log_group_name    /prism/${var.env}
+    log_stream_name   $(hostname)
+    auto_create_group true
+```
+
+`systemctl restart fluent-bit`
+
+30 day retention period for CloudWatch logs:
+
+```bash
+# note: this is applied in shared/main.tf so affects all envs
+# note: the name matches the above "log_group_name"
+# apply a 30 day retention period to cloudwatch logs:
+resource "aws_cloudwatch_log_group" "fluent_bit" {
+  name              = "/prism/${var.env}"
+  retention_in_days = 30
+
+  tags = {
+    Environment = var.env
+  }
+}
 ```
 
 ### EC2 boxes accessing the files on S3

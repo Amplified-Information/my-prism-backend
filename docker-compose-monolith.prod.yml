@@ -1,6 +1,6 @@
 services:
   web:
-    image: ghcr.io/prismmarketlabs/web.lp:0.3.5
+    image: ghcr.io/prismmarketlabs/web.lp:0.3.6
   # clob:
   #   deploy:
   #     replicas: 0

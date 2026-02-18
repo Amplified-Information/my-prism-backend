@@ -107,6 +107,11 @@ services:
     restart: always
     ports:
       - "5173:80"
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: "{{.Name}}"
     environment:
       IS_PASSWORD_PROTECTED: ${IS_PASSWORD_PROTECTED}
       HTUSER: ${HTUSER}

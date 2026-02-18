@@ -126,6 +126,9 @@ sudo apt-get update
 sudo apt-get install -y fluent-bit
 
 
+
+
+
 # want to add the following in the right place in /etc/fluent-bit/fluent-bit.conf:
 # [INPUT]
 #     Name              forward
@@ -144,6 +147,57 @@ sudo awk '
 }
 {print}
 ' /etc/fluent-bit/fluent-bit.conf > /tmp/fb.conf && sudo mv /tmp/fb.conf /etc/fluent-bit/fluent-bit.conf
+
+
+# Reduce the CPU [INPUT] interval from 1s to 60s (reduce log verbosity)
+sudo sed -i 's/\(^\s*interval_sec\s\+\)1/\160/I' /etc/fluent-bit/fluent-bit.conf
+
+
+
+###
+# S3 stream: stream fluent-bit logs to S3 bucket called "prismlabs-fluent-bit":
+###
+# ensure S3 output is configured (idempotent)
+if ! sudo grep -q "^\s*Name\s\+s3\s*$" /etc/fluent-bit/fluent-bit.conf; then
+  sudo mkdir -p /var/log/fluent-bit/s3
+  sudo chown -R fluent-bit:fluent-bit /var/log/fluent-bit/s3 || true
+
+  cat <<'FB_OUT' | sudo tee -a /etc/fluent-bit/fluent-bit.conf > /dev/null
+
+[OUTPUT]
+    Name              s3
+    Match             *
+    bucket            prismlabs-fluent-bit
+    region            ${var.aws_region}
+    s3_key_format     /${var.env}/$TAG/%Y/%m/%d/%H/%M/%S-$UUID.gz
+    store_dir         /var/log/fluent-bit/s3
+    total_file_size   5M
+    upload_timeout    60s
+    compression       gzip
+FB_OUT
+fi
+
+###
+# AWS Cloudwatch log streaming:
+###
+### stream fluent-bit logs to CloudWatch Logs:
+# ensure CloudWatch output is configured (idempotent)
+if ! sudo grep -q "^\s*Name\s\+cloudwatch_logs\s*$" /etc/fluent-bit/fluent-bit.conf; then
+  cat <<FB_CW | sudo tee -a /etc/fluent-bit/fluent-bit.conf > /dev/null
+
+[OUTPUT]
+    Name              cloudwatch_logs
+    Match             *
+    region            ${var.aws_region}
+    log_group_name    /prism/${var.env}
+    log_stream_name   $(hostname)
+    auto_create_group true
+FB_CW
+fi
+
+
+
+
 
 # restart fluent-bit and enable on reboot:
 sudo systemctl start fluent-bit
@@ -1002,7 +1056,7 @@ resource "aws_iam_policy" "combined_policy" {
           "arn:aws:s3:::pl-deployment-badges/*"
         ]
       },
-      // EC2 box has S3 WRITE access to s3://prismlabs-images":
+      // EC2 box has S3 WRITE access to s3://prismlabs-images:
       {
         Effect = "Allow",
         Action = [
@@ -1015,6 +1069,32 @@ resource "aws_iam_policy" "combined_policy" {
           "arn:aws:s3:::prismlabs-images",
           "arn:aws:s3:::prismlabs-images/*"
         ]
+      },
+      // EC2 box has S3 WRITE access to s3://prismlabs-fluent-bit:
+      {
+        Effect = "Allow",
+        Action = [
+          "s3:PutObject",
+          "s3:PutObjectAcl",
+          "s3:AbortMultipartUpload",
+          "s3:ListBucket"
+        ],
+        Resource = [
+          "arn:aws:s3:::prismlabs-fluent-bit",
+          "arn:aws:s3:::prismlabs-fluent-bit/*"
+        ]
+      },
+      // EC2 box has CloudWatch Logs WRITE access (for Fluent Bit cloudwatch_logs output):
+      {
+        Effect = "Allow",
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams"
+        ],
+        Resource = "arn:aws:logs:${var.aws_region}:*:log-group:/prism/${var.env}:*"
       }
     ]
   })
@@ -1132,4 +1212,14 @@ output "vpc_id" {
 
 output "combined_iam_policy_name" {
   value = aws_iam_instance_profile.combined_instance_profile.name
+}
+
+# apply a 30 day retention period to cloudwatch logs:
+resource "aws_cloudwatch_log_group" "fluent_bit" {
+  name              = "/prism/${var.env}"
+  retention_in_days = 30
+
+  tags = {
+    Environment = var.env
+  }
 }

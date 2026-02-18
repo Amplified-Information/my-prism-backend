@@ -6,6 +6,7 @@ import { z } from "zod";
 import { Shield, Eye, Users } from "lucide-react";
 import logo from "@/assets/logo.png";
 import { apiClient } from "../../grpcClient"
+import Countdown from "@/components/Countdown"
 
 const emailSchema = z.string().trim().email("Please enter a valid email").max(255, "Email is too long");
 
@@ -93,11 +94,8 @@ const Index = () => {
             style={{
               left: `${Math.random() * 100}%`,
               top: `${Math.random() * 100}%`,
+              animation: `dust-${i} ${duration}s ease-in-out ${delay}s infinite`,
               animationName: `dust-${i}`,
-              animationDuration: `${duration}s`,
-              animationTimingFunction: 'ease-in-out',
-              animationDelay: `${delay}s`,
-              animationIterationCount: 'infinite',
             }}
           >
             <style>{`
@@ -139,16 +137,13 @@ const Index = () => {
         </div>
       </header>
 
-      <main className="relative z-10 flex flex-col items-center px-4 py-12">
+      {/* Countdown below header */}
+      <div className="relative z-20 flex justify-center px-4 py-4">
+        <Countdown />
+      </div>
+
+      <main className="relative z-10 flex flex-col items-center px-4 py-4">
         <div className="max-w-4xl mx-auto text-center space-y-8">
-          {/* Coming Soon Badge */}
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-1000">
-            <div className="inline-block px-8 py-3 bg-secondary/50 backdrop-blur-sm border border-prism-gold/30 rounded-full">
-              <p className="text-prism-gold font-mono text-lg md:text-xl">
-                LAUNCHING SOON
-              </p>
-            </div>
-          </div>
 
           {/* Hero Content */}
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-100">
@@ -163,7 +158,10 @@ const Index = () => {
           {/* Description */}
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-200">
             <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              Trade Real-World Events on Hedera. A decentralized prediction protocol built for speed, fairness, and the next generation of Web3.
+              Trade Outcomes on Real-World Events on Hedera.
+            </p>
+            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed mt-2">
+              Prism Market is decentralized prediction protocol built for speed, fairness, and the next generation of Web3.
             </p>
           </div>
 
@@ -189,6 +187,19 @@ const Index = () => {
             <p className="text-xs text-muted-foreground mt-3">
               Be the first to know when we launch
             </p>
+            <a 
+              href="https://testnet.prism.market" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="inline-block mt-4"
+            >
+              <Button 
+                variant="outline" 
+                className="border-prism-gold/50 text-prism-gold hover:bg-prism-gold/10 hover:border-prism-gold"
+              >
+                See the Demo
+              </Button>
+            </a>
           </div>
 
           {/* Features */}
