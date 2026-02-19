@@ -58,6 +58,12 @@ variable "ssl_cert_arn" {
 }
 output "ssl_cert_arn" { value = var.ssl_cert_arn }
 
+variable "ssl_cert_arn_wildcard" {
+  description = "The SSL certificate ARN for the environment (wildcard domain)"
+  type        = string
+}
+output "ssl_cert_arn_wildcard" { value = var.ssl_cert_arn_wildcard }
+
 variable "ebs_volume_id" {
   description = "The EBS volume ID to attach to the data instance"
   type        = string
@@ -423,10 +429,13 @@ done)
 count=$(echo "$lines" | wc -l)
 height=$((40 + 20 * count))
 
+DEPLOY_TIME=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+
 echo "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"300\" height=\"$height\" style=\"font-family:monospace\">" > "$MACHINE.svg"
 echo "<text x=\"10\" y=\"20\" font-size=\"16\" fill=\"green\">$ENVIRONMENT.$MACHINE</text>" >> "$MACHINE.svg"
+echo "<text x=\"10\" y=\"40\" font-size=\"13\" fill=\"orange\">$DEPLOY_TIME</text>" >> "$MACHINE.svg"
 
-y=40
+y=60
 echo "$lines" | while read svc tag; do
   echo "<text x=\"30\" y=\"$y\" font-size=\"14\"><tspan fill=\"blue\">$svc</tspan>:<tspan fill=\"purple\">$tag</tspan></text>" >> "$MACHINE.svg"
   y=$((y + 20))
@@ -1218,6 +1227,10 @@ output "combined_iam_policy_name" {
 resource "aws_cloudwatch_log_group" "fluent_bit" {
   name              = "/prism/${var.env}"
   retention_in_days = 30
+
+  lifecycle {
+    prevent_destroy = true
+  }
 
   tags = {
     Environment = var.env

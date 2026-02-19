@@ -7,6 +7,7 @@ module "shared" {
   domain_name = "$DOMAIN_NAME"
   ebs_volume_id = "$EBS_VOLUME_ID"
   ssl_cert_arn = "$SSL_CERT_ARN"
+  ssl_cert_arn_wildcard = "$SSL_CERT_ARN_WILDCARD"
 }
 
 
@@ -298,12 +299,18 @@ resource "aws_lb_listener" "alb_listener_443" {
   protocol          = "HTTPS"
 
   ssl_policy        = "ELBSecurityPolicy-2016-08"
-  certificate_arn   = module.shared.ssl_cert_arn
+  certificate_arn   = module.shared.ssl_cert_arn_wildcard
 
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.alb_proxy_target_group_$ENV.arn
   }
+}
+
+# Attach the non-wildcard certificate for the root domain
+resource "aws_lb_listener_certificate" "alb_listener_443_additional_cert" {
+  listener_arn    = aws_lb_listener.alb_listener_443.arn
+  certificate_arn = module.shared.ssl_cert_arn
 }
 
 # Redirect  HTTP to HTTPS (301 - permanent redirect):
