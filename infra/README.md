@@ -61,13 +61,13 @@ https://us-east-1.console.aws.amazon.com/route53/v2/hostedzones
 
 hosted zone ID: `Z07868573V3HLWHKP9WV6`
 
-## AWS certificates
+## AWS certificates (note: wildcards)
 
 | Environment | hostname         | arn                                                                                 |
 |-------------|------------------|-------------------------------------------------------------------------------------|
-| dev         | dev.prism.market | arn:aws:acm:us-east-1:063088900305:certificate/fdb39519-526b-48d2-a96e-307381465c05 |
-| uat         | uat.prism.market | arn:aws:acm:us-east-1:063088900305:certificate/48dc07e4-d1c2-488e-a085-3e499893a4e4 |
-| prod        | prism.market     | arn:aws:acm:us-east-1:063088900305:certificate/93dfad7f-8a67-43f3-a2e1-7f1f2f4b91c7 |
+| dev         | *dev.prism.market | arn:aws:acm:us-east-1:063088900305:certificate/0c03a7c8-f646-4f60-a30f-29f14989749b |
+| uat         | *uat.prism.market | arn:aws:acm:us-east-1:063088900305:certificate/2481be4f-e7be-409d-bb7c-430d95b0becd |
+| prod        | *prism.market     | arn:aws:acm:us-east-1:063088900305:certificate/ccee5179-316a-4220-bb04-72dd26e2c3a9 |
 
 ## AWS EBS resources
 

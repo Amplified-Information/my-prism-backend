@@ -4,7 +4,7 @@
 
 
 -- Dumped from database version 18.1 (Debian 18.1-1.pgdg13+2)
--- Dumped by pg_dump version 18.1 (Debian 18.1-1.pgdg12+2)
+-- Dumped by pg_dump version 18.2 (Debian 18.2-1.pgdg12+1)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -209,7 +209,8 @@ ALTER SEQUENCE public.comments_comment_id_seq OWNED BY public.comments.comment_i
 CREATE TABLE public.global_data (
     id integer NOT NULL,
     tv_matched double precision DEFAULT 0.0 NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT tv_matched_non_negative CHECK ((tv_matched >= (0)::double precision))
 );
 
 
@@ -1548,6 +1549,13 @@ CREATE TRIGGER trigger_update_user_roles_updated_at BEFORE UPDATE ON public.user
 --
 
 CREATE TRIGGER trigger_update_users_updated_at BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.update_users_updated_at_column();
+
+
+--
+-- Name: global_data update_global_data_updated_at; Type: TRIGGER; Schema: public; Owner: your_db_user
+--
+
+CREATE TRIGGER update_global_data_updated_at BEFORE UPDATE ON public.global_data FOR EACH ROW EXECUTE FUNCTION public.update_global_data_updated_at();
 
 
 --

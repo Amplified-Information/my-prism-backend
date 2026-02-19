@@ -22,6 +22,7 @@ service ClobInternal {
   rpc GetOrdersForUser(UserRequest) returns (OrdersForUserResponse);
   // rpc PauseMarketToggle (MarketIdRequest) returns (StdResponse);
   // rpc DeleteMarket(MarketIdRequest) returns (StdResponse); // nuke the market on the CLOB
+  rpc GetTvPendingUsd(Empty) returns (StdResponse);
 }
 
 message Empty {}

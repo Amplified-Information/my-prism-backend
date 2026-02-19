@@ -8,6 +8,10 @@
 # source loadEnv.sh local
 # docker run -p 8090:8090 -p 9901:9901 -e ENVOY_HOST_CLOB=${ENVOY_HOST_CLOB} -e ENVOY_HOST_API=${ENVOY_HOST_API} -e ENVOY_HOST_WEB=${ENVOY_HOST_WEB} ghcr.io/prismmarketlabs/proxy:$VERSION
 #
+# or locally on a laptop:
+# source loadEnv.sh local2
+# docker run -d --network host -p 8090:8090 -p 9901:9901 -e ENVOY_HOST_CLOB=${ENVOY_HOST_CLOB} -e ENVOY_HOST_API=${ENVOY_HOST_API} -e ENVOY_HOST_WEB=${ENVOY_HOST_WEB} ghcr.io/prismmarketlabs/proxy:latest
+#
 # When clob, api, web are all on localhost when running locally:
 # source loadEnv.sh local2
 # docker run --network host ...

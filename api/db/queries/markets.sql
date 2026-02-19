@@ -26,13 +26,13 @@ LIMIT $1 OFFSET $2;
 
 -- name: GetAllUnresolvedMarkets :many
 SELECT * FROM markets
-WHERE resolved_at IS NULL AND closes_at > CURRENT_TIMESTAMP AND is_suspended = FALSE
+WHERE resolved_at IS NULL AND closes_at > CURRENT_TIMESTAMP AND is_suspended = FALSE AND is_paused = FALSE
 ORDER BY created_at ASC;
 -- LIMIT $1 OFFSET $2;
 
 -- name: CountUnresolvedMarkets :one
 SELECT COUNT(*) FROM markets
-WHERE resolved_at IS NULL AND closes_at > CURRENT_TIMESTAMP AND is_suspended = FALSE;
+WHERE resolved_at IS NULL AND closes_at > CURRENT_TIMESTAMP AND is_suspended = FALSE AND is_paused = FALSE;
 
 
 

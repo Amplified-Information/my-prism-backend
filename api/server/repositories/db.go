@@ -80,7 +80,7 @@ func (dbRepository *DbRepository) CreateNewsletterSubscription(email string, ipA
 	return nil
 }
 
-func (dbRepository *DbRepository) GetTotalVolumeUsdInTimePeriod(timePeriod string) (float64, error) {
+func (dbRepository *DbRepository) GetTotalValueMatchedUsdInTimePeriod(timePeriod string) (float64, error) {
 	// guards
 	if dbRepository.db == nil {
 		return 0, lib.ErrorLog("database not initialized")
@@ -102,13 +102,13 @@ func (dbRepository *DbRepository) GetTotalVolumeUsdInTimePeriod(timePeriod strin
 	// OK - proceed
 	/////
 	q := sqlc.New(dbRepository.db)
-	params := sqlc.GetTotalVolumeUsdInTimePeriodParams{
+	params := sqlc.GetTotalValueMatchedUsdInTimePeriodParams{
 		CreatedAt:   time.Now().Add(0 - lib.ParseDuration(timePeriod)),
 		CreatedAt_2: time.Now(),
 	}
-	totalVolume, err := q.GetTotalVolumeUsdInTimePeriod(context.Background(), params)
+	totalVolume, err := q.GetTotalValueMatchedUsdInTimePeriod(context.Background(), params)
 	if err != nil {
-		return 0, fmt.Errorf("GetTotalVolumeUsdInTimePeriod failed: %v", err)
+		return 0, fmt.Errorf("GetTotalValueMatchedUsdInTimePeriod failed: %v", err)
 	}
 
 	totalVolumeFloat, err := strconv.ParseFloat(totalVolume, 64)
@@ -133,23 +133,48 @@ func (dbRepository *DbRepository) GetNumActiveTraders() (uint32, error) {
 	return uint32(nActiveTraders), nil
 }
 
-func (dbRepository *DbRepository) GetTotalValuePendingUsd() (float64, error) {
+// query the CLOB for this...
+// this db query doesn't take into account partially matched order_intents
+// func (dbRepository *DbRepository) GetTotalValuePendingUsd() (float64, error) {
+// 	if dbRepository.db == nil {
+// 		return 0, lib.ErrorLog("database not initialized")
+// 	}
+
+// 	q := sqlc.New(dbRepository.db)
+// 	totalValuePendingUsd, err := q.GetTotalValuePendingUsd(context.Background())
+// 	if err != nil {
+// 		return 0, lib.ErrorLog("GetTotalValuePendingUsd failed", "error", err)
+// 	}
+
+// 	tvlFloat, err := strconv.ParseFloat(totalValuePendingUsd, 64)
+// 	if err != nil {
+// 		return 0, lib.ErrorLog("failed to parse TVL to float64", "error", err)
+// 	}
+
+// 	return tvlFloat, nil
+// }
+
+func (dbRepository *DbRepository) GetTotalValueMatchedUsdOpenMarkets() (float64, error) {
 	if dbRepository.db == nil {
 		return 0, lib.ErrorLog("database not initialized")
 	}
 
 	q := sqlc.New(dbRepository.db)
-	totalValuePendingUsd, err := q.GetTotalValuePendingUsd(context.Background())
+	params := sqlc.GetTotalValueMatchedUsdInTimePeriodParams{
+		CreatedAt:   time.UnixMicro(0), // 1/1/1970
+		CreatedAt_2: time.Now(),
+	}
+	tvMatchedUsdOpenMarkets, err := q.GetTotalValueMatchedUsdInTimePeriod(context.Background(), params)
 	if err != nil {
-		return 0, lib.ErrorLog("GetTotalValuePendingUsd failed", "error", err)
+		return 0, lib.ErrorLog("GetTotalValueMatchedUsdInTimePeriod failed", "error", err)
 	}
 
-	tvlFloat, err := strconv.ParseFloat(totalValuePendingUsd, 64)
+	tvMatchedUsdOpenMarketsFloat, err := strconv.ParseFloat(tvMatchedUsdOpenMarkets, 64)
 	if err != nil {
 		return 0, lib.ErrorLog("failed to parse TVL to float64", "error", err)
 	}
 
-	return tvlFloat, nil
+	return tvMatchedUsdOpenMarketsFloat, nil
 }
 
 func (dbRepository *DbRepository) GetTotalValueMatchedUsd() (float64, error) {

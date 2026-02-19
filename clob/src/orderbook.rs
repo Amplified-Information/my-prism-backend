@@ -202,6 +202,28 @@ impl OrderBookService {
 
         Ok(user_orders)
     }
+
+    pub async fn get_tv_pending_usd(&self) -> Result<f64, Box<dyn std::error::Error>> {
+        // No guards for performance - assume validated upstream
+
+        let order_books = self.order_books.read().await;
+        let mut total_value = 0.0;
+
+        for (_market_id, order_book) in order_books.iter() {
+            // log::info!("Calculating TV Pending USD for market {}", _market_id);
+            let book = order_book.read().await;
+
+            for order in &book.buy_orders {
+                total_value += order.price_usd.abs() * order.qty;
+            }
+
+            for order in &book.sell_orders {
+                total_value += order.price_usd.abs() * order.qty;
+            }
+        }
+        log::info!("tv_pending (USDC) across all markets: {}", total_value);
+        Ok(total_value)
+    }
 }
 
 #[derive(Debug)]
@@ -241,7 +263,7 @@ impl OrderBook {
         while i < opposite_orders.len() {
             let existing_order = &mut opposite_orders[i];
             // Match based on price constraints
-            if (incoming_order.price_usd > 0.0 && incoming_order.price_usd >= existing_order.price_usd) ||
+            if (incoming_order.price_usd > 0.0 && incoming_order.price_usd >= existing_order.price_usd.abs()) ||
                (incoming_order.price_usd < 0.0 && existing_order.price_usd >= incoming_order.price_usd.abs()) {
 
                 let orc2= existing_order.clone();

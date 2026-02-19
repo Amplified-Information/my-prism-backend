@@ -48,3 +48,6 @@ CORS update - added domains
 
 0.1.16
 added support for api/ApiAuth
+
+0.1.17
+expanded CORS to *.lovableproject.com

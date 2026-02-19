@@ -33,3 +33,9 @@ Update CLOB to ensure correct ordering of match events
 
 0.2.11
 added a floating point precision epsilon for full match
+
+0.2.12
+bug in clob matching logic
+
+0.2.13
+add endpoint to retrieve total pending orders

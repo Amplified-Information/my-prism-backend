@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -11,6 +12,9 @@ import (
 	pb_clob "api/gen/clob"
 	"api/server/lib"
 	repositories "api/server/repositories"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type Prism struct {
@@ -94,7 +98,7 @@ func (p *Prism) MacroMetadata() (*pb_api.MacroMetadataResponse, error) {
 
 	for _, period := range lib.VolumeResolutionPeriods {
 		period := strings.ToLower(strings.TrimSpace(period))
-		volume, err := p.dbRepository.GetTotalVolumeUsdInTimePeriod(period)
+		volume, err := p.dbRepository.GetTotalValueMatchedUsdInTimePeriod(period)
 		if err != nil {
 			return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get total volume USD for network %s: %v", period, err)
 		}
@@ -106,7 +110,7 @@ func (p *Prism) MacroMetadata() (*pb_api.MacroMetadataResponse, error) {
 		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get number of active traders: %v", err)
 	}
 
-	tvPendingUsd, err := p.dbRepository.GetTotalValuePendingUsd()
+	tvPendingUsd, err := p.clob_getTotalValuePendingUsd()
 	if err != nil {
 		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get TVL USD: %v", err)
 	}
@@ -116,9 +120,10 @@ func (p *Prism) MacroMetadata() (*pb_api.MacroMetadataResponse, error) {
 		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get TVL USD: %v", err)
 	}
 
-	tvlUsd, err := p.dbRepository.GetTvlUsd()
+	tvMatchedUsdOpenMarkets, err := p.dbRepository.GetTotalValueMatchedUsdOpenMarkets()
+	// log.Printf("tvMatchedUsdOpenMarkets: %f", tvMatchedUsdOpenMarkets)
 	if err != nil {
-		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get TVL USD: %v", err)
+		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get GetTotalValueMatchedUsdOpenMarkets: %v", err)
 	}
 
 	response := &pb_api.MacroMetadataResponse{
@@ -132,7 +137,7 @@ func (p *Prism) MacroMetadata() (*pb_api.MacroMetadataResponse, error) {
 		MinOrderSizeUsd:             minOrderSizeUsd,
 		TvPendingUsd:                tvPendingUsd,
 		TvMatchedUsd:                tvMatchedUsd,
-		TvlUsd:                      tvlUsd,
+		TvlUsd:                      tvMatchedUsdOpenMarkets + tvPendingUsd, // TVL = matched + pending
 		TotalVolumeUsd:              totalVolumeUsd,
 		ActiveTraders:               nActiveTraders,
 	}
@@ -264,4 +269,33 @@ func (p *Prism) TriggerRecreateClob() (bool, error) {
 	}
 
 	return true, nil
+}
+
+func (p *Prism) clob_getTotalValuePendingUsd() (float64, error) {
+	// this is a CLOB query because of the complexity of calculating the pending USD value from the PredictionIntents and Matches tables (partially matched orders, etc.)
+	// it's easier to just query the CLOB which has the current state of all open orders
+	clobAddr := os.Getenv("CLOB_HOST") + ":" + os.Getenv("CLOB_PORT")
+
+	conn, err := grpc.NewClient(clobAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return 0, lib.LogAndError(lib.LOG_ERROR, "Failed to open grpc connection to CLOB %v", err)
+	}
+	defer conn.Close()
+
+	clobClient := pb_clob.NewClobInternalClient(conn)
+	tvPending, err := clobClient.GetTvPendingUsd(
+		context.Background(),
+		&pb_clob.Empty{},
+	)
+	if err != nil {
+		return 0, lib.LogAndError(lib.LOG_ERROR, "failed to get total value pending USD from CLOB (%s): %v", clobAddr, err)
+	}
+	if tvPending.ErrorCode != 0 {
+		return 0, lib.LogAndError(lib.LOG_ERROR, "failed to get total value pending USD from CLOB (%s): %v", clobAddr, tvPending.ErrorCode)
+	}
+	tvPendingValue, err := strconv.ParseFloat(tvPending.Message, 64)
+	if err != nil {
+		return 0, lib.LogAndError(lib.LOG_ERROR, "failed to parse total value pending USD from CLOB: %v", err)
+	}
+	return tvPendingValue, nil
 }

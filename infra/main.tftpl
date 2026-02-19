@@ -306,6 +306,24 @@ resource "aws_lb_listener" "alb_listener_443" {
   }
 }
 
+# Redirect  HTTP to HTTPS (301 - permanent redirect):
+# Note: ALB security groups already allow port 80 via "allow_web_ingress_id" so no security group changes needed.
+resource "aws_lb_listener" "alb_listener_80" {
+  load_balancer_arn = aws_lb.alb_$ENV.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type = "redirect"
+
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
+}
+
 # Register the proxy_$ENV instance with the target group
 resource "aws_lb_target_group_attachment" "proxy_${ENV}_attachment" {
   target_group_arn = aws_lb_target_group.alb_proxy_target_group_$ENV.arn
@@ -335,6 +353,58 @@ resource "aws_lb_target_group_attachment" "proxy_${ENV}_attachment" {
 resource "aws_route53_record" "alb_alias" {
   zone_id = "Z07868573V3HLWHKP9WV6" # yes, this is fixed
   name    = "${module.shared.domain_name}"
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.alb_$ENV.dns_name
+    zone_id                = aws_lb.alb_$ENV.zone_id
+    evaluate_target_health = true
+  }
+}
+
+# Add an alias record for **admin.** subdomain
+resource "aws_route53_record" "alb_alias_admin" {
+  zone_id = "Z07868573V3HLWHKP9WV6" # yes, this is fixed
+  name    = "admin.${module.shared.domain_name}"
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.alb_$ENV.dns_name
+    zone_id                = aws_lb.alb_$ENV.zone_id
+    evaluate_target_health = true
+  }
+}
+
+# Add an alias record for **mainnet.** subdomain
+resource "aws_route53_record" "alb_alias_mainnet" {
+  zone_id = "Z07868573V3HLWHKP9WV6" # yes, this is fixed
+  name    = "mainnet.${module.shared.domain_name}"
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.alb_$ENV.dns_name
+    zone_id                = aws_lb.alb_$ENV.zone_id
+    evaluate_target_health = true
+  }
+}
+
+# Add an alias record for **testnet.** subdomain
+resource "aws_route53_record" "alb_alias_testnet" {
+  zone_id = "Z07868573V3HLWHKP9WV6" # yes, this is fixed
+  name    = "testnet.${module.shared.domain_name}"
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.alb_$ENV.dns_name
+    zone_id                = aws_lb.alb_$ENV.zone_id
+    evaluate_target_health = true
+  }
+}
+
+# Add an alias record for **previewnet.** subdomain
+resource "aws_route53_record" "alb_alias_previewnet" {
+  zone_id = "Z07868573V3HLWHKP9WV6" # yes, this is fixed
+  name    = "previewnet.${module.shared.domain_name}"
   type    = "A"
 
   alias {

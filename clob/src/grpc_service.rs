@@ -117,6 +117,26 @@ impl ClobInternal for ClobService {
             }
         }
     }
+
+    async fn get_tv_pending_usd(
+        &self,
+        _request: Request<crate::orderbook::proto::Empty>,
+    ) -> Result<Response<crate::orderbook::proto::StdResponse>, Status> {
+        let tv_pending_usd = self.order_book_service.get_tv_pending_usd().await;
+        match tv_pending_usd {
+            Ok(tv_pending_usd) => {
+                let response = crate::orderbook::proto::StdResponse {
+                    message: tv_pending_usd.to_string(),
+                    error_code: 0,
+                };
+                Ok(Response::new(response))
+            },
+            Err(e) => {
+                log::error!("Failed to get TV Pending USD: {}", e);
+                Err(Status::internal(e.to_string()))
+            }
+        }
+    }
 }
 
 #[tonic::async_trait]

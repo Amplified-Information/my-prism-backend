@@ -81,7 +81,7 @@ func (marketsRepository *MarketsRepository) GetMarkets(limit int32, offset int32
 	return markets, nil
 }
 
-func (marketsRepository *MarketsRepository) CreateMarket(marketId string, _net string, _imageUrl string, _statement string, _closesAt string, _description string, smartContractId string) (*sqlc.Market, error) {
+func (marketsRepository *MarketsRepository) CreateMarket(marketId string, _net string, _imageUrl string, _statement string, closesAt time.Time, _description string, smartContractId string) (*sqlc.Market, error) {
 	if marketsRepository.db == nil {
 		return nil, lib.ErrorLog("database not initialized")
 	}
@@ -104,15 +104,6 @@ func (marketsRepository *MarketsRepository) CreateMarket(marketId string, _net s
 	isValidSmartContractId := lib.IsValidAccountId(smartContractId)
 	if !isValidSmartContractId {
 		return nil, lib.ErrorLog("invalid smart contract ID", "smartContractId", smartContractId)
-	}
-
-	closesAt := time.Now().Add(30 * 24 * time.Hour) // default: 30 days from now
-	if _closesAt != "" {                            // the optional param is not set
-		closesAtTime, err := time.Parse(time.RFC3339, _closesAt)
-		if err != nil {
-			return nil, lib.ErrorLog("invalid closesAt time format (must be RFC3339)", "error", err, "closesAt", _closesAt)
-		}
-		closesAt = closesAtTime
 	}
 
 	description := strings.TrimSpace(_description)

@@ -21,6 +21,16 @@ interface IHederaAccountService {
   function isAuthorized(address account, bytes memory message, bytes memory signature) external returns (int64 responseCode, bool authorized);
 }
 
+// digi sig verification
+// oraclePubkeys = [
+//   "302a300506032b6570032100b4c8cfcaaea7e1d9e8fbbacfa1cbbacfa1cbbacfa1cbbacfa1cbbac",
+//   "302a300506032b6570032100a3dcbdbfbdcd9e8f8fbbacfa1cbbacfa1cbbacfa1cbbacfa1cbbac",
+//   "asdfasdfasd"
+// ]
+
+// 2/3 with prob > 0.99 => resolution
+// otherwise, 50/50 resolution
+
 /**
 prism.market prediction market smart contract
 Authors: ionneb

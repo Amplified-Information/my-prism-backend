@@ -108,3 +108,9 @@ more logging rationalisation.
 
 0.3.16
 macrometadata updates. global table
+
+0.3.17
+macrometadata updates. panic fix. GetTotalValueMatchedUsdOpenMarkets
+
+0.3.18
+macrometadata - call CLOB for pending orders

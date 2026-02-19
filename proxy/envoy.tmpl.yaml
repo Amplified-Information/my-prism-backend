@@ -144,7 +144,8 @@ static_resources:
                       envoy.filters.http.cors:
                         "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.CorsPolicy
                         allow_origin_string_match:
-                          - exact: "https://f7faefde-e59f-4956-9496-bd84da96dad3.lovableproject.com"
+                          # - exact: "https://f7faefde-e59f-4956-9496-bd84da96dad3.lovableproject.com"
+                          - suffix: ".lovableproject.com"
                           - suffix: ".lovable.app"
                           - suffix: ".getrichwithai.tech"
                           - exact: "https://amplified.info"

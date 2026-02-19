@@ -79,6 +79,15 @@ func (ms *MarketsService) GetMarkets(limit int32, offset int32) (*pb_api.Markets
 func (ms *MarketsService) CreateMarket(req *pb_api.CreateMarketRequest) (*pb_api.CreateMarketResponse, error) {
 	// guards
 	// protobuf validation does a great job sofar ;)
+	// closesAt is optional - if not set, default to 30 days from now
+	closesAt := time.Now().Add(30 * 24 * time.Hour)
+	if req.ClosesAt != nil && *req.ClosesAt != "" {
+		closesAtTime, err := time.Parse(time.RFC3339, *req.ClosesAt)
+		if err != nil {
+			return nil, lib.ErrorLog("invalid closesAt time format (must be RFC3339)", "error", err, "closesAt", *req.ClosesAt)
+		}
+		closesAt = closesAtTime
+	}
 
 	/////
 	// OK - 3 steps to create a new market
@@ -104,7 +113,10 @@ func (ms *MarketsService) CreateMarket(req *pb_api.CreateMarketRequest) (*pb_api
 		// YES, use the current X_SMART_CONTRACT_ID loaded from env vars - we're creating a new market
 		os.Getenv(fmt.Sprintf("%s_SMART_CONTRACT_ID", strings.ToUpper(req.Net))),
 	)
-	market, err := ms.marketsRepository.CreateMarket(req.MarketId, req.Net, req.ImageUrl, req.Statement, *req.ClosesAt, req.Description, contractID.String())
+	if err != nil {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to parse smart contract ID from env for net=%s: %v", req.Net, err)
+	}
+	market, err := ms.marketsRepository.CreateMarket(req.MarketId, req.Net, req.ImageUrl, req.Statement, closesAt, req.Description, contractID.String())
 	if err != nil {
 		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to create a new market row (marketId=%s) on the db: %v", req.MarketId, err)
 	}
@@ -125,6 +137,15 @@ func (ms *MarketsService) CreateMarket(req *pb_api.CreateMarketRequest) (*pb_api
 func (ms *MarketsService) CreateMarketv2(req *pb_api.CreateMarketv2Request) (*pb_api.CreateMarketResponse, error) {
 	// guards
 	// protobuf validation does a great job sofar ;)
+
+	closesAt := time.Now().Add(30 * 24 * time.Hour)
+	if req.ClosesAt != nil && *req.ClosesAt != "" {
+		closesAtTime, err := time.Parse(time.RFC3339, *req.ClosesAt)
+		if err != nil {
+			return nil, lib.ErrorLog("invalid closesAt time format (must be RFC3339)", "error", err, "closesAt", *req.ClosesAt)
+		}
+		closesAt = closesAtTime
+	}
 
 	/////
 	// OK - 3 steps to create a new market
@@ -156,7 +177,7 @@ func (ms *MarketsService) CreateMarketv2(req *pb_api.CreateMarketv2Request) (*pb
 		// YES, use the current X_SMART_CONTRACT_ID loaded from env vars - we're creating a new market
 		os.Getenv(fmt.Sprintf("%s_SMART_CONTRACT_ID", strings.ToUpper(req.Net))),
 	)
-	market, err := ms.marketsRepository.CreateMarket(req.MarketId, req.Net, imgUrl, req.Statement, *req.ClosesAt, req.Description, contractID.String())
+	market, err := ms.marketsRepository.CreateMarket(req.MarketId, req.Net, imgUrl, req.Statement, closesAt, req.Description, contractID.String())
 	if err != nil {
 		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to create a new market row (marketId=%s) on the db: %v", req.MarketId, err)
 	}

@@ -50,16 +50,6 @@ FROM prediction_intents
 WHERE tx_id = $1;
 
 
--- name: GetTotalValuePendingUsd :one
-SELECT COALESCE(SUM(pi.qty * ABS(pi.price_usd)), 0)::numeric AS tvl_usd
-FROM prediction_intents pi
-JOIN markets m ON pi.market_id = m.market_id
-WHERE pi.cancelled_at IS NULL 
-  AND pi.fully_matched_at IS NULL 
-  AND pi.evicted_at IS NULL
-  AND m.is_suspended IS FALSE
-  AND m.is_paused IS FALSE
-  AND m.resolved_at IS NULL;
 
 
 

@@ -550,7 +550,7 @@ func (hs *HederaService) BuyPositionTokens(sideYes *pb_clob.CreateOrderRequestCl
 	lib.Log(lib.LOG_INFO, "In marketId=%s, user with evmAddress=%s, has nYes=%d | nNo=%d", resultNo.MarketID, resultNo.EvmAddress, resultNo.NYes, resultNo.NNo)
 
 	// 4. and update the global tv_matched value
-	hs.dbRepository.UpdateTotalValueMatchedUsd(math.Min(math.Abs(sideYes.PriceUsd*sideYes.Qty), math.Abs(sideNo.PriceUsd*sideNo.Qty)))
+	hs.dbRepository.UpdateTotalValueMatchedUsd(math.Min(math.Abs(sideYes.PriceUsd*sideYes.Qty), math.Abs(sideNo.PriceUsd*sideNo.Qty)) * 2) // N.B. multiply by 2 because both yes and no sides contribute to the total value matched!
 
 	// if we get here, return true
 	return true, nil
