@@ -155,7 +155,7 @@ static_resources:
                         allow_methods: "POST, OPTIONS"
                         allow_headers: "authorization,content-type,x-grpc-web"
                         max_age: "1728000s"
-                        expose_headers: "grpc-status,grpc-message"
+                        expose_headers: "authorization,grpc-status,grpc-message,grpc-status-details-bin"
                         allow_credentials: true # N.B. this is required to allow cookies to be sent with CORS requests
               access_log:
                 - name: envoy.access_loggers.file
