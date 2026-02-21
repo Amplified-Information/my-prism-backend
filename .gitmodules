@@ -1,3 +1,6 @@
 [submodule "web"]
 	path = web
 	url = git@github.com:PrismMarketLabs/prism-front-end.git
+[submodule "web.admin"]
+	path = web.admin
+	url = git@github.com:PrismMarketLabs/prism-admin.git

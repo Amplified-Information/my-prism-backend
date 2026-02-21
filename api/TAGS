@@ -114,3 +114,7 @@ macrometadata updates. panic fix. GetTotalValueMatchedUsdOpenMarkets
 
 0.3.18
 macrometadata - call CLOB for pending orders
+
+0.3.19
+Added soft-delete comments. New admin endpoints to manage markets
+

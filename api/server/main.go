@@ -68,12 +68,16 @@ func (s *server) CreatePredictionIntent(ctx context.Context, req *pb_api.Predict
 }
 
 func (s *server) GetMarketById(ctx context.Context, req *pb_api.MarketIdRequest) (*pb_api.MarketResponse, error) {
-	result, err := s.marketsService.GetMarketById(req.GetMarketId())
+	isAdmin := s.authService.HasRole(ctx, lib.ADMIN)
+
+	result, err := s.marketsService.GetMarketById(req.GetMarketId(), isAdmin)
 	return result, err
 }
 
 func (s *server) GetMarkets(ctx context.Context, req *pb_api.LimitOffsetRequest) (*pb_api.MarketsResponse, error) {
-	result, err := s.marketsService.GetMarkets(req.GetLimit(), req.GetOffset())
+	isAdmin := s.authService.HasRole(ctx, lib.ADMIN)
+
+	result, err := s.marketsService.GetMarkets(req.GetLimit(), req.GetOffset(), isAdmin)
 	return result, err
 }
 
@@ -245,6 +249,77 @@ func (s *server) GetAllPredictionIntents(ctx context.Context, req *pb_api.LimitO
 
 	return &pb_api.PredictionIntentsResponse{
 		PredictionIntents: predictionIntents,
+	}, nil
+}
+
+func (s *server) ToggleMarketPause(ctx context.Context, req *pb_api.MarketIdRequest) (*pb_api.StdResponse, error) {
+	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
+		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
+	}
+
+	market, err := s.marketsRepository.ToggleMarketPause(req.MarketId)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb_api.StdResponse{
+		ErrorCode: 0,
+		Message:   fmt.Sprintf("market.IsPaused: %v", market.IsPaused),
+	}, nil
+}
+
+func (s *server) ToggleMarketSuspend(ctx context.Context, req *pb_api.MarketIdRequest) (*pb_api.StdResponse, error) {
+	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
+		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
+	}
+
+	market, err := s.marketsRepository.ToggleMarketSuspend(req.MarketId)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb_api.StdResponse{
+		ErrorCode: 0,
+		Message:   fmt.Sprintf("market.IsSuspended: %v", market.IsSuspended),
+	}, nil
+}
+
+func (s *server) DeleteComment(ctx context.Context, req *pb_api.CommentIdRequest) (*pb_api.StdResponse, error) {
+	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
+		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
+	}
+
+	err := s.commentsRepository.DeleteComment(req.CommentId)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb_api.StdResponse{
+		ErrorCode: 0,
+		Message:   "Comment deleted successfully",
+	}, nil
+}
+
+func (s *server) ResolveMarket(ctx context.Context, req *pb_api.ResolveMarketRequest) (*pb_api.StdResponse, error) {
+	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
+		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
+	}
+
+	isOK, err := s.marketsService.ResolveMarket(req.MarketId, req.Outcome)
+	if err != nil {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "market resolution failed", err)
+	}
+
+	if !isOK {
+		return &pb_api.StdResponse{
+			ErrorCode: 1,
+			Message:   "market resolution failed",
+		}, nil
+	}
+
+	return &pb_api.StdResponse{
+		ErrorCode: 0,
+		Message:   "Market resolved successfully",
 	}, nil
 }
 

@@ -31,8 +31,8 @@ func (ms *MarketsService) Init(marketsRepository *repositories.MarketsRepository
 	return nil
 }
 
-func (ms *MarketsService) GetMarketById(marketId string) (*pb_api.MarketResponse, error) {
-	market, err := ms.marketsRepository.GetMarketById(marketId)
+func (ms *MarketsService) GetMarketById(marketId string, isAdmin bool) (*pb_api.MarketResponse, error) {
+	market, err := ms.marketsRepository.GetMarketById(marketId, isAdmin)
 	if err != nil {
 		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get market by id: %v", err)
 	}
@@ -44,7 +44,7 @@ func (ms *MarketsService) GetMarketById(marketId string) (*pb_api.MarketResponse
 	return response, nil
 }
 
-func (ms *MarketsService) GetMarkets(limit int32, offset int32) (*pb_api.MarketsResponse, error) {
+func (ms *MarketsService) GetMarkets(limit int32, offset int32, isAdmin bool) (*pb_api.MarketsResponse, error) {
 	result := os.Getenv("DB_MAX_ROWS")
 	DB_MAX_ROWS, err := strconv.Atoi(result)
 	if err != nil {
@@ -55,7 +55,7 @@ func (ms *MarketsService) GetMarkets(limit int32, offset int32) (*pb_api.Markets
 		limit = int32(DB_MAX_ROWS)
 	}
 
-	markets, err := ms.marketsRepository.GetMarkets(limit, offset)
+	markets, err := ms.marketsRepository.GetMarkets(limit, offset, isAdmin)
 	if err != nil {
 		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get markets: %v", err)
 	}
@@ -329,4 +329,31 @@ func (ms *MarketsService) GetNumMarkets() uint32 {
 		return 0
 	}
 	return uint32(nMarkets)
+}
+
+func (ms *MarketsService) ResolveMarket(marketId string, noYes bool) (bool, error) {
+	// step 1 - resolve on the smart contract
+	market, err := ms.marketsRepository.GetMarketById(marketId, true)
+	if err != nil {
+		return false, lib.LogAndError(lib.LOG_ERROR, "failed to get market by id: %v", err)
+	}
+
+	isOK, err := ms.hederaService.ResolveMarketOnChain(market.Net, marketId, market.SmartContractID, noYes)
+	if err != nil {
+		return false, lib.LogAndError(lib.LOG_ERROR, "failed to resolve market on chain: %v", err)
+	}
+	if !isOK {
+		return false, lib.LogAndError(lib.LOG_ERROR, "transaction failed to execute on chain for unknown reasons")
+	}
+
+	// step 2 - mark as resolved on the db
+	isOK, err = ms.marketsRepository.ResolveMarket(marketId, noYes)
+	if err != nil {
+		return false, lib.LogAndError(lib.LOG_ERROR, "failed to resolve market on db: %v", err)
+	}
+	if !isOK {
+		return false, lib.LogAndError(lib.LOG_ERROR, "failed to resolve market on db for unknown reasons")
+	}
+
+	return true, nil
 }

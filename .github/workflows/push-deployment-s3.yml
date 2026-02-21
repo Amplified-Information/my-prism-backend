@@ -31,7 +31,9 @@ jobs:
 
       - name: Sync .config* and .secrets files to S3
         run: |
-          for dir in api clob db eventbus proxy web; do
+          # dynamically determine service names from docker-compose:
+          services=$(yq '.services // {} | keys | .[]' docker-compose-*.yml 2>/dev/null | sort -u)
+          for dir in $services; do
             aws s3 cp $dir s3://prismlabs-deployment/$dir/ \
               --recursive \
               --exclude "*" \

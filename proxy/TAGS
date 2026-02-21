@@ -54,3 +54,12 @@ expanded CORS to *.lovableproject.com
 
 0.1.18
 added expose_headers: authorization and grpc-status-details-bin
+
+0.1.19
+added admin. subdomain routing to web_admin_service
+
+0.1.20
+Add CORS config to allow prism subdomains (e.g. admin.dev.prism.market to access dev.prism.market, etc.)
+
+0.1.21
+web.lp service for landing page

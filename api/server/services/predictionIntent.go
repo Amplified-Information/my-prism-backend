@@ -157,9 +157,9 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.Predicti
 	// 	return "", lib.LogAndError(lib.LOG_ERROR, "failed to validate %s_SMART_CONTRACT_ID: %v", strings.ToUpper(netSelectedByUser), err)
 	// }
 	// look up this market's smartContractID in the database
-	market, err := pis.marketsRepository.GetMarketById(req.MarketId)
+	market, err := pis.marketsRepository.GetMarketById(req.MarketId, false /* don't include suspended or paused markets*/)
 	if err != nil {
-		return "", lib.LogAndError(lib.LOG_ERROR, "failed to get market by id %s: %v", req.MarketId, err)
+		return "", lib.LogAndError(lib.LOG_ERROR, "failed to get market by id %s: %v. Is the market suspended or paused?", req.MarketId, err)
 	}
 	_smartContractId, err := hiero.ContractIDFromString(market.SmartContractID)
 	if err != nil {

@@ -3,7 +3,7 @@
 # docker compose -f docker-compose-proxy.yml -f docker-compose-proxy.dev.yml up -d 
 services:
   proxy:
-    image: ghcr.io/prismmarketlabs/proxy:0.1.18
+    image: ghcr.io/prismmarketlabs/proxy:0.1.21
     # pull_policy: always
     restart: always
     ports:
@@ -19,3 +19,5 @@ services:
       ENVOY_HOST_CLOB: ${ENVOY_HOST_CLOB}
       ENVOY_HOST_API: ${ENVOY_HOST_API}
       ENVOY_HOST_WEB: ${ENVOY_HOST_WEB}
+      ENVOY_HOST_WEB_ADMIN: ${ENVOY_HOST_WEB_ADMIN}
+      ENVOY_HOST_WEB_LP: ${ENVOY_HOST_WEB_LP}

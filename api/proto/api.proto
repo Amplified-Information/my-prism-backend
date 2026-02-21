@@ -28,6 +28,10 @@ service ApiServicePublic {
   rpc GetAllMatches(LimitOffsetRequest) returns (MatchesResponse);
   rpc GetAllPositions(LimitOffsetRequest) returns (PositionsResponse);
   rpc GetAllPredictionIntents(LimitOffsetRequest) returns (PredictionIntentsResponse);
+  rpc ToggleMarketPause(MarketIdRequest) returns (StdResponse);
+  rpc ToggleMarketSuspend(MarketIdRequest) returns (StdResponse);
+  rpc DeleteComment(CommentIdRequest) returns (StdResponse);
+  rpc ResolveMarket(ResolveMarketRequest) returns (StdResponse);
 }
 
 service ApiServiceInternal {
@@ -137,6 +141,10 @@ message PositionInfo {
 message UserPortfolioResponse {
   map<string, PositionInfo> positions = 1                      [json_name = "positions"];
   map<string, PredictionIntents> open_prediction_intents = 2   [json_name = "openPredictionIntents"];
+}
+
+message CommentIdRequest {
+  int32 comment_id = 1 [json_name = "commentId"];
 }
 
 message MarketIdRequest {
@@ -281,4 +289,9 @@ message PositionsResponse {
 
 message PredictionIntentsResponse {
   repeated PredictionIntentRequest /* PIRequest for now*/ prediction_intents = 1;
+}
+
+message ResolveMarketRequest {
+  string market_id = 1      [json_name = "marketId",    (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
+  bool outcome = 2          [json_name = "outcome"];
 }

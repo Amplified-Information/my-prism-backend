@@ -5,7 +5,7 @@
 # docker push ghcr.io/prismmarketlabs/db:$VERSION
 # 
 # source loadEnv.sh local
-# docker run -p 5432:5432 -v /mnt/external/postgresdata:/var/lib/postgresql -e POSTGRES_USER=${DB_UNAME} -e POSTGRES_PASSWORD=${DB_PWORD} -e POSTGRES_DB=${DB_NAME} ghcr.io/prismmarketlabs/db:$VERSION
+# docker run -d -p 5432:5432 -v /mnt/external/postgresdata:/var/lib/postgresql -e POSTGRES_USER=${DB_UNAME} -e POSTGRES_PASSWORD=${DB_PWORD} -e POSTGRES_DB=${DB_NAME} ghcr.io/prismmarketlabs/db:latest
 
 FROM postgres:18-trixie
 

@@ -174,7 +174,8 @@ CREATE TABLE public.comments (
     public_key character varying(2048) NOT NULL,
     key_type integer NOT NULL,
     content text NOT NULL,
-    created_at timestamp without time zone DEFAULT now() NOT NULL
+    created_at timestamp without time zone DEFAULT now() NOT NULL,
+    is_suspended boolean DEFAULT false NOT NULL
 );
 
 
@@ -267,6 +268,7 @@ CREATE TABLE public.markets (
     closes_at timestamp with time zone DEFAULT (now() + '30 days'::interval) NOT NULL,
     description text NOT NULL,
     is_suspended boolean DEFAULT false NOT NULL,
+    outcome boolean,
     CONSTRAINT smart_contract_id_check CHECK (((length((smart_contract_id)::text) >= 5) AND ((smart_contract_id)::text ~~ '%.%.%'::text)))
 );
 

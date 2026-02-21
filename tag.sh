@@ -18,7 +18,7 @@ fi
 ####
 # part 1 - prompt user input
 ####
-read -p "Enter SERVICE (api, clob, proxy, eventbus, web, web.eng, web.uat, web.lp): " SERVICE
+read -p "Enter SERVICE (api, clob, proxy, eventbus, web, web.admin, web.eng, web.uat, web.lp): " SERVICE
 SERVICE=${SERVICE:-api}
 
 docker info > /dev/null 2>&1

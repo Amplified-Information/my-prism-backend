@@ -36,12 +36,26 @@ func (cs *CronService) CronJob() {
 
 	cs.KickOutOrderIntentsNotBackedByFunds()
 
+	cs.CalcUserPoints()
+
 	lib.Log(lib.LOG_INFO, "CronService: CronJob completed.")
 }
 
-func (cs *CronService) UpdatePositionsWithRealPositions() error {
-	lib.Log(lib.LOG_INFO, "UpdatePositionsWithRealPositions...")
-	// TODO: implement
+func (cs *CronService) CalcUserPoints() error {
+	lib.Log(lib.LOG_INFO, "CalcUserPoints...")
+
+	/*
+		| behaviour | points |
+		| --- | --- |
+		| user connected their wallet in the last 24 hours | 10 |
+		| user entered a limit order in any market within 10% of market price | 10 |
+		| user entered a limit order in any market within 5% of market price | 30 |
+		| user entered a limit order in any market within 2% of market price | 60 |
+		| user entered a limit order in any market within 1% of market price | 90 |
+		| user entered a market order in any market | 30 |
+		| a user order matched | 50 |
+		| | 0 points |
+	*/
 
 	return nil
 }

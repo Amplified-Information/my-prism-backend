@@ -110,3 +110,18 @@ func (commentsRepository *CommentsRepository) CreateComment(marketId string, acc
 	lib.Info("comment added", "marketId", marketId, "accountId", accountId)
 	return &row, nil
 }
+
+func (commentsRepository *CommentsRepository) DeleteComment(commentId int32) error {
+	if commentsRepository.db == nil {
+		return lib.ErrorLog("database not initialized")
+	}
+
+	q := sqlc.New(commentsRepository.db)
+	err := q.DeleteComment(context.Background(), commentId)
+	if err != nil {
+		return lib.ErrorLog("DeleteComment failed", "error", err, "commentId", commentId)
+	}
+
+	lib.Info("comment deleted", "commentId", commentId)
+	return nil
+}

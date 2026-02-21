@@ -427,8 +427,7 @@ lines=$(docker compose ps --format "table {{.Service}}\t{{.Image}}" 2>/dev/null 
 done)
 
 count=$(echo "$lines" | wc -l)
-height=$((40 + 20 * count))
-
+height=$((70 + 20 * count))
 DEPLOY_TIME=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
 
 echo "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"300\" height=\"$height\" style=\"font-family:monospace\">" > "$MACHINE.svg"
@@ -847,6 +846,7 @@ resource "aws_security_group" "allow_proxy_ingress" {
   description = "Allow proxy ingress traffic"
   vpc_id      = aws_vpc.main.id
 
+  # API
   ingress {
     from_port   = 8888
     to_port     = 8888
@@ -854,6 +854,7 @@ resource "aws_security_group" "allow_proxy_ingress" {
     cidr_blocks = ["10.0.0.0/24"] # Public subnet CIDR
   }
 
+  # API - healthcheck
   ingress {
     from_port   = 8889
     to_port     = 8889
@@ -861,6 +862,7 @@ resource "aws_security_group" "allow_proxy_ingress" {
     cidr_blocks = ["10.0.0.0/24"] # Public subnet CIDR
   }
 
+  # clob
   ingress {
     from_port   = 50051
     to_port     = 50051
@@ -868,9 +870,26 @@ resource "aws_security_group" "allow_proxy_ingress" {
     cidr_blocks = ["10.0.0.0/24"]
   }
 
+  # web
   ingress {
     from_port   = 5173
     to_port     = 5173
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/24"]
+  }
+
+  # web.admin
+  ingress {
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/24"]
+  }
+
+  # web.lp
+  ingress {
+    from_port   = 8081
+    to_port     = 8081
     protocol    = "tcp"
     cidr_blocks = ["10.0.0.0/24"]
   }
@@ -881,6 +900,7 @@ resource "aws_security_group" "allow_monolith_egress" {
   description = "Allow monolith egress traffic"
   vpc_id      = aws_vpc.main.id
 
+  # API
   egress {
     from_port   = 8888
     to_port     = 8888
@@ -888,6 +908,7 @@ resource "aws_security_group" "allow_monolith_egress" {
     cidr_blocks = ["10.0.1.0/24"] # Private subnet CIDR
   }
 
+  # API - healthcheck
   egress {
     from_port   = 8889
     to_port     = 8889
@@ -895,6 +916,7 @@ resource "aws_security_group" "allow_monolith_egress" {
     cidr_blocks = ["10.0.1.0/24"] # Private subnet CIDR
   }
 
+  # clob
   egress {
     from_port   = 50051
     to_port     = 50051
@@ -902,9 +924,26 @@ resource "aws_security_group" "allow_monolith_egress" {
     cidr_blocks = ["10.0.1.0/24"]
   }
 
+  # web
   egress {
     from_port   = 5173
     to_port     = 5173
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.1.0/24"]
+  }
+
+  # web.admin
+  egress {
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.1.0/24"]
+  }
+
+  # web.lp
+  egress {
+    from_port   = 8081
+    to_port     = 8081
     protocol    = "tcp"
     cidr_blocks = ["10.0.1.0/24"]
   }

@@ -55,7 +55,7 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 			continue // skip to next userPosition
 		}
 
-		market, err := ps.marketsRepository.GetMarketById(userPosition.MarketID.String())
+		market, err := ps.marketsRepository.GetMarketById(userPosition.MarketID.String(), false /* don't include suspended or paused markets*/)
 		if err != nil {
 			lib.Log(lib.LOG_WARN, "skipping market %s: failed to get market: %v", userPosition.MarketID.String(), err)
 			continue // skip to next userPosition

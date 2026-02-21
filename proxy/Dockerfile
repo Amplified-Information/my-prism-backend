@@ -6,11 +6,11 @@
 #
 # When everything is inside a container
 # source loadEnv.sh local
-# docker run -p 8090:8090 -p 9901:9901 -e ENVOY_HOST_CLOB=${ENVOY_HOST_CLOB} -e ENVOY_HOST_API=${ENVOY_HOST_API} -e ENVOY_HOST_WEB=${ENVOY_HOST_WEB} ghcr.io/prismmarketlabs/proxy:$VERSION
+# docker run -p 8090:8090 -p 9901:9901 -e ENVOY_HOST_CLOB=${ENVOY_HOST_CLOB} -e ENVOY_HOST_API=${ENVOY_HOST_API} -e ENVOY_HOST_WEB=${ENVOY_HOST_WEB} -e ENVOY_HOST_WEB_ADMIN=${ENVOY_HOST_WEB_ADMIN} -e ENVOY_HOST_WEB_LP=${ENVOY_HOST_WEB_LP} ghcr.io/prismmarketlabs/proxy:$VERSION
 #
 # or locally on a laptop:
 # source loadEnv.sh local2
-# docker run -d --network host -p 8090:8090 -p 9901:9901 -e ENVOY_HOST_CLOB=${ENVOY_HOST_CLOB} -e ENVOY_HOST_API=${ENVOY_HOST_API} -e ENVOY_HOST_WEB=${ENVOY_HOST_WEB} ghcr.io/prismmarketlabs/proxy:latest
+# docker run -d --network host -p 8090:8090 -p 9901:9901 -e ENVOY_HOST_CLOB=${ENVOY_HOST_CLOB} -e ENVOY_HOST_API=${ENVOY_HOST_API} -e ENVOY_HOST_WEB=${ENVOY_HOST_WEB} -e ENVOY_HOST_WEB_ADMIN=${ENVOY_HOST_WEB_ADMIN} -e ENVOY_HOST_WEB_LP=${ENVOY_HOST_WEB_LP} ghcr.io/prismmarketlabs/proxy:latest
 #
 # When clob, api, web are all on localhost when running locally:
 # source loadEnv.sh local2
@@ -27,6 +27,8 @@ RUN apt-get update && apt-get install -y gettext && rm -rf /var/lib/apt/lists/*
 # - ${ENVOY_HOST_CLOB}
 # - ${ENVOY_HOST_API}
 # - ${ENVOY_HOST_WEB}
+# - ${ENVOY_HOST_WEB_ADMIN}
+# - ${ENVOY_HOST_WEB_LP}
 
 # Copy template and entrypoint
 COPY envoy.tmpl.yaml /etc/envoy/envoy.tmpl.yaml

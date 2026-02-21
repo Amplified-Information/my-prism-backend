@@ -129,13 +129,40 @@ static_resources:
                           timeout: 0s
                           max_stream_duration:
                             grpc_timeout_header_max: 0s
+                      
                       ###
-                      # Fallback to web service for regular HTTP requests
+                      # web.admin service
+                      # runs at: https://admin.prism.market, https://admin.dev.prism.market, https://admin.uat.prism.market, etc.
+                      ###
+                      - match:
+                          prefix: "/"
+                          headers:
+                            - name: ":authority"
+                              safe_regex_match:
+                                regex: "^admin\\..*"
+                        route:
+                          cluster: web_admin_service
+                          timeout: 0s
+                      ###
+                      # web service
+                      # runs at: testnet.dev/uat.prism.market, previewnet.dev/uat.prism.market, mainnet.dev/uat.prism.market, etc.
+                      ###
+                      - match:
+                          prefix: "/"
+                          headers:
+                            - name: ":authority"
+                              safe_regex_match:
+                                regex: "^(testnet|previewnet|mainnet)\\..*"
+                        route:
+                          cluster: web_service
+                          timeout: 0s
+                      ###
+                      # Fallback to web.lp service for regular HTTP requests
                       ###
                       - match:
                           prefix: "/"
                         route:
-                          cluster: web_service
+                          cluster: web_lp_service # landing page
                           timeout: 0s
                           # prefix_rewrite: "/" # SPA routing (React)! - No. Do this on the nginx level in the web service
 
@@ -145,6 +172,7 @@ static_resources:
                         "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.CorsPolicy
                         allow_origin_string_match:
                           # - exact: "https://f7faefde-e59f-4956-9496-bd84da96dad3.lovableproject.com"
+                          - suffix: ".prism.market" # allow subdomains e.g. admin.prism.market, admin.dev.prism.market, etc.
                           - suffix: ".lovableproject.com"
                           - suffix: ".lovable.app"
                           - suffix: ".getrichwithai.tech"
@@ -221,7 +249,7 @@ static_resources:
                     socket_address:
                       address: ${ENVOY_HOST_API}   # or your host's Docker bridge IP (e.g., 172.17.0.1 for Docker)
                       port_value: 8888
-    - name: web_service
+    - name: web_service # the main web app
       connect_timeout: 1s
       type: static # yes, static IP address - not logical_dns
       # http2_protocol_options: {} # definitely don't want http2 for web!
@@ -235,6 +263,34 @@ static_resources:
                     socket_address:
                       address: ${ENVOY_HOST_WEB}   # or your host's Docker bridge IP (e.g., 172.17.0.1 for Docker)
                       port_value: 5173
+    - name: web_admin_service # web admin app
+      connect_timeout: 1s
+      type: static # yes, static IP address - not logical_dns
+      # http2_protocol_options: {} # definitely don't want http2 for web!
+      lb_policy: round_robin
+      load_assignment:
+        cluster_name: web_admin_service
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: ${ENVOY_HOST_WEB_ADMIN}   # or your host's Docker bridge IP (e.g., 172.17.0.1 for Docker)
+                      port_value: 8080
+    - name: web_lp_service # web landing page app
+      connect_timeout: 1s
+      type: static # yes, static IP address - not logical_dns
+      # http2_protocol_options: {} # definitely don't want http2 for web!
+      lb_policy: round_robin
+      load_assignment:
+        cluster_name: web_lp_service
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: ${ENVOY_HOST_WEB_LP}   # or your host's Docker bridge IP (e.g., 172.17.0.1 for Docker)
+                      port_value: 8081
     - name: health_service
       connect_timeout: 1s
       type: static

@@ -43,7 +43,7 @@ func (marketsRepository *MarketsRepository) InitDb() error {
 	return nil
 }
 
-func (marketsRepository *MarketsRepository) GetMarketById(marketId string) (*sqlc.Market, error) {
+func (marketsRepository *MarketsRepository) GetMarketById(marketId string, isAdmin bool) (*sqlc.Market, error) {
 	if marketsRepository.db == nil {
 		return nil, lib.ErrorLog("database not initialized")
 	}
@@ -54,24 +54,28 @@ func (marketsRepository *MarketsRepository) GetMarketById(marketId string) (*sql
 	}
 
 	q := sqlc.New(marketsRepository.db)
-	market, err := q.GetMarket(context.Background(), marketUUID)
+	market, err := q.GetMarketById(context.Background(), sqlc.GetMarketByIdParams{
+		MarketID: marketUUID,
+		Column2:  isAdmin,
+	})
 	if err != nil {
-		return nil, lib.ErrorLog("GetMarket failed", "error", err, "marketId", marketId)
+		return nil, lib.ErrorLog("GetMarketById failed", "error", err, "marketId", marketId)
 	}
 
 	// debug: fetched market from database
 	return &market, nil
 }
 
-func (marketsRepository *MarketsRepository) GetMarkets(limit int32, offset int32) ([]sqlc.Market, error) {
+func (marketsRepository *MarketsRepository) GetMarkets(limit int32, offset int32, isAdmin bool) ([]sqlc.Market, error) {
 	if marketsRepository.db == nil {
 		return nil, lib.ErrorLog("database not initialized")
 	}
 
 	q := sqlc.New(marketsRepository.db)
 	markets, err := q.GetMarkets(context.Background(), sqlc.GetMarketsParams{
-		Limit:  limit,
-		Offset: offset,
+		Limit:   limit,
+		Offset:  offset,
+		Column3: isAdmin,
 	})
 	if err != nil {
 		return nil, lib.ErrorLog("GetMarkets failed", "error", err, "limit", limit, "offset", offset)
@@ -166,4 +170,64 @@ func (marketsRepository *MarketsRepository) GetAllUnresolvedMarkets() ([]sqlc.Ma
 	}
 
 	return markets, nil
+}
+
+func (marketsRepository *MarketsRepository) ToggleMarketPause(marketId string) (*sqlc.Market, error) {
+	if marketsRepository.db == nil {
+		return nil, lib.ErrorLog("database not initialized")
+	}
+
+	marketUUID, err := uuid.Parse(marketId)
+	if err != nil {
+		return nil, lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
+	}
+
+	q := sqlc.New(marketsRepository.db)
+	market, err := q.ToggleMarketPause(context.Background(), marketUUID)
+	if err != nil {
+		return nil, lib.ErrorLog("ToggleMarketPause failed", "error", err, "marketId", marketId)
+	}
+
+	return &market, nil
+}
+
+func (marketsRepository *MarketsRepository) ToggleMarketSuspend(marketId string) (*sqlc.Market, error) {
+	if marketsRepository.db == nil {
+		return nil, lib.ErrorLog("database not initialized")
+	}
+
+	marketUUID, err := uuid.Parse(marketId)
+	if err != nil {
+		return nil, lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
+	}
+
+	q := sqlc.New(marketsRepository.db)
+	market, err := q.ToggleMarketSuspend(context.Background(), marketUUID)
+	if err != nil {
+		return nil, lib.ErrorLog("ToggleMarketSuspend failed", "error", err, "marketId", marketId)
+	}
+
+	return &market, nil
+}
+
+func (marketsRepository *MarketsRepository) ResolveMarket(marketId string, outcome bool) (bool, error) {
+	if marketsRepository.db == nil {
+		return false, lib.ErrorLog("database not initialized")
+	}
+
+	marketUUID, err := uuid.Parse(marketId)
+	if err != nil {
+		return false, lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
+	}
+
+	q := sqlc.New(marketsRepository.db)
+	err = q.ResolveMarket(context.Background(), sqlc.ResolveMarketParams{
+		MarketID: marketUUID,
+		Outcome:  sql.NullBool{Bool: outcome, Valid: true},
+	})
+	if err != nil {
+		return false, lib.ErrorLog("ResolveMarket failed", "error", err, "marketId", marketId)
+	}
+
+	return true, nil
 }

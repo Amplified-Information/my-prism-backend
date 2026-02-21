@@ -5,7 +5,7 @@
 # docker push ghcr.io/prismmarketlabs/eventbus:$VERSION
 # 
 # source loadEnv.sh local
-# docker run -p 4222:4222 -p 6222:6222 ghcr.io/prismmarketlabs/eventbus:$VERSION
+# docker run -d -p 4222:4222 -p 6222:6222 ghcr.io/prismmarketlabs/eventbus:latest
 
 # BUILD stage
 FROM nats:2.12-alpine

@@ -469,9 +469,9 @@ func (hs *HederaService) BuyPositionTokens(sideYes *pb_clob.CreateOrderRequestCl
 	// contractID, err := hiero.ContractIDFromString(
 	// 	os.Getenv(fmt.Sprintf("%s_SMART_CONTRACT_ID", strings.ToUpper(sideYes.Net))),
 	// )
-	market, err := hs.marketsRepository.GetMarketById(sideYes.MarketId /* yes or no, doesn't matter*/)
+	market, err := hs.marketsRepository.GetMarketById(sideYes.MarketId /* yes or no, doesn't matter*/, false)
 	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "invalid contract ID: %v", err)
+		return false, lib.LogAndError(lib.LOG_ERROR, "could not retrieve market: %v. Is the market suspended or paused?", err)
 	}
 	contractId, err := hiero.ContractIDFromString(market.SmartContractID)
 	if err != nil {
@@ -601,4 +601,38 @@ func (hs *HederaService) CreateNewMarket(marketId string, statement string, net 
 	lib.Log(lib.LOG_INFO, "CreateNewMarket - tx successful. Hedera txId = %s", result.TransactionID.String())
 
 	return remainingAllowance.Uint64(), nil
+}
+
+func (hs *HederaService) ResolveMarketOnChain(net string, marketId string, contractIdStr string, noYes bool) (bool, error) {
+	contractId, err := hiero.ContractIDFromString(contractIdStr)
+	if err != nil {
+		return false, lib.LogAndError(lib.LOG_ERROR, "failed to parse smart contract ID from market data: %v", err)
+	}
+
+	marketIdBig, err := lib.Uuid7_to_bigint(marketId)
+	if err != nil {
+		return false, lib.LogAndError(lib.LOG_ERROR, "failed to convert marketId to bigint: %v", err)
+	}
+
+	params := hiero.NewContractFunctionParameters()
+	params.AddUint128BigInt(marketIdBig) // marketId
+	params.AddBool(noYes)                // no = false, yes = true
+
+	result, err := hiero.NewContractExecuteTransaction().
+		SetContractID(contractId).
+		SetGas(1_000_000). // TODO - can this be lowered? 2M in 4_buy.ts
+		SetFunction("resolveMarket", params).
+		Execute(hs.hedera_clients[net]) // both sides are guaranteed to be on the same network
+	if err != nil {
+		return false, lib.LogAndError(lib.LOG_ERROR, "failed to execute contract: %v", err)
+	}
+
+	_, err = result.GetRecord(hs.hedera_clients[net])
+	if err != nil {
+		return false, lib.LogAndError(lib.LOG_ERROR, "ResolveMarket - tx failed (could not get transaction record). Hedera txId = %s. %v", result.TransactionID.String(), err)
+	}
+
+	lib.Log(lib.LOG_INFO, "ResolveMarket - tx successful. Hedera txId = %s", result.TransactionID.String())
+	lib.Log(lib.LOG_INFO, "Market resolved as %s", map[bool]string{true: "YES", false: "NO"}[noYes])
+	return true, nil
 }

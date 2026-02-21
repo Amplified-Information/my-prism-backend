@@ -28,7 +28,7 @@ SELECT
 FROM 
   comments
 WHERE 
-  market_id = $1
+  market_id = $1 AND is_suspended = FALSE
 ORDER BY 
   created_at DESC
 LIMIT 
@@ -50,5 +50,11 @@ LIMIT
 
 -- name: DeleteComment :exec
 DELETE FROM comments
+WHERE 
+  comment_id = $1;
+
+-- name: SoftDeleteComment :exec
+UPDATE comments
+SET is_suspended = TRUE
 WHERE 
   comment_id = $1;

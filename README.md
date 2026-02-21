@@ -8,8 +8,9 @@ deployable services:
 - `api`: an API backend
 - `web`: [`prism-front-end`](https://github.com/PrismMarketLabs/prism-front-end) - the main Lovable web app (Note: this is a git **submodule** to a *separate* front-end repo)
 - `web.lp`: a landing page
-- `web.eng`: an engineering front-end
-- `web.uat`: a web app for the uat environment
+~~- `web.eng`: an engineering front-end~~
+~~ - `web.uat`: a web app for the uat environment~~
+- `web.admin`: a separate web app for administrating Prism [`prism-front-end`](https://github.com/PrismMarketLabs/prism-admin) (Note: this is a git **submodule** to a *separate* front-end repo)
 - `proxy`: a proxy to marshall traffic
 - `eventbus`: event bus for pub/sub message communication
 - `mw`: middleware for web app (server-side control of preview links across social media platforms)
@@ -41,21 +42,21 @@ To release a new version of a service, follow the release procedure here: https:
 
 `dev`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1771539706) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1771539706) | [data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1771539706) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1771629931) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1771629931) | [data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1771629931) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1771539706) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1771539706) | ![data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1771539706) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1771629931) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1771629931) | ![data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1771629931) |
 
 `uat`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1771539706) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1771539706) | [data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1771539706) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1771629931) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1771629931) | [data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1771629931) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1771539706) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1771539706) | ![data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1771539706) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1771629931) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1771629931) | ![data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1771629931) |
 
 `prod`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1771539706) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1771539706) | [data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1771539706) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1771629931) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1771629931) | [data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1771629931) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1771539706) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1771539706) | ![data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1771539706) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1771629931) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1771629931) | ![data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1771629931) |
 
 *Note: see .git/hooks/pre-commit to see how to update the cache-busting nonce*
 
@@ -574,11 +575,13 @@ jobs:
             -d '{"event_type":"web-submodule-updated"}'
 ```
 
-2. create a token (classic) called "PARENT_REPO_TOKEN" (https://github.com/settings/tokens) with scopes: [repo]. Call it "repo_notifications"
+2. create a token (classic) (https://github.com/settings/tokens) with scopes: [repo]. Call it "repo_notifications"
 
 ghp_******
 
-3. Add this repo_notifications token to the prism-front-end submodule's repo (repository secrets): https://github.com/PrismMarketLabs/prism-front-end/settings/secrets/actions
+3. Add this repo_notifications token ("PARENT_REPO_TOKEN") to the prism-front-end submodule's repo (repository secrets): 
+- https://github.com/PrismMarketLabs/prism-front-end/settings/secrets/actions
+- https://github.com/PrismMarketLabs/prism-admin/settings/secrets/actions
 
 4. Add the following to the standard build-web.yml (rename it build-web__submodule__.yml to be explicit about it being a submodule):
 
