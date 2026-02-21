@@ -8,12 +8,17 @@ module "shared" {
   ebs_volume_id = "$EBS_VOLUME_ID"
   ssl_cert_arn = "$SSL_CERT_ARN"
   ssl_cert_arn_wildcard = "$SSL_CERT_ARN_WILDCARD"
+
+  ec2_type_bastion = "$EC2_TYPE_BASTION"
+  ec2_type_proxy = "$EC2_TYPE_PROXY"
+  ec2_type_monolith = "$EC2_TYPE_MONOLITH"
+  ec2_type_data = "$EC2_TYPE_DATA"
 }
 
 
 resource "aws_instance" "bastion_$ENV" {
   ami           = module.shared.ami
-  instance_type = "t3.nano"
+  instance_type = module.shared.ec2_type_bastion
   key_name      = module.shared.aws_key_bastion
   availability_zone = module.shared.aws_az
   
@@ -50,7 +55,7 @@ resource "aws_instance" "bastion_$ENV" {
 
 resource "aws_instance" "proxy_$ENV" {
   ami           = module.shared.ami
-  instance_type = "t3.nano"
+  instance_type = module.shared.ec2_type_proxy
   key_name      = module.shared.aws_key_internal
   availability_zone = module.shared.aws_az
 
@@ -94,7 +99,7 @@ resource "aws_instance" "proxy_$ENV" {
 
 resource "aws_instance" "monolith_$ENV" {
   ami           = module.shared.ami
-  instance_type = "t3.micro"
+  instance_type = module.shared.ec2_type_monolith
   key_name      = module.shared.aws_key_internal
   availability_zone = module.shared.aws_az
 
@@ -137,7 +142,7 @@ resource "aws_instance" "monolith_$ENV" {
 
 resource "aws_instance" "data_$ENV" {
   ami           = module.shared.ami
-  instance_type = "t3.nano"
+  instance_type = module.shared.ec2_type_data
   key_name      = module.shared.aws_key_internal
   availability_zone = module.shared.aws_az                      # must be the same as the EBS volume
 

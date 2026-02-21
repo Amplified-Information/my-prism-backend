@@ -179,8 +179,13 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.Predicti
 	}
 	lib.Log(lib.LOG_INFO, "Spender allowance for account %s on contract %s: $%.2f", accountId.String(), _smartContractId.String(), spenderAllowanceUsd)
 
-	if spenderAllowanceUsd < math.Abs(req.GetPriceUsd()*req.GetQty()) {
-		return "", lib.LogAndError(lib.LOG_ERROR, "Spender allowance is $USD%.2f (USDC token: %s) on smartContractId=%s, which is too low for this predictionIntent ($USD%.2f)", spenderAllowanceUsd, usdcAddress.String(), _smartContractId.String(), req.GetPriceUsd()*req.GetQty())
+	// amountBeingSpentUsd := math.Abs(req.PriceUsd * req.Qty) // Don't do this. This is incorrect! (e.g. -0.99 price_usd with qty 10 is a big USDC number that needs large allowance)
+	amountBeingSpentUsd := req.PriceUsd * req.Qty
+	if req.PriceUsd < 0.0 {
+		amountBeingSpentUsd = (1 - math.Abs(req.PriceUsd)) * req.Qty
+	}
+	if spenderAllowanceUsd < amountBeingSpentUsd {
+		return "", lib.LogAndError(lib.LOG_ERROR, "Spender allowance is $USD%.2f (USDC token: %s) on smartContractId=%s, which is too low for this predictionIntent ($USD%.2f, price_usd=%.2f)", spenderAllowanceUsd, usdcAddress.String(), _smartContractId.String(), amountBeingSpentUsd, req.PriceUsd)
 	}
 
 	// ensure the spenderAllowanceUsd is <= usdc balance currently in the user's wallet
@@ -193,7 +198,7 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.Predicti
 	if spenderAllowanceUsd <= currentUserBalanceUsdc {
 		// OK
 	} else {
-		if math.Abs(req.PriceUsd)*req.Qty <= currentUserBalanceUsdc {
+		if amountBeingSpentUsd <= currentUserBalanceUsdc {
 			// this is also OK - let's not warn the user that their allowance is higher than their balance
 		} else {
 			return "", lib.LogAndError(lib.LOG_ERROR, "Spender allowance ($USD%.2f) is greater than than the user's balance ($USD%.2f)", spenderAllowanceUsd, currentUserBalanceUsdc)

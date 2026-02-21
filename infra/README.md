@@ -41,14 +41,12 @@ The following resources (static - not to be deleted) should be created manually 
 - DNS hosted zone on Route 53 (AWS)
 - AWS certificates
 - EBS (elastic block storage) for persistent data storage
+- AWS SES service
 - S3 bucket (prismlabs-deployment) - a landing zone for deploying docker-compose* files
 - S3 bucket (pl-deployment-badges) - a landing zone to store status badges (.svg) about the current deployment
 - S3 bucket (prismlabs-images) - a place which serves uploaded market image files
-- S3 bucket (prismlabs-fluent-bit) - a place to store application logs (fluent-bit)
-- AWS SES service
-- TODO: S3 bucket for fluent-bit logs
-- TODO: AWS glacier (permanent record of logs)
-- TODO: AWS Cloudwatch (30 day retention period)
+- S3 bucket (prismlabs-fluent-bit) - a place to store application logs (fluent-bit) - roll over to AWS glacier after 30 days (permanent record of logs)
+- x3 (/prism/dev, /prism/uat, prism/prod) AWS Cloudwatch log groups (30 day retention period) - https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#logsV2:log-groups/create-log-group 
 - ~~EIP (elastic IP address)~~
 
 ## DNS hosted zone
@@ -366,20 +364,30 @@ Step 2:  add the following fluent-bit config to your EC2 box:
 
 `systemctl restart fluent-bit`
 
-30 day retention period for CloudWatch logs:
+30 day retention period for CloudWatch logs (if you were to do it in Terraform):
+
+Note: please don't create in terraform. Manually create a cloudwatch log group for each env using click-ops:
+- log group name "/prism/{ENV}"
+- 30 day retention
+- delete protection enabled
+- enable anomoly detection
 
 ```bash
 # note: this is applied in shared/main.tf so affects all envs
 # note: the name matches the above "log_group_name"
 # apply a 30 day retention period to cloudwatch logs:
-resource "aws_cloudwatch_log_group" "fluent_bit" {
-  name              = "/prism/${var.env}"
-  retention_in_days = 30
-
-  tags = {
-    Environment = var.env
-  }
-}
+# resource "aws_cloudwatch_log_group" "fluent_bit" {
+#   name              = "/prism/${var.env}"
+#   retention_in_days = 30
+#
+#   lifecycle {
+#     # N.B. do not destroy this aws_cloudwatch_log_group or your will lose your logs
+#     prevent_destroy = true
+#   }
+#   tags = {
+#     Environment = var.env
+#   }
+# }
 ```
 
 ### EC2 boxes accessing the files on S3

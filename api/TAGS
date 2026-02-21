@@ -118,3 +118,8 @@ macrometadata - call CLOB for pending orders
 0.3.19
 Added soft-delete comments. New admin endpoints to manage markets
 
+0.3.20
+Resolve issue validating allowance
+
+0.3.21
+Resolve another issue validating allowance

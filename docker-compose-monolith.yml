@@ -4,7 +4,7 @@
 # docker compose -f docker-compose-monolith.yml -f docker-compose-monolith.dev.yml up -d
 services:
   api:
-    image: ghcr.io/prismmarketlabs/api:0.3.19
+    image: ghcr.io/prismmarketlabs/api:0.3.21
     # pull_policy: always
     restart: always
     ports:
@@ -28,14 +28,17 @@ services:
       MAINNET_USDC_ADDRESS: ${MAINNET_USDC_ADDRESS}
       AVAILABLE_NETWORKS: ${AVAILABLE_NETWORKS}
       PREVIEWNET_SMART_CONTRACT_ID: ${PREVIEWNET_SMART_CONTRACT_ID}
+      PREVIEWNET_HCS_TOPIC_ID: ${PREVIEWNET_HCS_TOPIC_ID}
       PREVIEWNET_HEDERA_OPERATOR_ID: ${PREVIEWNET_HEDERA_OPERATOR_ID}
       PREVIEWNET_HEDERA_OPERATOR_KEY_TYPE: ${PREVIEWNET_HEDERA_OPERATOR_KEY_TYPE}
       PREVIEWNET_PUBLIC_KEY: ${PREVIEWNET_PUBLIC_KEY}
       TESTNET_SMART_CONTRACT_ID: ${TESTNET_SMART_CONTRACT_ID}
+      TESTNET_HCS_TOPIC_ID: ${TESTNET_HCS_TOPIC_ID}
       TESTNET_HEDERA_OPERATOR_KEY_TYPE: ${TESTNET_HEDERA_OPERATOR_KEY_TYPE}
       TESTNET_HEDERA_OPERATOR_ID: ${TESTNET_HEDERA_OPERATOR_ID}
       TESTNET_PUBLIC_KEY: ${TESTNET_PUBLIC_KEY}
       MAINNET_SMART_CONTRACT_ID: ${MAINNET_SMART_CONTRACT_ID}
+      MAINNET_HCS_TOPIC_ID: ${MAINNET_HCS_TOPIC_ID}
       MAINNET_HEDERA_OPERATOR_ID: ${MAINNET_HEDERA_OPERATOR_ID}
       MAINNET_HEDERA_OPERATOR_KEY_TYPE: ${MAINNET_HEDERA_OPERATOR_KEY_TYPE}
       MAINNET_PUBLIC_KEY: ${MAINNET_PUBLIC_KEY}
@@ -102,7 +105,7 @@ services:
   #     # secrets:
   #     HTPASSWD: ${HTPASSWD}
   web:
-    image: ghcr.io/prismmarketlabs/web:0.6.11
+    image: ghcr.io/prismmarketlabs/web:0.6.12
     # pull_policy: always
     restart: always
     ports:
@@ -119,7 +122,7 @@ services:
       HTPASSWD: ${HTPASSWD}
   
   web.admin:
-    image: ghcr.io/prismmarketlabs/web.admin:0.0.2
+    image: ghcr.io/prismmarketlabs/web.admin:0.0.3
     # pull_policy: always
     restart: always
     ports:
@@ -130,10 +133,10 @@ services:
         fluentd-address: localhost:24224
         tag: "{{.Name}}"
     environment:
-      IS_PASSWORD_PROTECTED: ${IS_PASSWORD_PROTECTED}
-      HTUSER: ${HTUSER}
+      WEB_ADMIN_IS_PASSWORD_PROTECTED: ${WEB_ADMIN_IS_PASSWORD_PROTECTED}
+      WEB_ADMIN_HTUSER: ${WEB_ADMIN_HTUSER}
       # secrets:
-      HTPASSWD: ${HTPASSWD}
+      WEB_ADMIN_HTPASSWD: ${WEB_ADMIN_HTPASSWD}
   
   web.lp:
     image: ghcr.io/prismmarketlabs/web.lp:0.3.6

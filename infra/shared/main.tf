@@ -70,6 +70,31 @@ variable "ebs_volume_id" {
 }
 output "ebs_volume_id" { value = var.ebs_volume_id }
 
+
+
+
+variable "ec2_type_bastion" {
+  type        = string
+}
+output "ec2_type_bastion" { value = var.ec2_type_bastion }
+
+variable "ec2_type_proxy" {
+  type        = string
+}
+output "ec2_type_proxy" { value = var.ec2_type_proxy }
+
+variable "ec2_type_monolith" {
+  type        = string
+}
+output "ec2_type_monolith" { value = var.ec2_type_monolith }
+
+variable "ec2_type_data" {
+  type        = string
+}
+output "ec2_type_data" { value = var.ec2_type_data }
+
+
+
 output "ami" { value = "ami-0f9c27b471bdcd702" } // Debian 13
 output "fixed_ip_bastion" { value = "10.0.0.9" } // N.B. bastion is on the public subnet 
 output "fixed_ip_proxy" { value = "10.0.1.10" }     // private subnet 
@@ -195,6 +220,7 @@ if ! sudo grep -q "^\s*Name\s\+cloudwatch_logs\s*$" /etc/fluent-bit/fluent-bit.c
     Name              cloudwatch_logs
     Match             *
     region            ${var.aws_region}
+    # N.B. create this log_group_name (e.g. /prism/dev) manually via clickops (30 day retention, deletion protection) - https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#logsV2:log-groups
     log_group_name    /prism/${var.env}
     log_stream_name   $(hostname)
     auto_create_group true
@@ -1263,15 +1289,16 @@ output "combined_iam_policy_name" {
 }
 
 # apply a 30 day retention period to cloudwatch logs:
-resource "aws_cloudwatch_log_group" "fluent_bit" {
-  name              = "/prism/${var.env}"
-  retention_in_days = 30
+# resource "aws_cloudwatch_log_group" "fluent_bit" {
+#   name              = "/prism/${var.env}"
+#   retention_in_days = 30
 
-  lifecycle {
-    prevent_destroy = true
-  }
+#   lifecycle {
+#     # N.B. do not destroy this aws_cloudwatch_log_group or your will lose your logs
+#     prevent_destroy = true
+#   }
 
-  tags = {
-    Environment = var.env
-  }
-}
+#   tags = {
+#     Environment = var.env
+#   }
+# }

@@ -117,26 +117,6 @@ func (ns *NatsService) HandleOrderMatches() error {
 			return
 		}
 
-		// TODO - assert that the user's allowance >= the size of the matched order
-		// ensure user has provided enough of an allowance to the smart contract:
-		// spenderAllowanceUsd, err := ns.hederaService.GetSpenderAllowanceUsd(*_networkSelected, accountId, _smartContractId, usdcAddress, usdcDecimals)
-		// if err != nil {
-		// 	return "", lib.LogAndError(lib.LOG_ERROR, "failed to get spender allowance: %v", err)
-		// }
-		// lib.Log(lib.LOG_INFO, "Spender allowance for account %s on contract %s: $%.2f", accountId.String(), _smartContractId.String(), spenderAllowanceUsd)
-		// if spenderAllowanceUsd < math.Abs(req.GetPriceUsd()*req.GetQty()) {
-		// 	return "", lib.LogAndError(lib.LOG_ERROR, "Spender allowance ($USD%.2f USD token = %s) too low for this predictionIntent ($USD%.2f)", spenderAllowanceUsd, usdcAddress.String(), req.GetPriceUsd()*req.GetQty())
-		// }
-
-		// // ensure the spenderAllowanceUsd is >= usdc balance currently in the user's wallet
-		// currentUserBalanceUsdc, err := ns.hederaService.GetUsdcBalanceUsd(*_networkSelected, accountId)
-		// if err != nil {
-		// 	return "", lib.LogAndError(lib.LOG_ERROR, "failed to get user's USDC balance: %v", err)
-		// }
-		// if currentUserBalanceUsdc < spenderAllowanceUsd {
-		// 	return "", lib.LogAndError(lib.LOG_ERROR, "User's USDC balance ($USD%.2f) is less than the allowance ($USD%.2f)", currentUserBalanceUsdc, spenderAllowanceUsd)
-		// }
-
 		// assert that orderRequestClobTuple[0].priceUsd > 0 and orderRequestClobTuple[1].priceUsd < 0 (i.e. one is a bid and the other is an ask)
 		if orderRequestClobTuple[0].PriceUsd < 0.0 {
 			lib.Log(lib.LOG_ERROR, "PROBLEM: orderRequestClobTuple[0].PriceUsd(%f) MUST be greater than 0 (txid=%s).", orderRequestClobTuple[0].PriceUsd, orderRequestClobTuple[0].TxId)

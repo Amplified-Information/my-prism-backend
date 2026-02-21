@@ -512,6 +512,7 @@ func (hs *HederaService) BuyPositionTokens(sideYes *pb_clob.CreateOrderRequestCl
 	// - 2. record the price on the price table
 	// - 3. record the YES/NO balances
 	// - 4. record the global tv_matched
+	// - 5. log on Hedera HCS
 	/////
 
 	if hs.dbRepository == nil {
@@ -551,6 +552,12 @@ func (hs *HederaService) BuyPositionTokens(sideYes *pb_clob.CreateOrderRequestCl
 
 	// 4. and update the global tv_matched value
 	hs.dbRepository.UpdateTotalValueMatchedUsd(math.Min(math.Abs(sideYes.PriceUsd*sideYes.Qty), math.Abs(sideNo.PriceUsd*sideNo.Qty)) * 2) // N.B. multiply by 2 because both yes and no sides contribute to the total value matched!
+
+	// 5. log on Hedera HCS
+	_, err = hs.PublishHCSmessage(sideYes.Net, fmt.Sprintf("[%s,%s]", sideYes.TxId, sideNo.TxId))
+	if err != nil {
+		return false, lib.LogAndError(lib.LOG_ERROR, "Error publishing HCS message for market %s: %v", sideYes.MarketId, err)
+	}
 
 	// if we get here, return true
 	return true, nil
@@ -635,4 +642,32 @@ func (hs *HederaService) ResolveMarketOnChain(net string, marketId string, contr
 	lib.Log(lib.LOG_INFO, "ResolveMarket - tx successful. Hedera txId = %s", result.TransactionID.String())
 	lib.Log(lib.LOG_INFO, "Market resolved as %s", map[bool]string{true: "YES", false: "NO"}[noYes])
 	return true, nil
+}
+
+func (hs *HederaService) PublishHCSmessage(net string, message string) (string, error) {
+	topicIdStr := os.Getenv(fmt.Sprintf("%s_HCS_TOPIC_ID", strings.ToUpper(net)))
+	if topicIdStr == "" {
+		return "", lib.LogAndError(lib.LOG_ERROR, "HCS_TOPIC_ID environment variable is not set for network %s", net)
+	}
+
+	topicId, err := hiero.TopicIDFromString(topicIdStr)
+	if err != nil {
+		return "", lib.LogAndError(lib.LOG_ERROR, "invalid HCS_TOPIC_ID for network %s: %v", net, err)
+	}
+
+	tx, err := hiero.NewTopicMessageSubmitTransaction().
+		SetTopicID(topicId).
+		SetMessage([]byte(message)).
+		Execute(hs.hedera_clients[net])
+	if err != nil {
+		return "", lib.LogAndError(lib.LOG_ERROR, "failed to submit HCS message: %v", err)
+	}
+
+	_, err = tx.GetReceipt(hs.hedera_clients[net])
+	if err != nil {
+		return "", lib.LogAndError(lib.LOG_ERROR, "failed to get receipt for HCS message: %v", err)
+	}
+
+	lib.Log(lib.LOG_INFO, "HCS message published successfully. Hedera txId = %s", tx.TransactionID.String())
+	return tx.TransactionID.String(), nil
 }

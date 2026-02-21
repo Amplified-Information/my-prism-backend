@@ -63,3 +63,6 @@ Add CORS config to allow prism subdomains (e.g. admin.dev.prism.market to access
 
 0.1.21
 web.lp service for landing page
+
+0.1.22
+added missing UAT landing page config
