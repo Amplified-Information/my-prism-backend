@@ -370,7 +370,7 @@ func (hs *HederaService) BuyPositionTokens(sideYes *pb_clob.CreateOrderRequestCl
 	lib.Log(lib.LOG_INFO, "sigYes (len=%d): %x", len(sigYes), sigYes)
 	lib.Log(lib.LOG_INFO, "sigNo (len=%d): %x", len(sigNo), sigNo)
 
-	serializedPayloadYes, err := lib.AssemblePayloadHexForSigning(&pb_api.PredictionIntentRequest{
+	serializedPayloadYes, err := lib.AssemblePayloadHexForSigning(&pb_api.PrismPredictionIntentRequest{
 		PriceUsd:   sideYes.PriceUsd,
 		Qty:        sideYes.QtyOrig, // N.B. use QtyOrig and not Qty (remaining amount) - digital sig verifies based on original quantity, not current available Qty
 		MarketId:   sideYes.MarketId,
@@ -381,7 +381,7 @@ func (hs *HederaService) BuyPositionTokens(sideYes *pb_clob.CreateOrderRequestCl
 		return false, lib.LogAndError(lib.LOG_ERROR, "failed to extract YES payload for signing: %v", err)
 	}
 
-	serializedPayloadNo, err := lib.AssemblePayloadHexForSigning(&pb_api.PredictionIntentRequest{
+	serializedPayloadNo, err := lib.AssemblePayloadHexForSigning(&pb_api.PrismPredictionIntentRequest{
 		PriceUsd:   sideNo.PriceUsd,
 		Qty:        sideNo.QtyOrig, // N.B. use QtyOrig and not Qty (remaining amount) - digital sig verifies based on original quantity, not current available Qty
 		MarketId:   sideNo.MarketId,
@@ -513,6 +513,7 @@ func (hs *HederaService) BuyPositionTokens(sideYes *pb_clob.CreateOrderRequestCl
 	// - 3. record the YES/NO balances
 	// - 4. record the global tv_matched
 	// - 5. log on Hedera HCS
+	// - 6. update the matches record with the HCS message ID
 	/////
 
 	if hs.dbRepository == nil {
@@ -522,7 +523,7 @@ func (hs *HederaService) BuyPositionTokens(sideYes *pb_clob.CreateOrderRequestCl
 	// 1. record the successful on-chain match
 	txHash := receipt.TransactionID.String()
 	lib.Log(lib.LOG_INFO, "TransactionID (txHash) for successful match: %s", txHash)
-	err = hs.matchesRepository.UpdateMatchTxHash(sideYes.MarketId, sideYes.TxId, sideNo.TxId, txHash)
+	err = hs.matchesRepository.UpdateMatch(sideYes.MarketId, sideYes.TxId, sideNo.TxId, txHash, nil)
 	if err != nil {
 		return false, lib.LogAndError(lib.LOG_ERROR, "Error logging a successful tx to matches table: %v", err)
 	}
@@ -539,12 +540,12 @@ func (hs *HederaService) BuyPositionTokens(sideYes *pb_clob.CreateOrderRequestCl
 	// }
 
 	// 3. record the YES/NO balances
-	resultYes, err := hs.positionsRepository.UpsertUserPositions(sideYes.EvmAddress, sideYes.MarketId, nYesTokens.Int64(), nNoTokens.Int64())
+	resultYes, err := hs.positionsRepository.UpsertUserPositions(sideYes.EvmAddress, sideYes.MarketId, nYesTokens.Int64(), nNoTokens.Int64(), sideYes.PriceUsd)
 	if err != nil {
 		return false, lib.LogAndError(lib.LOG_ERROR, "Error upserting user position tokens for %s on market %s: %v", sideYes.EvmAddress, sideYes.MarketId, err)
 	}
 	lib.Log(lib.LOG_INFO, "In marketId=%s, user with evmAddress=%s, has nYes=%d | nNo=%d", resultYes.MarketID, resultYes.EvmAddress, resultYes.NYes, resultYes.NNo)
-	resultNo, err := hs.positionsRepository.UpsertUserPositions(sideNo.EvmAddress, sideNo.MarketId, nYesTokens2.Int64(), nNoTokens2.Int64())
+	resultNo, err := hs.positionsRepository.UpsertUserPositions(sideNo.EvmAddress, sideNo.MarketId, nYesTokens2.Int64(), nNoTokens2.Int64(), sideNo.PriceUsd)
 	if err != nil {
 		return false, lib.LogAndError(lib.LOG_ERROR, "Error upserting user position tokens for %s on market %s: %v", sideNo.EvmAddress, sideNo.MarketId, err)
 	}
@@ -554,9 +555,16 @@ func (hs *HederaService) BuyPositionTokens(sideYes *pb_clob.CreateOrderRequestCl
 	hs.dbRepository.UpdateTotalValueMatchedUsd(math.Min(math.Abs(sideYes.PriceUsd*sideYes.Qty), math.Abs(sideNo.PriceUsd*sideNo.Qty)) * 2) // N.B. multiply by 2 because both yes and no sides contribute to the total value matched!
 
 	// 5. log on Hedera HCS
-	_, err = hs.PublishHCSmessage(sideYes.Net, fmt.Sprintf("[%s,%s]", sideYes.TxId, sideNo.TxId))
+	hederaHcsTxId, err := hs.PublishHCSmessage(sideYes.Net, fmt.Sprintf("[%s,%s]", sideYes.TxId, sideNo.TxId))
 	if err != nil {
 		return false, lib.LogAndError(lib.LOG_ERROR, "Error publishing HCS message for market %s: %v", sideYes.MarketId, err)
+	}
+
+	// 6. update the matches record with the HCS message ID
+	// call UpdateMatchTxHash again - this time include the hederaHcsTxId
+	err = hs.matchesRepository.UpdateMatch(sideYes.MarketId, sideYes.TxId, sideNo.TxId, txHash, &hederaHcsTxId)
+	if err != nil {
+		return false, lib.LogAndError(lib.LOG_ERROR, "Error logging a successful hederaHcsTxId to matches table: %v", err)
 	}
 
 	// if we get here, return true

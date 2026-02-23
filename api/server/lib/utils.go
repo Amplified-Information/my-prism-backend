@@ -75,7 +75,7 @@ func PrettyJSON(input string) string {
 
 // JsonMarshaller marshals protobuf messages to JSON using protojson to respect json_name annotations
 // Produces compact JSON without spaces for signature verification compatibility
-func JsonMarshaller(req *pb.PredictionIntentRequest) ([]byte, error) {
+func JsonMarshaller(req *pb.PrismPredictionIntentRequest) ([]byte, error) {
 	jsonBytes, err := GloboMarshaler.Marshal(req)
 	if err != nil {
 		return nil, err

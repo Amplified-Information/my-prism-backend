@@ -29,7 +29,7 @@ import (
 * @param usdcDecimals number of decimals for USDC
 * @returns a long string conforming to the format
  */
-func AssemblePayloadHexForSigning(req *pb_api.PredictionIntentRequest, usdcDecimals uint64) (string, error) {
+func AssemblePayloadHexForSigning(req *pb_api.PrismPredictionIntentRequest, usdcDecimals uint64) (string, error) {
 	Info("prediction intent request", "request", req)
 
 	collateralUsdAbs := math.Abs(req.PriceUsd * req.Qty)

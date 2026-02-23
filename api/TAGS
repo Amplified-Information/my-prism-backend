@@ -123,3 +123,12 @@ Resolve issue validating allowance
 
 0.3.21
 Resolve another issue validating allowance
+
+0.3.22
+Added HSC logging of matches
+
+0.3.23
+branded interface - PrismOrderIntentRequest
+
+0.3.24
+Added cost basis calculation for Prism points

@@ -50,9 +50,9 @@ AND m.created_at >= $1 AND m.created_at <= $2;
 
 -- UPDATE
 
--- name: UpdateMatchTxHash :exec
+-- name: UpdateMatch :exec
 UPDATE matches
-SET tx_hash = $4
+SET tx_hash = $4, hcs_tx_id = $5
 WHERE (market_id = $1 AND tx_id1 = $2 AND tx_id2 = $3) OR (market_id = $1 AND tx_id1 = $3 AND tx_id2 = $2);
 
 -- name: ResolveMarket :exec

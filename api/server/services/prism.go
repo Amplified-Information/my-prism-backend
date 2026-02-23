@@ -137,7 +137,7 @@ func (p *Prism) MacroMetadata() (*pb_api.MacroMetadataResponse, error) {
 		MinOrderSizeUsd:             minOrderSizeUsd,
 		TvPendingUsd:                tvPendingUsd,
 		TvMatchedUsd:                tvMatchedUsd,
-		TvlUsd:                      tvMatchedUsdOpenMarkets + tvPendingUsd, // TVL = matched + pending
+		TvlUsd:                      tvMatchedUsdOpenMarkets, // + tvPendingUsd, // TVL = matched + pending
 		TotalVolumeUsd:              totalVolumeUsd,
 		ActiveTraders:               nActiveTraders,
 	}

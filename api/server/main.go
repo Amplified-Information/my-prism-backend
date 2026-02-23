@@ -55,7 +55,7 @@ func (s *server) Health(ctx context.Context, req *pb_api.Empty) (*pb_api.StdResp
 	}, nil
 }
 
-func (s *server) CreatePredictionIntent(ctx context.Context, req *pb_api.PredictionIntentRequest) (*pb_api.StdResponse, error) {
+func (s *server) CreatePredictionIntent(ctx context.Context, req *pb_api.PrismPredictionIntentRequest) (*pb_api.StdResponse, error) {
 	if err := req.ValidateAll(); err != nil { // PGV validation
 		return &pb_api.StdResponse{Message: fmt.Sprintf("Invalid request: %v", err)}, err
 	}

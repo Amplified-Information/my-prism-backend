@@ -75,7 +75,7 @@ func (positionsRepository *PositionsRepository) GetUserPositionsByMarketId(evmAd
 	return converted, err
 }
 
-func (positionsRepository *PositionsRepository) UpsertUserPositions(evmAddress string, marketId string, nYesTokens int64, nNoTokens int64) (*sqlc.Position, error) {
+func (positionsRepository *PositionsRepository) UpsertUserPositions(evmAddress string, marketId string, nYesTokens int64, nNoTokens int64, priceUsd float64) (*sqlc.Position, error) {
 	if positionsRepository.db == nil {
 		return nil, lib.ErrorLog("database not initialized")
 	}
@@ -87,6 +87,7 @@ func (positionsRepository *PositionsRepository) UpsertUserPositions(evmAddress s
 		EvmAddress: evmAddress,
 		NYes:       nYesTokens,
 		NNo:        nNoTokens,
+		Column5:    priceUsd,
 	})
 	if err != nil {
 		return nil, lib.ErrorLog("UpsertUserPositions failed", "error", err, "evmAddress", evmAddress, "marketId", marketId)

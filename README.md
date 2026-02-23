@@ -8,8 +8,6 @@ deployable services:
 - `api`: an API backend
 - `web`: [`prism-front-end`](https://github.com/PrismMarketLabs/prism-front-end) - the main Lovable web app (Note: this is a git **submodule** to a *separate* front-end repo)
 - `web.lp`: a landing page
-~~- `web.eng`: an engineering front-end~~
-~~ - `web.uat`: a web app for the uat environment~~
 - `web.admin`: a separate web app for administrating Prism [`prism-front-end`](https://github.com/PrismMarketLabs/prism-admin) (Note: this is a git **submodule** to a *separate* front-end repo)
 - `proxy`: a proxy to marshall traffic
 - `eventbus`: event bus for pub/sub message communication
@@ -48,21 +46,21 @@ To release a new version of a service, follow the release procedure here: https:
 
 `dev`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1771701813) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1771701813) | [data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1771701813) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1771793380) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1771793380) | [data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1771793380) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1771701813) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1771701813) | ![data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1771701813) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1771793380) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1771793380) | ![data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1771793380) |
 
 `uat`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1771701813) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1771701813) | [data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1771701813) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1771793380) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1771793380) | [data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1771793380) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1771701813) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1771701813) | ![data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1771701813) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1771793380) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1771793380) | ![data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1771793380) |
 
 `prod`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1771701813) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1771701813) | [data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1771701813) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1771793380) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1771793380) | [data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1771793380) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1771701813) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1771701813) | ![data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1771701813) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1771793380) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1771793380) | ![data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1771793380) |
 
 *Note: see .git/hooks/pre-commit to see how to update the cache-busting nonce*
 
@@ -318,18 +316,18 @@ View all the images here: https://github.com/orgs/PrismMarketLabs/packages
 
 
 
-### 1. update the TAGS file
+### 2. update the TAGS file
 
 Update the VERSION file with a short description of the change
 
 On your local machine, pull the image you want to tag (new: run `./tags.sh` to do this automatically):
 
 
-### 2. update the docker-compose-SERVICE.ENV.yml file
+### 3. update the docker-compose-SERVICE.ENV.yml file
 
 And update the docker-compose-SERVICE.ENV.yml with the new version.
 
-### 3. push the source code
+### 4. push the source code
 
 `git add .`
 
@@ -361,7 +359,7 @@ docker images | grep $IMAGE_DST
 docker push $IMAGE_DST:$VER_DST
 ```
 
-### 4. login to the box (via bastion) and refresh the running image
+### 5. login to the box (via bastion) and refresh the running image
 
 ```bash
 ./0_pull_latest.sh

@@ -52,14 +52,14 @@
 \begin{titlepage}
     \centering
     \vspace*{4cm}
-    {\Huge\bfseries Prism Market\par}
+    {\Huge\bfseries Prism Market V1\par}
     \vspace{0.5cm}
     {\Large Technical whitepaper\par}
     \vspace{2cm}
     {\large
-        \textbf{Authors:} obinishia (CTO), Ethan Scrase (CEO)\\[0.3em]
-        \textbf{Lead Architect:} obinishia\\[0.3em]
-        \textbf{Date:} February 21st 2026
+        \textbf{Authors:} Obinishia (CTO), Ethan Scrase (CEO)\\[0.3em]
+        \textbf{Lead Architect:} Obinishia\\[0.3em]
+        \textbf{Date:} February 22nd 2026
     \par}
     \vfill
     % {\small\textit{Confidential --- For informational purposes only.}\par}
@@ -77,7 +77,7 @@
 \begin{tabular}{@{}lll@{}}
 \toprule
 \textbf{Version} & \textbf{Date}       & \textbf{Description}                                                                 \\ \midrule
-1.0              & February 21st 2026 & Release of the Prism Market technical whitepaper.\\ \bottomrule
+1.0              & February 22nd 2026 & Release of the Prism Market technical whitepaper.\\ \bottomrule
 \end{tabular}
 
 % ──────────────────────────────────────────────
@@ -86,34 +86,32 @@
 \section*{Abstract}
 \addcontentsline{toc}{section}{Abstract}
 
-Decentralized prediction marketplaces have evolved rapidly from early experiments in information aggregation to robust platforms leveraging decentralised technologies. There are numerous centralised prediction marketplaces currently operating on the Internet - all of which are under centralized control and a high level of trust in the marketplace operator is needed for users to confidently participate. Decentralized ledger technology enables trustless participation in prediction markets, censorship resistance, much lower transaction costs and reduced reliance on intermediaries. As distributed ledger technology matures, decentralized prediction markets are poised to unlock new forms of collective intelligence, democratize access to forecasting tools, and serve as foundational primitives for risk management and decision-making.
+Decentralised prediction marketplaces have evolved rapidly from early experiments in information aggregation to mainstream Internet applications with large numbers of daily users, with popular platforms processing significant amounts of USD daily. Prediction markets have been shown to aggregate distributed information efficiently and often outperform traditional forecasting methods~\cite{hanson2003}\cite{berg2008}\cite{wolfers2004}. There are many examples of centralised prediction marketplaces currently operating on the Internet. Because of the centralised nature of these platforms, a high level of trust in the marketplace operator is needed for users to confidently participate. Decentralised ledger technology enables trustless participation in prediction markets, censorship resistance, much lower transaction costs and reduced reliance on intermediaries. As distributed ledger technology matures, decentralised prediction markets are poised to unlock new forms of collective intelligence, democratize access to forecasting tools, and serve as foundational primitives for risk management and decision-making.
 
-Prism Market is a decentralized prediction market and prediction protocol. Prism provides a high-speed, low-latency, low-trust, transparent, and orderly marketplace for forecasting outcomes of any verifiable statement.
+Prism Market is a decentralised prediction market protocol. Prism Market Protocol provides a high-speed, low-latency, trustless, transparent, and orderly marketplace for forecasting outcomes of any verifiable statement.
 
-Decentralized prediction marketplaces enable users to trade positions on some market statement in a peer-to-peer way~\cite{wolfers2004}. Any user can create a new market (a market statement) and any user can open or close a position in that market by interacting with a decentralized state machine such as a smart contract~\cite{poon2016}. Because the Prism marketplace is decentralized, users can exchange predictions with each other in a peer-to-peer way, which is in contrast to relying on a centralized platform to facilitate order matches~\cite{lyons2020}.
+Decentralised prediction marketplaces enable users to trade positions on some market statement in a peer-to-peer way~\cite{wolfers2004}, with reduced reliance on intermediaries. Any user can create a new market (a market statement) and any user can open or close a position in that market by interacting with a decentralised state machine such as a smart contract~\cite{poon2016}. Because the Prism marketplace is decentralised, users can exchange predictions with each other in a peer-to-peer way, which is in contrast to relying on a trusted, centralised platform to facilitate order matches~\cite{lyons2020}.
 
-Prism utilises a hybrid architecture where high-frequency order matching is performed off-chain and order settlement is finalised on-chain. Hybrid execution architectures combining off-chain execution with on-chain settlement are widely studied as a scalability strategy for distributed ledgers~\cite{baird2016}. A highly scalable, low-latency off-chain central limit order book (CLOB) is used to match signed order intents. Matched order intents are then settled on-chain using a smart contract (e.g.\ EVM)~\cite{nasdaq2019}. This hybrid architecture provides a balance between users' needs for low latency and high throughput with users' limited trust of centralized platforms and a preference for ultra-low transaction fee, uncensorable, peer-to-peer value transfer mechanisms~\cite{adams2021}.
+Prism utilises a hybrid architecture where high-frequency order matching is performed off-chain and order settlement is finalised on-chain. Hybrid execution architectures combining off-chain execution with on-chain settlement are widely studied as a scalability strategy for distributed ledgers~\cite{baird2016}. A highly scalable, low-latency off-chain central limit order book (CLOB) is used to match signed order intents. Matched order intents are then settled on-chain using a smart contract (e.g.\ EVM)~\cite{nasdaq2019}. This hybrid architecture provides a balance between users' needs for low latency and high throughput, with users' limited trust of centralised platforms and a preference for ultra-low transaction fee, uncensorable, peer-to-peer value transfer mechanisms~\cite{adams2021}.
 
-Prism is built on the Hedera network which features massive transaction-per-second throughput, low latency, security guarantees, ordering fairness, low and predictable transaction fees~\cite{hedera_whitepaper}\cite{szabo1997}. Additionally, the Hedera network is governed by a governing council which ensures long-term stability~\cite{hedera_whitepaper} of the network. The technical and governance features of the Hedera network make it particularly suitable for building applications such as prediction marketplaces, which have the potential to grow to many millions of users and many millions of markets. Prediction marketplaces are just one category of application that could run on a trust network, so choosing to build on a network such as Hedera that can grow and scale into the future is an intentional decision.
+Prism Market Protocol is built on the Hedera network which features massive transaction-per-second throughput, low latency, security guarantees, ordering fairness, low and predictable transaction fees~\cite{hedera_whitepaper}\cite{szabo1997}. Additionally, the Hedera network is governed by a governing council which ensures long-term stability~\cite{hedera_whitepaper} of the network. The technical and governance features of the Hedera network make it particularly suitable for building applications such as prediction marketplaces, which have the potential to grow to many millions of users and many millions of markets. Prediction marketplaces are just one category of application that could run on a trust network, so choosing to build on a network such as Hedera that can grow and scale into the future is an intentional decision.
 
-This technical whitepaper details the implementation of Prism, including its central limit order book (CLOB), its signature-based on-chain settlement mechanism, describes the capability of the Hedera base layer, and discusses how the protocol can evolve into the future with further decentralization and performance upgrades.
+This technical whitepaper details the implementation of Prism Market Protocol, including its central limit order book (CLOB), its signature-based on-chain settlement mechanism, describes the capability of the Hedera base layer, and discusses how the protocol can evolve into the future with further decentralization and performance upgrades.
 
 % ──────────────────────────────────────────────
-% 1. Introduction
+% Introduction
 % ──────────────────────────────────────────────
 \section{Introduction}
 
-Prism is a decentralized marketplace which facilitates trading on the outcome of future events. Any account (human or agent) can create a market by declaring a market statement and submitting the transaction to the Prism smart contract. Any account (human or agent) can buy a position in the market by submitting an order intent to the Prism smart contract with an accompanying collateral token (Circle USDC is Prism's collateral token). When the market resolves, the position settles and the winning position is paid out to the account using the collateral token. A losing position forfeits its collateral in its entirety.
+Prism Market Protocol is a decentralised marketplace which facilitates trading on the outcome of future events. Any account (human or agent) can create a market by declaring a market statement and submitting the transaction to the Prism smart contract. Any Hedera account owner (human or agent) can buy a position in the market by submitting an order intent to the Prism smart contract with an accompanying collateral token (Circle USDC is Prism's collateral token). When the market resolves, the position settles and the winning position is paid out to the account using the collateral token. A losing position forfeits its collateral in its entirety.
 
-Prediction markets have been shown to aggregate distributed information efficiently and often outperform traditional forecasting methods~\cite{hanson2003}\cite{berg2008}\cite{wolfers2004}
+At the protocol level, any participant -- whether human or algorithmic agent -- can propose a new market statement via the \textbf{Market Factory}. A good market statement is clear, unambiguous and publicly verifiable. The Prism Market protocol is a decentralised protocol and as long as the outcome of a statement can be readily verified by a decentralised resolution source (e.g. an Oracle), the Factory will proceed to create a new market. Once the market is live, participants can buy a position by submitting a cryptographically signed order intent to the Prism smart contract, funded by USDC collateral. Upon market resolution, winning positions settle on-chain and are paid out in USDC, while losing positions forfeit their entire collateral.
 
-At the protocol level, any participant -- whether human or algorithmic agent -- can propose a new event via the \textbf{Market Factory}. The Prism protocol is a decentralised protocol and as long as the outcome of a statement can be readily verified by a decentralized resolution source (\textbf{Oracle}), the Factory will proceed to create a new market. Once the market is live, participants can buy a position by submitting a cryptographically signed order intent to the Prism smart contract, funded by USDC collateral. Upon market resolution, winning positions settle on-chain and are paid out in USDC, while losing positions forfeit their  entire collateral.
-
-% Prism Market facilitates decentralized trading on future events. Designed as a ``Truth Layer'' of its ecosystem, the protocol aggregates global sentiment into real-time probabilities, consistent with academic models of information markets~\cite{wolfers2004}.
+% Prism Market facilitates decentralised trading on future events. Designed as a ``Truth Layer'' of its ecosystem, the protocol aggregates global sentiment into real-time probabilities, consistent with academic models of information markets~\cite{wolfers2004}.
 
 % While automated market makers (AMMs) have successfully enabled liquidity for fungible tokens, prediction markets benefit from the precision and capital efficiency of Central Limit Order Books~\cite{daian2020}. To overcome latency and cost limitations of fully on-chain order books, Prism implements a hybrid model combining Web2 execution performance with Web3 settlement assurances~\cite{baird2016}.
 
-% Prism Market facilitates decentralized trading on the outcome of future events. Designed as the ``Truth Layer'' of the Hedera ecosystem, the protocol aggregates global sentiment into real-time, accurate probabilities.
+% Prism Market facilitates decentralised trading on the outcome of future events. Designed as the ``Truth Layer'' of the Hedera ecosystem, the protocol aggregates global sentiment into real-time, accurate probabilities.
 
 % While automated market makers (AMMs) have successfully enabled liquidity for fungible tokens on Hedera, prediction markets require the precision and capital efficiency of a Central Limit Order Book (CLOB). To overcome the latency and cost limitations of fully on-chain order books, Prism Market implements a hybrid model that combines Web2 performance with Web3 security.
 
@@ -141,9 +139,9 @@ A typical user journey through \texttt{prism.market's} hybrid architecture proce
     \label{fig:flow-diagram}
 \end{figure}
 
-The prediction market logic in figure \ref{fig:flow-diagram} was implemented for the Ethereum virtual machine. The EVM can process a high number of transactions per second and can process reasonably large instructions of byte code without incurring too many fees (measured in USD). The low cost execution of the EVM running on the Hedera network makes low value predictions feasible -- such predictions would not be feasible on other networks. Additionally, there are no layer 1 or layer 2 methods on Hedera which many gen 1 and gen 2 blockchains (e.g. bitcoin and ethereum) utilise to try to address scalability challenges. The major problem with such an approach is the reduction in decentralisation and security tradeoffs which actually lowers trust and increases centralised control in the market. The bigger the scalability problems, the worse this situation becomes and there can even be a cannibalisation effect on the base layer where transaction validators aren't incentivised to process transactions because the transaction flow is being redirected towards the higher scalability layer(s).
+The prediction market logic in figure \ref{fig:flow-diagram} was implemented for the Ethereum virtual machine running on Hedera. The EVM on Hedera can process a high number of transactions per second and can process reasonably large instructions of byte code without fees (measured in USD) becoming prohibitively expensive. The low cost execution of the EVM running on the Hedera network makes low value predictions feasible; such predictions would not be feasible on other networks. Many gen 1 and gen 2 blockchains attempt to address scalability challenges through use of layer 2 networks. The major problem with such an approach is the reduction in decentralisation and security tradeoffs which actually degrades decentralisation and reduces peer-to-peer trust. The bigger the scalability problems, the worse this situation becomes and there can even be a cannibalisation effect on the base layer where transaction validators aren't incentivised to process transactions because the transaction flow is being redirected towards the higher scalability layer(s).
 
-The prism smart contract makes extensive use of the Hedera pre-compiled smart contracts which are heavily tested, verified and execute with a high degree of reliability and gas efficiency. The prism smart contract performs on-chain signature verification of all order intents and supports multiple cryptographic key types such as ECDSA and ed25519.
+The Prism smart contract makes extensive use of the Hedera pre-compiled smart contracts which are heavily tested, verified and execute with a high degree of reliability and gas efficiency. The Prism smart contract performs on-chain signature verification of all order intents and supports cryptographic key types such as ECDSA.
 
 % Algorithm:
 \begin{algorithm}[H]
@@ -166,24 +164,24 @@ The prism smart contract makes extensive use of the Hedera pre-compiled smart co
 \end{algorithm}
 
 % ──────────────────────────────────────────────
-% 2. Prism Architecture
+% Prism Architecture
 % ──────────────────────────────────────────────
 \section{Prism Architecture}
 
-Prism is built on Hedera which features high transaction throughput, scalability, transaction ordering fairness, low latency and predictable fees~\cite{hedera_whitepaper}\cite{szabo1997}. Importantly, the Hedera Council which governs the network ensures its long-term stability~\cite{hedera_whitepaper}, orderly, predictable operation and enables organisations to forecast their operating costs with clarity. Prism is a Hedera-only protocol and inherits all the benefits and trust that is inherent to the Hedera network. 
+Prism is built on Hedera which features high transaction throughput, scalability, transaction ordering fairness, low latency and predictable fees~\cite{hedera_whitepaper}\cite{szabo1997}. Importantly, the Hedera Council which governs the network ensures its long-term stability~\cite{hedera_whitepaper}, orderly and predictable operation, and enables organisations to forecast their operating costs with clarity. Prism Market is a Hedera-only protocol and inherits all the benefits and trust that is inherent to the Hedera network. 
 
 From a high level architecture perspective, the Prism protocol consists of two core components:
 
-\begin{enumerate}[leftmargin=2em]
-    \item \textbf{On-chain smart contract settlement mechanism} (decentralized)
-    \item \textbf{Off-chain matching of signed order intents} (semi-centralized)
+\begin{enumerate}[leftmargin=1.33em]
+    \item \textbf{On-chain smart contract settlement mechanism} (decentralised)
+    \item \textbf{Off-chain matching of signed order intents} (semi-centralised)
 \end{enumerate}
 
 Any person or entity with a Hedera account can create a prediction intent, sign it with their Hedera wallet, and submit it to the Prism API where it is validated before being routed to the Prism CLOB~\cite{kreps2011}.
 
-The Prism CLOB is a distributed, high-performance order matching engine that processes thousands of transactions per second and can scale horizontally using standard cloud-based approaches (load balancing, container replication, Kubernetes, etc.).
+The Prism CLOB is a distributed, high-performance order matching engine that can process a large number of transactions per second and can scale horizontally using standard cloud-based approaches (load balancing, container replication, Kubernetes, etc.)
 
-The Prism smart contract is written in Solidity and is published on the Hedera network. The smart contract is notified of order intent matches by the Prism API. The smart contract validates the match on-chain (including digital signature verification) and performs collateral token transfer as well as position token allocation. The smart contract design prioritises safety and features the following security precautions~\cite{nasdaq2019}\cite{boneh2020}:
+The Prism smart contract is written in Solidity and is published on the Hedera network. The smart contract is notified of order intent matches by the Prism Market API. The smart contract validates the CLOB's match event on-chain (including digital signature verification) and performs collateral token transfer as well as position token allocation. The smart contract design prioritises safety and for mainnet launch, will feature the following security precautions~\cite{nasdaq2019}:
 
 \begin{itemize}[leftmargin=2em]
     \item Tested smart contract
@@ -195,20 +193,20 @@ The Prism smart contract is written in Solidity and is published on the Hedera n
 
 \subsection{Off-Chain Matching Engine}
 
-To provide a high-quality trading experience on a par with that experienced on centralized exchanges, Prism Market utilizes a high-performance off-chain matching engine. The matching engine is written in Rust which results in a CLOB that is performant, low-latency, memory safe, CPU/memory efficient, reliable and scalable.
+To provide a high-quality trading experience on a par with that experienced on centralised exchanges, Prism Market utilises a high-performance off-chain matching engine. The matching engine is written in Rust which results in an orderbook solution that is performant, low-latency, memory safe, CPU/memory efficient, reliable and scalable.
 
-The prism matching engine (CLOB Algorithm~\ref{alg:order-matching}) processes incoming orderIntents for particular a prediction marketId and compares them against existing orders on the opposite side (YES side vs NO side). The CLOB matches orders based on price and quantity: a YES order matches if its price is greater than or equal to the absolute value of a NO order's price, and vice versa. If the incoming order's quantity is less than or equal to the existing order's quantity, a full match occurs; otherwise, a partial match is made and the remaining quantity is matched with other orders. Matched orders trigger notifications via an event bus. As the protocol evoles, in future, events from the Prism event bus may be made available to subscribers in real-time. Unmatched orders are added to the order book for future matching. The engine is designed for high performance and all incoming orderIntent objects undergo rigourous validation for syntactic and semantic correctness.
+The Prism matching engine (Algorithm~\ref{alg:order-matching}) processes incoming order intent objects for a particular prediction marketId and compares them against existing orders on the opposite side (YES side vs NO side). The CLOB matches orders based on price and quantity: a YES order matches if its price is greater than or equal to the absolute value of a NO order's price, and vice versa. If the incoming order's quantity is less than or equal to the existing order's quantity, a full match occurs; otherwise, a partial match is made and the remaining quantity is matched with other orders. Matched orders trigger notifications via an event bus. As the protocol evolves, in future, events from the Prism event bus may be made available to subscribers in real-time. Unmatched orders are added to the order book for future matching. The engine is designed for high performance and all incoming orderIntent objects undergo rigorous validation for syntactic and semantic correctness.
 
-Matching orderIntent objects are forwarded to a smart contract for on-chain settlement. The Prism smart contract verifies signatures using standard cryptographic validation techniques~\cite{katz2020}\cite{boneh2020}.
+Matching orderIntent objects are forwarded to a smart contract for on-chain settlement where the Prism smart contract verifies signatures using standard cryptographic validation techniques.
 
 \begin{description}[leftmargin=0em, style=nextline]
-    \item[Non-Custodial Architecture] User funds remain under cryptographic control until execution conditions are satisfied, a core principle of decentralized applications~\cite{poon2016}.
+    \item[Non-Custodial Architecture] User funds remain under cryptographic control until execution conditions are satisfied, a core principle of decentralised applications~\cite{poon2016}.
     \item[Immutable Settlement] Final settlement is immutable once confirmed, reflecting the tamper-resistant guarantees of distributed ledger consensus~\cite{szabo1997}.
-    \item[Low Latency] The Prism orderbook rapidly matches prediction intents in under a millisecond. Such order matching speed and latency would not be possible to perform on-chain.
+    \item[Low Latency] The Prism orderbook rapidly matches prediction intents in less than a few milliseconds, with scope to significantly reduce orderbook latency even further. Such order matching speed and latency would not be possible to achieve on-chain.
     \item[Near Real-Time Responsiveness] From the moment a prediction intent is made given the current market information, to the moment an order is matched and sent to the Prism smart contract, a user experiences near-real-time responsiveness.
-    \item[Orderbook Transparency] All pending orders are publicly visible to market participants via a real-time streaming gRPC interface.
-    \item[Low Fees] By processing order intents off-chain, users do not incur Hedera network fees for placing or canceling unmatched orders.
-    \item[Familiar Interface] The orderbook user interface is familiar to traders and DeFi users.
+    \item[Orderbook Transparency] All pending orders are publicly visible to market participants via a real-time streaming gRPC interface. The Prism gRPC service has standard cloud protections in place (e.g. rate limiting, DDoS protection, etc.) to prevent abuse and provide uninterrupted orderbook transparency to market participants.
+    \item[Low Fees] By processing order intents off-chain, users do not incur Hedera network fees directly for placing or canceling unmatched orders.
+    \item[Familiar Interface] The Prism orderbook interface will be immediately familiar to anyone with experience of centralised exchanges or decentralised finance platforms. The standard order book depth view, price ladder, and trade history feed mirror the conventions of professional trading interfaces, significantly lowering the barrier to entry for experienced traders whilst remaining intuitive enough for newcomers to the prediction market space.
 \end{description}
 
 
@@ -245,23 +243,23 @@ Matching orderIntent objects are forwarded to a smart contract for on-chain sett
 
 \subsection{On-Chain Settlement (HSCS)}
 
-User order intents are settled on-chain using the Hedera Smart Contract Service. Two matching order intent objects (including digital signatures) are presented to the smart contract for settlement. The smart contract validates the objects, verifies the digital signatures (using a Hedera pre-compiled smart contract), holds collateral tokens in decentralised escrow, and allocates redeemable position tokens. The contract verifies signatures using standard cryptographic validation techniques~\cite{katz2020}\cite{boneh2020}.
+User order intents are settled on-chain using the Hedera Smart Contract Service. Two matching order intent objects (including digital signatures) are presented to the smart contract for settlement. The smart contract validates the objects, verifies the digital signatures (using a Hedera pre-compiled smart contract), holds collateral tokens in decentralised escrow, and allocates redeemable position tokens.
 
-\begin{description}[leftmargin=2em, style=nextline]
+\begin{description}[leftmargin=0em, style=nextline]
     \item[Non-Custodial] The Prism prediction protocol is non-custodial; user funds are held in smart contracts and can only be moved on a valid market determination by an oracle, valid trade execution, or user-initiated redemption.
-    \item[Immutable Settlement] Final trade execution and the distribution of outcome shares are finalized on-chain, ensuring that once a match is settled, it is irreversible and uncensorable.
+    \item[Immutable Settlement] Final trade execution and the distribution of outcome shares are finalised on-chain, ensuring that once a match is settled, it is irreversible and uncensorable.
 \end{description}
 
-Non-custodial architecture ensures user funds remain under cryptographic control until execution conditions are satisfied, a core principle of decentralized applications~\cite{poon2016}. Final settlement is immutable once confirmed, reflecting the tamper-resistant guarantees of distributed ledger consensus~\cite{szabo1997}.
+Non-custodial architecture ensures user funds remain under cryptographic control until execution conditions are satisfied, a core principle of decentralised applications~\cite{poon2016}. Final settlement is immutable once confirmed, reflecting the tamper-resistant guarantees of distributed ledger consensus~\cite{szabo1997}.
 
 Ancillary functionality is encoded in the smart contract to handle smart contract instantiation, new market creation, set market outcomes, redeem position tokens for collateral tokens, retrieve balances, etc.
 
-\subsection{A generalized prediction protocol}
+\subsection{A generalised prediction protocol}
 
-A prediction intent is presented to prism.market using the rigidly defined format (protobuf) in listing \ref{lst:prediction-intent}. A human or an agent can construct a predictionIntentRequest object for any of the available markets, sign the prediction intent object using their Hedera wallet and present their prediction to prism.market for peer-to-peer matching and settlement. prism.market has made a public and permissionless gRPC interface (web) available and this is the primary means of access for any person or agent wishing to participate in a Prism prediction market.
+A prediction intent is presented to prism.market using the rigidly defined format (protobuf) in listing \ref{lst:prediction-intent}. A human or an agent can construct a \texttt{PrismPredictionIntentRequest} object for any of the available markets, sign the prediction intent object using their Hedera wallet and present their prediction to prism.market for peer-to-peer matching and settlement. prism.market has made a public gRPC interface (web) available so integrators can interact directly with Prism. The endpoint is security protected and rate-limited to prevent abuse and ensure a high-quality user experience for all participants. Prism market has no ability to create arbitrary orders on behalf of a user nor tamper with order amounts once the user has signed an order intent in their wallet.
 
-\begin{lstlisting}[language=Java, caption={PredictionIntentRequest Protobuf Definition}, label={lst:prediction-intent}, basicstyle=\ttfamily\small]
-message PredictionIntentRequest {
+\begin{lstlisting}[language=Java, caption={PrismPredictionIntentRequest protobuf definition}, label={lst:prediction-intent}, basicstyle=\ttfamily\small]
+message PrismPredictionIntentRequest {
   string tx_id = 1;
   string net = 2;
   string market_id = 3;
@@ -277,120 +275,175 @@ message PredictionIntentRequest {
 }
 \end{lstlisting}
 
-Public interaction with the Prism protocol is supported through the highly-available Prism API. Direct interaction with the smart contract (e.g.\ redeem collateral tokens after successful prediction) is also provided for~\cite{katz2020}.
+Public interaction with the Prism Market protocol is supported through the highly-available Prism Market API. Direct interaction with the smart contract (e.g.\ redeem collateral tokens after successful prediction) is also provided for.
 
 \subsection{Auditable History (HCS)}
 
-Transparency is achieved through consensus-ordered event logs (Hedera Consensus Service --- HCS). Append-only event streams provide verifiable audit trails analogous to distributed log systems~\cite{kreps2011}. Tamper-resistant logging enables independent verification of market history without relying on the matching engine operator. Real-time event streams allow automated agents to detect opportunities, similar to streaming market data infrastructure used in traditional finance systems~\cite{kreps2011}.
+Transparency is achieved through consensus-ordered event logs (Hedera Consensus Service -- HCS). Append-only event streams provide verifiable audit trails analogous to distributed log systems~\cite{kreps2011}. Tamper-resistant logging enables independent verification of market history without relying on the matching engine operator. Real-time event streams allow automated agents to detect opportunities, similar to streaming market data infrastructure used in traditional finance systems~\cite{kreps2011}.
 
-Transparency and trust are enhanced using HCS. All critical protocol events, including market creation and finalized trades, are logged via HCS. The Prism event stream can be listened to by any market participant and the provenance of each matched order can be readily and publicly verified with no permissions required.
+Transparency and trust are enhanced using HCS. All critical protocol events, including market creation and finalised trades, are logged via HCS. The Prism event stream can be listened to by any market participant and the provenance of each matched order can be readily and publicly verified with no permissions required.
 
-\begin{description}[leftmargin=2em, style=nextline]
-    \item[Tamper-Proof Audit Trail] Prism's HCS event stream creates a verifiable record of all market activity that is independent of the off-chain matching engine.
-    \item[Prediction Event Stream Broadcast] Interested parties (including bots) can listen to Prism's event stream in real-time and have the ability to quickly identify verifiable market opportunities without delay or middle-man interference.
-\end{description}
+% \begin{description}[leftmargin=0em, style=nextline]
+%     \item[Tamper-Proof Audit Trail] Prism's HCS event stream creates a verifiable record of all market activity that is independent of the off-chain matching engine.
+%     \item[Prediction Event Stream Broadcast] Interested parties (including bots) can listen to Prism's event stream in real-time and have the ability to quickly identify verifiable market opportunities without delay or middle-man interference.
+% \end{description}
+
+
+Prism Market's integration with the Hedera Consensus Service (HCS) provides a tamper-proof, independently verifiable audit trail of all market activity for a very low cost (fractions of a cent per HCS message published as at the time of writing). It is envisaged that every critical protocol event -- including market creation, order intent matching, and final settlement -- can be logged to an append-only HCS topic, creating a permanent and publicly accessible record that is entirely independent of the off-chain matching engine. This ensures that even if the Prism matching engine were to be compromised or become unavailable, the integrity of the market history can always be verified by any party with access to the Hedera network. 
+
+In the current implementation of Prism Market, HCS is used for auditing and transparency purposes only and as Prism Market evolves, the HCS may be used more and more as a real-time, trusted event stream broadcast mechanism for any interested party seeking marketplace opportunities.
+
+In addition to providing an audit trail, in the future it is envisaged that the Prism Market HCS event stream will serve as a real-time broadcast mechanism for market activity. Any interested party -- whether a human participant, an algorithmic trading agent, or an independent auditor -- can subscribe to the Prism Market event stream and receive a continuous feed of verified market events as they occur. This openness enables automated agents to rapidly identify and act on market opportunities without relying on any intermediary or requiring special permissions from the Prism Market protocol operator. The combination of tamper-proof logging and real-time event broadcasting ensures that Prism Market operates with the highest degree of transparency and that all participants have equal and unfettered access to market information.
 
 % ──────────────────────────────────────────────
-% 3. Market Mechanics
+% Market Mechanics
 % ──────────────────────────────────────────────
 \section{Market Mechanics}
 
 \subsection{Binary Outcomes \& Collateral}
 
-Prism is a binary option (YES/NO) prediction market. In the future, Prism may support outcomes other than YES/NO. Binary contracts are a standard structure in prediction market design literature~\cite{hanson2003}.
+Prism Market Protocol is a binary option (YES/NO) prediction market. In the future, Prism Market may support outcomes other than YES/NO (e.g. Gnosis conditional tokens). Binary contracts are a standard structure in prediction market design literature~\cite{hanson2003}. In the current implementation, users must wait for the market to resolve before being able to convert winning position tokens into USDC collateral tokens. In the future, Prism Market envisages a fully collateralised decentralised secondary marketplace where users can exit their positions early, prior to market resolution.
 
-Stablecoin collateral provides price stability relative to fiat currency and is commonly used in decentralized finance markets~\cite{wood_ethereum}\cite{lyons2020}.
+% Stablecoin collateral provides price stability relative to fiat currency and is commonly used in decentralised finance markets~\cite{wood_ethereum}\cite{lyons2020}.
 
-\begin{description}[leftmargin=2em, style=nextline]
-    \item[Collateral Token] Currently the only supported collateral token is Circle's USDC.
-    \item[Position Token] The Prism smart contract converts collateral tokens (USDC) to position tokens according to the current market price and the amount of available liquidity.
-\end{description}
+% \begin{description}[leftmargin=0em, style=nextline]
+%     \item[Collateral Token] Currently the only supported collateral token is Circle's USDC.
+%     \item[Position Token] The Prism smart contract converts collateral tokens (USDC) to position tokens according to the current market price and the amount of available liquidity.
+% \end{description}
 
-All markets on Prism are fully backed by USDC collateral --- there is no borrowing capability and all markets are fully collateralised. Fully collateralized prediction markets eliminate counterparty risk and margin insolvency concerns~\cite{hanson2003}.
+Stablecoin collateral provides price stability relative to fiat currency and is commonly used in decentralised finance markets~\cite{wood_ethereum}\cite{lyons2020}. Prism uses Circle's USDC as its sole collateral token, a widely adopted, fully-reserved stablecoin pegged to the US dollar. The use of USDC ensures that market participants are not exposed to the price volatility of a native protocol token when opening or closing positions, and that the value of winning position payouts is predictable and stable at the time of redemption. 
 
-A market on the Prism smart contract has the following properties:
+When a participant submits a matched order intent to the Prism smart contract, their USDC collateral is transferred to the smart contract and held in decentralised escrow for the duration of the market. The smart contract then converts the deposited USDC collateral into YES or NO position tokens according to the current market price at the time of the match. Position tokens represent a participant's claim on the outcome of the market and are redeemable for USDC upon market resolution. A winning position is redeemable for 1.00 USDC per position token (there is a 1:1 mapping between position tokens and collateral tokens), while a losing position expires worthless and its collateral is allocated to the winning side. This fully collateralised model eliminates counterparty risk and ensures that all outstanding position tokens are always backed by an equivalent amount of USDC held in the smart contract. All markets on Prism are fully backed by USDC collateral -- there is no borrowing capability and all markets are fully collateralised. Fully collateralised prediction markets reduce or eliminate many concerns around counterparty risk and margin insolvency~\cite{hanson2003}.
+
+
+\subsection{On-chain state machine}
+
+A market on the Prism Market smart contract has the following properties:
 
 \begin{itemize}[leftmargin=2em]
-    \item A unique identifier (UUID)
+    \item A unique identifier (UUID7)
     \item A market statement (text)
-    \item A ledger which maintains USDC collateral balances (escrow) for a particular user
-    \item A mechanism to convert USDC collateral into YES/NO position tokens according to the instantaneous market price
-    \item A ledger which maintains YES/NO balances for a particular user
+    \item A ledger to maintain USDC collateral balances (escrow) for a particular user
+    \item A mechanism (distributed state machine) to convert USDC collateral into YES/NO position tokens according to the instantaneous market price
+    \item A ledger to maintain YES/NO balances for a particular user
 \end{itemize}
 
-\begin{description}[leftmargin=2em, style=nextline]
-    \item[Share Value] Prices float between \$0.00 and \$1.00, representing the market's estimated probability (e.g., \$0.65 = the market believes a YES outcome has a 65\% probability and a NO outcome has a 35\% probability). Prediction market prices are widely interpreted as probabilistic forecasts under rational market assumptions~\cite{wolfers2004}.
-    \item[Settlement] Upon resolution of the binary option market, winning shares are redeemable for 1.00 USDC, while losing shares expire worthless.
-    \item[Oracle Provider] Only an authorized oracle can resolve a market. Oracle-based resolution is a standard component of decentralized prediction protocols~\cite{poon2016}.
-\end{description}
+% \begin{description}[leftmargin=0em, style=nextline]
+%     \item[Share Value] Prices float between \$0.00 and \$1.00, representing the market's estimated probability (e.g., \$0.65 = the market believes a YES outcome has a 65\% probability and a NO outcome has a 35\% probability). Prediction market prices are widely interpreted as probabilistic forecasts under rational market assumptions~\cite{wolfers2004}.
+%     \item[Settlement] Upon resolution of the binary option market, winning shares are redeemable for 1.00 USDC, while losing shares expire worthless.
+%     \item[Oracle Provider] Only an authorised oracle can resolve a market. Oracle-based resolution is a standard component of decentralised prediction protocols~\cite{poon2016}.
+% \end{description}
 
-\subsection{CLOB vs.\ AMM}
+Prices in a Prism market float between \$0.00 and \$1.00, representing the market's estimated probability of a YES or NO outcome. For example, a YES price of \$0.65 implies that the market collectively believes there is a 65\% probability of a YES outcome and a 35\% probability of a NO outcome. Prediction market prices are widely interpreted as probabilistic forecasts under rational market assumptions~\cite{wolfers2004}. This price discovery mechanism is a core feature of prediction markets and is what makes them valuable as information aggregation tools -- the price of a position token at any given moment reflects the aggregated belief of all market participants.
 
-Unlike AMMs that use bonding curves, Prism uses a Central Limit Order Book (CLOB) where prices are discovered through direct competition between buyers and sellers.
+Upon resolution of the binary option market, winning position tokens are redeemable for 1.00 USDC per token, while losing position tokens expire worthless and their underlying collateral is redistributed to the winning side. This settlement mechanism ensures that the total collateral held in the smart contract is always fully distributed upon market resolution, with no residual funds remaining in escrow.
 
-\begin{description}[leftmargin=2em, style=nextline]
-    \item[Efficiency] This model allows for tighter spreads and more accurate probability discovery.
-    \item[No Impermanent Loss] Traders avoid the ``impermanent loss'' typical of AMM-based prediction markets.
-\end{description}
+Market resolution is performed exclusively by an authorised oracle provider (e.g. Supra, Chainlink). The oracle is responsible for determining the outcome of the market statement and submitting the resolution to the Prism smart contract. Oracle-based resolution is a standard component of decentralised prediction protocols~\cite{poon2016} and is a critical aspect of the trust model. The use of a decentralised oracle provider ensures that market resolution is transparent, verifiable, and resistant to manipulation by any single party, including the Prism protocol operator.
+
+
+
+% \subsection{CLOB vs.\ AMM}
+
+% Unlike AMMs that use bonding curves, Prism uses a Central Limit Order Book (CLOB) where prices are discovered through direct competition between buyers and sellers.
+
+% \begin{description}[leftmargin=0em, style=nextline]
+%     \item[Efficiency] This model allows for tighter spreads and more accurate probability discovery.
+%     \item[No Impermanent Loss] Traders avoid the ``impermanent loss'' typical of AMM-based prediction markets.
+% \end{description}
 
 \subsection{Fee Structure \& Revenue Model}
 
-Prism utilizes a revenue model designed to encourage maximum trading volume and user (human and agent) participation while ensuring long-term sustainability. Low initial fees are commonly used in platform bootstrapping strategies to stimulate network effects~\cite{wolfers2004}.
+% Prism utilises a revenue model designed to encourage maximum trading volume and user (human and agent) participation while ensuring long-term sustainability. Low initial fees are commonly used in platform bootstrapping strategies to stimulate network effects~\cite{wolfers2004}.
 
-\begin{description}[leftmargin=2em, style=nextline]
-    \item[Genesis Interface Fees] Currently set to 0\% to minimize friction for early adopters and bootstrap liquidity.
-    \item[Redemption Fee] Protocol revenue is generated solely at settlement. A 2\% fee is applied only when winning shares are redeemed for collateral.
-    \item[Governance Flexibility] Fee parameters are adjustable by the protocol governance (Prism DAO) to ensure adaptability. Future adjustments may be implemented to fund development, insurance funds, or token buybacks, subject to community consensus.
-\end{description}
+% \begin{description}[leftmargin=0em, style=nextline]
+%     \item[Genesis Interface Fees] Currently set to 0\% to minimize friction for early adopters and bootstrap liquidity.
+%     \item[Redemption Fee] Protocol revenue is generated solely at settlement. A 2\% fee is applied only when winning shares are redeemed for collateral.
+%     \item[Governance Flexibility] Fee parameters are adjustable by the protocol governance (Prism DAO) to ensure adaptability. Future adjustments may be implemented to fund development, insurance funds, or token buybacks, subject to community consensus.
+% \end{description}
+
+Prism utilises a revenue model designed to encourage maximum trading volume and broad user participation -- whether human or algorithmic agent -- while ensuring the long-term financial sustainability of the protocol. The fee structure is deliberately designed to minimize friction during the early stages of the protocol's lifecycle, prioritising liquidity bootstrapping and network effect stimulation over near-term revenue generation. Low initial fees are commonly used in platform bootstrapping strategies to stimulate network effects and attract early adopters~\cite{wolfers2004}.
+
+During the genesis phase of the protocol, interface fees are set to 0\% in order to minimize friction for early adopters, incentivize participation, and bootstrap liquidity across available markets. This approach prioritises the growth of an active and liquid marketplace over the extraction of protocol revenue during the critical early stages of adoption. Protocol revenue is generated solely at the point of settlement, ensuring that fees are only incurred by participants who have successfully predicted a market outcome. A 2\% fee is applied to the total collateral in a market once it ends. This model aligns the protocol's revenue incentives with the success of its participants -- Prism only earns revenue when its users win. 
+
+It is important to note that these percentages are subject to change as Prism evolves into the future. Fee parameters are not fixed \textit{in perpetuity} and are fully adjustable by the protocol governance body (Prism Market DAO), ensuring that the fee structure can adapt to the evolving needs of the protocol and its community. Future fee adjustments may be implemented to fund ongoing protocol development, establish insurance or reserve funds, support token buyback programs, or incentivize liquidity provision, all subject to transparent community consensus and governance processes.
+
 
 % ──────────────────────────────────────────────
-% 4. Hedera Native Integration
+% A Hedera native protocol
 % ──────────────────────────────────────────────
-\section{Hedera Native Integration}
+\section{A Hedera native protocol}
 
-Prism Market is engineered to maximize the efficiency of the Hedera network's native services.
+% Prism Market is engineered to maximize the efficiency of Hedera's native capabilities.
 
-\begin{description}[leftmargin=2em, style=nextline]
-    \item[HSCS] The protocol utilizes HSCS for trustless settlement logic. In future, the protocol may evolve to support Hedera Token Service (HTS) to provide native share management with higher speed, security, lower cost, and higher transaction-per-second throughput. Native token services can provide efficiency and throughput advantages over contract-level token implementations~\cite{hedera_hts}.
-    \item[Transparency and Trust using HCS] Prism uses HCS topics to log every matching engine payload, ensuring the off-chain state can be publicly verified thereby increasing trust in the protocol and reassuring market participants that the market conducts itself in an orderly way that can be trusted and payouts are guaranteed within the limits of the protocol~\cite{hedera_hcs}.
-    \item[Predictable Economics] Leverages Hedera's fixed-fee model to ensure that market creation and resolution costs remain low and stable, regardless of network congestion~\cite{hedera_whitepaper}.
-\end{description}
+% \begin{description}[leftmargin=0em, style=nextline]
+%     \item[Hedera smart contract service] The protocol utilises HSCS for trustless settlement logic. In future, the protocol may evolve to support Hedera Token Service (HTS) to provide native share management with higher speed, security, lower cost, and higher transaction-per-second throughput. Native token services can provide efficiency and throughput advantages over contract-level token implementations~\cite{hedera_hts}.
+%     \item[Hedera consensus service] Prism uses HCS topics to log every matching engine payload, ensuring the off-chain state can be publicly verified thereby increasing trust in the protocol and reassuring market participants that the market conducts itself in an orderly way that can be trusted and payouts are guaranteed within the limits of the protocol~\cite{hedera_hcs}. Hedera's fixed-fee model, ensures that market operating costs remain low and stable, regardless of network congestion~\cite{hedera_whitepaper}
+%     \item[Hedera token service] In the future, Prism may utilise HTS for representation of collateral token and position token balances
+%     \item[Hedera hooks] In the future, Prism may leverage Hedera hooks to perform state machine transitions at high speed, low latency and low cost.
+% \end{description}
+
+
+Prism Market is engineered to maximize the efficiency of Hedera's native capabilities. Each component of the Prism Market protocol has been designed to leverage the powerful and unique capabilities of the Hedera network, ensuring that the protocol inherits the full benefits of Hedera's high-throughput, low-latency, and low-cost trust network.
+
+The Prism Market smart contract is deployed on the Hedera Smart Contract Service (HSCS), which provides trustless settlement logic for all matched order intents. HSCS enables Prism to perform on-chain signature verification, collateral token transfer, and position token allocation in a fully decentralised and auditable manner. In future, the protocol may evolve to incorporate the Hedera Token Service (HTS) to provide native position token management with higher speed, greater security, lower cost, and higher transaction-per-second throughput than is achievable through contract-level token implementations alone. Native token services have been shown to provide significant efficiency and throughput advantages over contract-level token implementations~\cite{hedera_hts}.
+
+Prism Market uses Hedera Consensus Service (HCS) topics to log every matching engine payload, ensuring that the off-chain state can be publicly verified at any time. This increases trust in the protocol and reassures market participants that the marketplace conducts itself in a transparent and orderly manner. Hedera's fixed-fee model ensures that market operating costs remain low and stable regardless of network congestion~\cite{hedera_whitepaper}, a property that is critical for a prediction marketplace that may process millions of events over its lifetime. Publishing a message to an HCS topic costs only a fraction of a cent (US dollars), making it economically viable to log every protocol event to the Hedera network without imposing a material cost burden on the protocol or its participants~\cite{hedera_hcs}.
+
+Looking further ahead, Prism may in future utilise the Hedera Token Service for the native representation of both collateral token and position token balances, replacing the current smart contract ledger approach with a more efficient and natively integrated token management solution. Additionally, as the Hedera ecosystem continues to mature, Prism may leverage new and emerging Hedera features to perform safe state machine transitions at high speed, low latency, and low cost, and remove the protocol's reliance on EVM execution for state updates.
+
+
+
+% ──────────────────────────────────────────────
+% Conclusion
+% ──────────────────────────────────────────────
+\section{Conclusion}
+
+Prism Market is a significant step forward for decentralised prediction markets in the Hedera ecosystem. By combining a high-performance off-chain order book with on-chain settlement via the Hedera Smart Contract Service, Prism delivers a trading experience that is both familiar to traditional market participants and grounded in the trust guarantees of Hedera's best-in-class distributed ledger technology. Prism's hybrid architecture addresses a fundamental tension between the low-latency, high-throughput demands of a modern prediction marketplace; with the transparency, immutability, and censorship-resistance that decentralised protocols uniquely provide.
+
+The choice of Hedera as the underlying DLT network is intentional and consequential. Hedera's high transaction throughput, low and predictable fees, ordering fairness, and long-term governance stability make it uniquely suited to support a next-generation prediction protocol that can operate at scale. Unlike generation one and generation two blockchain networks that rely on layer two solutions to address scalability -- at the cost of decentralisation and trust -- Hedera provides these properties natively at the base layer. This ensures that Prism inherits a strong and stable foundation without sacrificing the core properties that make decentralised prediction markets valuable.
+
+The Prism protocol is designed to be as generalised and permissionless as possible. Any human participant or algorithmic agent can create a market, submit a cryptographically signed prediction intent, and participate in peer-to-peer order matching and on-chain settlement without requiring permission from a centralised authority. This openness, combined with rigorous on-chain signature verification and fully collateralised market mechanics, ensures that market participants can engage with confidence and that the integrity of every trade can be relied on.
+
+Looking ahead, Prism is well positioned to evolve alongside the broader decentralised finance ecosystem. Future development directions include deeper integration with Hedera native services, expanded oracle provider support for diverse market resolution, verifiable AI and AI market resolution, regulated marketplace access using digital identity, as well the evolution of the matching engine itself towards an even more decentralised solution that leverages next-gen Hedera features. As prediction markets continue to demonstrate their value as tools for information aggregation, risk management, and collective forecasting, Prism aims to be the protocol of choice for participants seeking a trustless, transparent, and high-performance prediction marketplace built for the next generation of decentralised finance.
+
+
 
 % ──────────────────────────────────────────────
 % 5. Technical Specifications
 % ──────────────────────────────────────────────
-\section{Technical Specifications}
+% \section{Technical Specifications}
 
-\textit{Note: The following sections define the specific technical implementation of the architecture described above. These parameters are critical for developer and auditor reference.}
+% \textit{Note: The following sections define the specific technical implementation of the architecture described above. These parameters are critical for developer and auditor reference.}
 
-\subsection{Matching Engine Stack}
+% \subsection{Matching Engine Stack}
 
-\begin{description}[leftmargin=2em, style=nextline]
-    \item[Language \& Architecture] Rust orderbook.
-    \item[Latency Benchmarks] TBD. Latency will vary according to resource demands, memory size, and processing power. Additionally, network loading is an important factor which can affect latency of the CLOB.
-\end{description}
+% \begin{description}[leftmargin=0em, style=nextline]
+%     \item[Language \& Architecture] Rust orderbook.
+%     \item[Latency Benchmarks] TBD. Latency will vary according to resource demands, memory size, and processing power. Additionally, network loading is an important factor which can affect latency of the CLOB.
+% \end{description}
 
-\subsection{Oracle Framework}
+% \subsection{Oracle Framework}
 
-\begin{description}[leftmargin=2em, style=nextline]
-    \item[Providers] TBD --- UMA, Chainlink, etc.
-    \item[Aggregation Logic] N/A --- only one oracle provider for MVP.
-\end{description}
+% \begin{description}[leftmargin=0em, style=nextline]
+%     \item[Providers] TBD --- UMA, Chainlink, etc.
+%     \item[Aggregation Logic] N/A --- only one oracle provider for MVP.
+% \end{description}
 
-\subsection{HIP-206 Implementation}
+% \subsection{HIP-206 Implementation}
 
-\begin{description}[leftmargin=2em, style=nextline]
-    \item[Precompile Usage] Pre-compiled Hedera smart contracts are used for on-chain digital signature verification.
-\end{description}
+% \begin{description}[leftmargin=0em, style=nextline]
+%     \item[Precompile Usage] Pre-compiled Hedera smart contracts are used for on-chain digital signature verification.
+% \end{description}
 
-\subsection{HCS Schema}
+% \subsection{HCS Schema}
 
-\begin{description}[leftmargin=2em, style=nextline]
-    \item[Topic Structure] Schema not currently defined. Messages are published consistently.
-\end{description}
+% \begin{description}[leftmargin=0em, style=nextline]
+%     \item[Topic Structure] Schema not currently defined. Messages are published consistently.
+% \end{description}
+
 
 % ──────────────────────────────────────────────
-% 6. Disclaimer
+% 7. Disclaimer
 % ──────────────────────────────────────────────
 \section{Disclaimer}
 
@@ -462,14 +515,6 @@ G.~Wood,
 \bibitem{szabo1997}
 N.~Szabo,
 \textit{Formalizing and Securing Relationships on Public Networks}, 1997.
-
-\bibitem{katz2020}
-J.~Katz, Y.~Lindell,
-\textit{Introduction to Modern Cryptography}, 2020.
-
-\bibitem{boneh2020}
-D.~Boneh, V.~Shoup,
-\textit{Applied Cryptography}, 2020.
 
 \bibitem{kreps2011}
 J.~Kreps, N.~Narkhede, J.~Rao,

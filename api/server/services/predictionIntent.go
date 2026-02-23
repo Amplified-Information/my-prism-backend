@@ -44,7 +44,7 @@ func (pis *PredictionIntentsService) Init(dbRepository *repositories.DbRepositor
 	return nil
 }
 
-func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PredictionIntentRequest) (string, error) {
+func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PrismPredictionIntentRequest) (string, error) {
 	/////
 	// validations
 	/////
@@ -327,16 +327,16 @@ func (pis *PredictionIntentsService) GetAllPredictionIntentsForMarketIdAndAccoun
 	return predictionIntent, nil
 }
 
-func (pis *PredictionIntentsService) GetAllPredictionIntents(limit int32, offset int32) ([]*pb_api.PredictionIntentRequest, error) {
+func (pis *PredictionIntentsService) GetAllPredictionIntents(limit int32, offset int32) ([]*pb_api.PrismPredictionIntentRequest, error) {
 	predictionIntents, err := pis.predictionIntentsRepository.GetAllPredictionIntents(int(limit), int(offset))
 	if err != nil {
 		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get all prediction intents: %v", err)
 	}
 
-	// Map []sqlc.PredictionIntent to []*pb_api.PredictionIntentRequest
-	var pbPredictionIntents []*pb_api.PredictionIntentRequest
+	// Map []sqlc.PredictionIntent to []*pb_api.PrismPredictionIntentRequest
+	var pbPredictionIntents []*pb_api.PrismPredictionIntentRequest
 	for _, pi := range predictionIntents {
-		pbPredictionIntents = append(pbPredictionIntents, &pb_api.PredictionIntentRequest{
+		pbPredictionIntents = append(pbPredictionIntents, &pb_api.PrismPredictionIntentRequest{
 			TxId:        pi.TxID.String(),
 			Net:         pi.Net,
 			MarketId:    pi.MarketID.String(),

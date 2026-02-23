@@ -287,7 +287,8 @@ CREATE TABLE public.matches (
     market_id uuid NOT NULL,
     tx_hash character varying(256) NOT NULL,
     qty1 double precision NOT NULL,
-    qty2 double precision NOT NULL
+    qty2 double precision NOT NULL,
+    hcs_tx_id character varying(256) DEFAULT NULL::character varying
 );
 
 
@@ -364,7 +365,11 @@ CREATE TABLE public.positions (
     n_no bigint NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP CONSTRAINT positions_created_at_not_null NOT NULL,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP CONSTRAINT positions_created_at_not_null1 NOT NULL,
+    cost_basis_price_yes_usd double precision DEFAULT 0.0 NOT NULL,
+    cost_basis_price_no_usd double precision DEFAULT 0.0 NOT NULL,
     CONSTRAINT positions_account_id_check CHECK ((length(evm_address) >= 5)),
+    CONSTRAINT positions_cost_basis_price_no_usd_check CHECK (((cost_basis_price_no_usd >= (0.00)::double precision) AND (cost_basis_price_no_usd <= (1.00)::double precision))),
+    CONSTRAINT positions_cost_basis_price_yes_usd_check CHECK (((cost_basis_price_yes_usd >= (0.00)::double precision) AND (cost_basis_price_yes_usd <= (1.00)::double precision))),
     CONSTRAINT positions_n_no_check CHECK ((n_no >= 0)),
     CONSTRAINT positions_n_yes_check CHECK ((n_yes >= 0))
 );

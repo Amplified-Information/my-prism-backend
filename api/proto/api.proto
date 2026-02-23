@@ -12,7 +12,7 @@ import "validate/validate.proto"; // PGV
 service ApiServicePublic {
   rpc Health(Empty) returns (StdResponse);
   rpc NewsLetter(NewsLetterRequest) returns (StdResponse);
-  rpc CreatePredictionIntent(PredictionIntentRequest) returns (StdResponse);
+  rpc CreatePredictionIntent(PrismPredictionIntentRequest) returns (StdResponse);
   rpc GetMarketById(MarketIdRequest) returns (MarketResponse);
   rpc GetMarkets(LimitOffsetRequest) returns (MarketsResponse);
   rpc CreateMarket(CreateMarketRequest) returns (CreateMarketResponse);
@@ -47,7 +47,7 @@ service ApiAuth {
 
 message Empty {}
 
-message PredictionIntentRequest {
+message PrismPredictionIntentRequest {
   string tx_id = 1              [json_name = "txId",        (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
   string net = 2                [json_name = "net",         (validate.rules).string = {in: ["mainnet", "testnet", "previewnet"]} /* Hedera network */];
   string market_id = 3          [json_name = "marketId",    (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
@@ -288,7 +288,7 @@ message PositionsResponse {
 }
 
 message PredictionIntentsResponse {
-  repeated PredictionIntentRequest /* PIRequest for now*/ prediction_intents = 1;
+  repeated PrismPredictionIntentRequest /* PIRequest for now*/ prediction_intents = 1;
 }
 
 message ResolveMarketRequest {

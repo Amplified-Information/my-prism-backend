@@ -46,7 +46,7 @@ func (pir *PredictionIntentsRepository) InitDb() error {
 }
 
 // SaveOrderRequest saves an order request to the database
-func (pir *PredictionIntentsRepository) CreateOrderIntentRequest(req *pb_api.PredictionIntentRequest) (*sqlc.PredictionIntent, error) {
+func (pir *PredictionIntentsRepository) CreateOrderIntentRequest(req *pb_api.PrismPredictionIntentRequest) (*sqlc.PredictionIntent, error) {
 	if pir.db == nil {
 		return nil, lib.ErrorLog("could not connect to database")
 	}

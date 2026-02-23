@@ -5,16 +5,12 @@
 \contentsline {section}{\numberline {2}Prism Architecture}{4}{section.2}%
 \contentsline {subsection}{\numberline {2.1}Off-Chain Matching Engine}{5}{subsection.2.1}%
 \contentsline {subsection}{\numberline {2.2}On-Chain Settlement (HSCS)}{6}{subsection.2.2}%
-\contentsline {subsection}{\numberline {2.3}A generalized prediction protocol}{7}{subsection.2.3}%
+\contentsline {subsection}{\numberline {2.3}A generalised prediction protocol}{7}{subsection.2.3}%
 \contentsline {subsection}{\numberline {2.4}Auditable History (HCS)}{7}{subsection.2.4}%
 \contentsline {section}{\numberline {3}Market Mechanics}{8}{section.3}%
 \contentsline {subsection}{\numberline {3.1}Binary Outcomes \& Collateral}{8}{subsection.3.1}%
-\contentsline {subsection}{\numberline {3.2}CLOB vs.\ AMM}{8}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.2}On-chain state machine}{8}{subsection.3.2}%
 \contentsline {subsection}{\numberline {3.3}Fee Structure \& Revenue Model}{9}{subsection.3.3}%
-\contentsline {section}{\numberline {4}Hedera Native Integration}{9}{section.4}%
-\contentsline {section}{\numberline {5}Technical Specifications}{9}{section.5}%
-\contentsline {subsection}{\numberline {5.1}Matching Engine Stack}{9}{subsection.5.1}%
-\contentsline {subsection}{\numberline {5.2}Oracle Framework}{10}{subsection.5.2}%
-\contentsline {subsection}{\numberline {5.3}HIP-206 Implementation}{10}{subsection.5.3}%
-\contentsline {subsection}{\numberline {5.4}HCS Schema}{10}{subsection.5.4}%
-\contentsline {section}{\numberline {6}Disclaimer}{10}{section.6}%
+\contentsline {section}{\numberline {4}A Hedera native protocol}{10}{section.4}%
+\contentsline {section}{\numberline {5}Conclusion}{10}{section.5}%
+\contentsline {section}{\numberline {6}Disclaimer}{11}{section.6}%
