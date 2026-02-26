@@ -166,13 +166,18 @@ func (matchesRepository *MatchesRepository) UpdateMatch(marketId string, tx1 str
 		return lib.ErrorLog("invalid txId2 uuid", "error", err, "txId2", tx2)
 	}
 
+	var hcsTxIDStr string
+	if hcsTxId != nil {
+		hcsTxIDStr = *hcsTxId
+	}
+
 	q := sqlc.New(matchesRepository.db)
 	err = q.UpdateMatch(context.Background(), sqlc.UpdateMatchParams{
 		MarketID: marketUUID,
 		TxId1:    txId1,
 		TxId2:    txId2,
 		TxHash:   txHash,
-		HcsTxID:  sql.NullString{String: *hcsTxId, Valid: hcsTxId != nil},
+		HcsTxID:  sql.NullString{String: hcsTxIDStr, Valid: hcsTxId != nil},
 	})
 	if err != nil {
 		return lib.ErrorLog("UpdateMatch failed", "error", err, "marketId", marketId, "txId1", tx1, "txId2", tx2)

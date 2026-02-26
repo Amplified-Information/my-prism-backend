@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.24 (TeX Live 2022/Debian) (preloaded format=pdflatex 2026.2.21)  22 FEB 2026 20:49
+This is pdfTeX, Version 3.141592653-2.6-1.40.24 (TeX Live 2022/Debian) (preloaded format=pdflatex 2026.2.21)  23 FEB 2026 08:34
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -719,18 +719,15 @@ LaTeX Font Info:    Font shape `T1/lmtt/bx/n' in size <10> not available
 (Font)              Font shape `T1/lmtt/b/n' tried instead on input line 269.
  [7]
 [8] [9] [10] [11] [12] (./whitepaper.aux)
-
-LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.
-
 Package rerunfilecheck Info: File `whitepaper.out' has not changed.
 (rerunfilecheck)             Checksum: A40EE62B81AE45A718F260AA8A668197;2455.
  ) 
 Here is how much of TeX's memory you used:
- 16389 strings out of 477975
- 253931 string characters out of 5839281
+ 16387 strings out of 477975
+ 253912 string characters out of 5839281
  1872330 words of memory out of 5000000
- 36088 multiletter control sequences out of 15000+600000
- 563772 words of font info for 128 fonts, out of 8000000 for 9000
+ 36086 multiletter control sequences out of 15000+600000
+ 563783 words of font info for 128 fonts, out of 8000000 for 9000
  59 hyphenation exceptions out of 8191
  75i,12n,76p,1221b,1279s stack positions out of 10000i,1000n,20000p,200000b,200000s
 {/usr/share/texmf/fonts/enc/dvips/lm/lm-ec.enc}{/usr/share/texmf/fonts/enc/dv
@@ -741,7 +738,7 @@ f/fonts/type1/public/lm/lmr12.pfb></usr/share/texmf/fonts/type1/public/lm/lmr9.
 pfb></usr/share/texmf/fonts/type1/public/lm/lmri10.pfb></usr/share/texmf/fonts/
 type1/public/lm/lmsy10.pfb></usr/share/texmf/fonts/type1/public/lm/lmtk10.pfb><
 /usr/share/texmf/fonts/type1/public/lm/lmtt10.pfb>
-Output written on whitepaper.pdf (13 pages, 301700 bytes).
+Output written on whitepaper.pdf (13 pages, 301611 bytes).
 PDF statistics:
  284 PDF objects out of 1000 (max. 8388607)
  245 compressed objects within 3 object streams

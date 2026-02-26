@@ -87,7 +87,7 @@ func (positionsRepository *PositionsRepository) UpsertUserPositions(evmAddress s
 		EvmAddress: evmAddress,
 		NYes:       nYesTokens,
 		NNo:        nNoTokens,
-		Column5:    priceUsd,
+		PriceUsd:   priceUsd,
 	})
 	if err != nil {
 		return nil, lib.ErrorLog("UpsertUserPositions failed", "error", err, "evmAddress", evmAddress, "marketId", marketId)

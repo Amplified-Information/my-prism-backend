@@ -46,21 +46,21 @@ To release a new version of a service, follow the release procedure here: https:
 
 `dev`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1771793380) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1771793380) | [data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1771793380) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1772054320) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1772054320) | [data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1772054320) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1771793380) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1771793380) | ![data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1771793380) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1772054320) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1772054320) | ![data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1772054320) |
 
 `uat`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1771793380) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1771793380) | [data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1771793380) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1772054320) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1772054320) | [data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1772054320) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1771793380) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1771793380) | ![data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1771793380) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1772054320) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1772054320) | ![data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1772054320) |
 
 `prod`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1771793380) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1771793380) | [data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1771793380) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1772054320) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1772054320) | [data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1772054320) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1771793380) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1771793380) | ![data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1771793380) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1772054320) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1772054320) | ![data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1772054320) |
 
 *Note: see .git/hooks/pre-commit to see how to update the cache-busting nonce*
 
