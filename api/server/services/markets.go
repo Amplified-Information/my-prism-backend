@@ -214,22 +214,30 @@ func (ms *MarketsService) mapMarketToMarketResponse(market *sqlc.Market) (*pb_ap
 		imageUrl = ""
 	}
 
+	var outcome *bool
+	if market.Outcome.Valid {
+		outcome = &market.Outcome.Bool
+	}
+
 	priceUsd, err := ms.priceService.GetLatestPriceByMarket(market.MarketID.String())
 	if err != nil {
 		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get latest price for market %s: %v", market.MarketID.String(), err)
 	}
 
 	marketResponse := &pb_api.MarketResponse{
-		MarketId:    market.MarketID.String(),
-		Net:         market.Net,
-		Statement:   market.Statement,
-		IsPaused:    market.IsPaused,
-		IsSuspended: market.IsSuspended,
-		CreatedAt:   createdAt,
-		ResolvedAt:  resolvedAt,
-		ImageUrl:    imageUrl,
-		PriceUsd:    priceUsd,
-		Description: market.Description,
+		MarketId:        market.MarketID.String(),
+		Net:             market.Net,
+		Statement:       market.Statement,
+		IsPaused:        market.IsPaused,
+		IsSuspended:     market.IsSuspended,
+		CreatedAt:       createdAt,
+		ResolvedAt:      resolvedAt,
+		ImageUrl:        imageUrl,
+		PriceUsd:        priceUsd,
+		Description:     market.Description,
+		ClosesAt:        market.ClosesAt.String(),
+		Outcome:         outcome,
+		SmartContractId: market.SmartContractID,
 	}
 	return marketResponse, nil
 }

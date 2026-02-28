@@ -141,3 +141,7 @@ bug fix - issue with cost basis calculation
 
 0.3.27
 bug fix - another issue with cost basis calculation
+
+0.3.28
+add resolution date, outcome, smart contract id to market response object
+

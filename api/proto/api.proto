@@ -167,8 +167,10 @@ message MarketResponse {
   string image_url = 8          [json_name = "imageUrl"];
   float price_usd = 9           [json_name = "priceUsd"];
   // string smart_contract_id = 9  [json_name = "smartContractId"]; // not needed - smart_contract_id is a column in the markets table
-  string description = 10        [json_name = "description"];
+  string description = 10       [json_name = "description"];
   string closes_at = 11         [json_name = "closesAt"];
+  optional bool outcome = 12    [json_name = "outcome"];
+  string smart_contract_id = 13 [json_name = "smartContractId"];
 }
 
 message CreateMarketResponse {
