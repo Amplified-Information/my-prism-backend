@@ -159,3 +159,6 @@ S3 image upload OK - v2 market factory
 
 0.4.0
 Support for network selection in admin web interface
+
+0.4.1
+auth and authz changes. augmented markets updates

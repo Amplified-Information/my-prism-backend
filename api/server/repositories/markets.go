@@ -98,12 +98,21 @@ func (marketsRepository *MarketsRepository) GetMarkets(limit int32, offset int32
 		return nil, lib.ErrorLog("GetMarkets failed", "error", err, "limit", limit, "offset", offset)
 	}
 
-	// debug: fetched markets from database
 	marketAugs := make([]MarketAug, len(markets))
 	for i, market := range markets {
+
+		categoryIds, err := q.GetCategoriesForMarket(context.Background(), market.MarketID)
+		if err != nil {
+			return nil, lib.ErrorLog("GetCategoriesForMarket failed", "error", err, "marketId", market.MarketID)
+		}
+		categoryIds32 := make([]int32, len(categoryIds))
+		for i, category := range categoryIds {
+			categoryIds32[i] = int32(category.ID)
+		}
+
 		marketAugs[i] = MarketAug{
 			Market:      market,
-			CategoryIds: []int32{}, // TODO - Initialize with an empty slice or fetch actual category IDs if needed
+			CategoryIds: categoryIds32,
 		}
 	}
 	return marketAugs, nil
@@ -225,9 +234,18 @@ func (marketsRepository *MarketsRepository) GetAllUnresolvedMarkets() ([]MarketA
 
 	var marketAugs []MarketAug
 	for _, market := range markets {
+		categoryIds, err := q.GetCategoriesForMarket(context.Background(), market.MarketID)
+		if err != nil {
+			return nil, lib.ErrorLog("GetCategoriesForMarket failed", "error", err, "marketId", market.MarketID)
+		}
+		categoryIds32 := make([]int32, len(categoryIds))
+		for i, category := range categoryIds {
+			categoryIds32[i] = int32(category.ID)
+		}
+
 		marketAugs = append(marketAugs, MarketAug{
 			Market:      market,
-			CategoryIds: []int32{}, // TODO - fetch actual category IDs here
+			CategoryIds: categoryIds32,
 		})
 	}
 
@@ -250,9 +268,18 @@ func (marketsRepository *MarketsRepository) ToggleMarketPause(marketId string) (
 		return nil, lib.ErrorLog("ToggleMarketPause failed", "error", err, "marketId", marketId)
 	}
 
+	categoryIds, err := q.GetCategoriesForMarket(context.Background(), marketUUID)
+	if err != nil {
+		return nil, lib.ErrorLog("GetCategoriesForMarket failed", "error", err, "marketId", marketId)
+	}
+	categoryIds32 := make([]int32, len(categoryIds))
+	for i, category := range categoryIds {
+		categoryIds32[i] = int32(category.ID)
+	}
+
 	return &MarketAug{
 		Market:      market,
-		CategoryIds: []int32{}, // TODO - fetch actual category IDs here
+		CategoryIds: categoryIds32,
 	}, nil
 }
 
@@ -272,9 +299,18 @@ func (marketsRepository *MarketsRepository) ToggleMarketSuspend(marketId string)
 		return nil, lib.ErrorLog("ToggleMarketSuspend failed", "error", err, "marketId", marketId)
 	}
 
+	categoryIds, err := q.GetCategoriesForMarket(context.Background(), marketUUID)
+	if err != nil {
+		return nil, lib.ErrorLog("GetCategoriesForMarket failed", "error", err, "marketId", marketId)
+	}
+	categoryIds32 := make([]int32, len(categoryIds))
+	for i, category := range categoryIds {
+		categoryIds32[i] = int32(category.ID)
+	}
+
 	return &MarketAug{
 		Market:      market,
-		CategoryIds: []int32{}, // TODO - fetch actual category IDs here
+		CategoryIds: categoryIds32,
 	}, nil
 }
 

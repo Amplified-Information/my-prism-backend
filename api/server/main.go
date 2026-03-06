@@ -385,7 +385,7 @@ func main() {
 		"CRON_STR",
 		"JWT_EXPIRY_HOURS",
 		"S3_BUCKET_NAME",
-		"AWS_REGION",
+		"S3_AWS_REGION",
 		// secrets:
 		"DB_PWORD",
 		"PREVIEWNET_HEDERA_OPERATOR_KEY",

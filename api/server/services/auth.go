@@ -105,7 +105,10 @@ func (as *AuthService) VerifyChallenge(walletIdStr string, network string, sigBa
 
 func (as *AuthService) HasRole(ctx context.Context, role lib.RolesType) bool {
 	md, ok := metadata.FromIncomingContext(ctx)
-	if ok {
+	if !ok {
+		lib.Log(lib.LOG_ERROR, "HasRole: no metadata in context")
+		return false
+	} else {
 		authHeaders := md.Get("authorization")
 		if len(authHeaders) > 0 {
 			token := authHeaders[0] // "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."

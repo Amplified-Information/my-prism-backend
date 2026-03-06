@@ -4,7 +4,7 @@
 # docker compose -f docker-compose-monolith.yml -f docker-compose-monolith.dev.yml up -d
 services:
   api:
-    image: ghcr.io/prismmarketlabs/api:0.4.0
+    image: ghcr.io/prismmarketlabs/api:0.4.1
     # pull_policy: always
     restart: always
     ports:
@@ -64,7 +64,7 @@ services:
       CRON_STR: ${CRON_STR}
       JWT_EXPIRY_HOURS: ${JWT_EXPIRY_HOURS}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME}
-      AWS_REGION: ${AWS_REGION}
+      S3_AWS_REGION: ${S3_AWS_REGION}
       # secrets:
       DB_PWORD: ${DB_PWORD}
       PREVIEWNET_HEDERA_OPERATOR_KEY: ${PREVIEWNET_HEDERA_OPERATOR_KEY}
@@ -107,7 +107,7 @@ services:
   #     # secrets:
   #     HTPASSWD: ${HTPASSWD}
   web:
-    image: ghcr.io/prismmarketlabs/web:0.6.20
+    image: ghcr.io/prismmarketlabs/web:0.6.21
     # pull_policy: always
     restart: always
     ports:
@@ -124,7 +124,7 @@ services:
       HTPASSWD: ${HTPASSWD}
   
   web.admin:
-    image: ghcr.io/prismmarketlabs/web.admin:0.1.1
+    image: ghcr.io/prismmarketlabs/web.admin:0.1.2
     # pull_policy: always
     restart: always
     ports:
