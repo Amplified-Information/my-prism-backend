@@ -4,7 +4,7 @@
 # docker compose -f docker-compose-monolith.yml -f docker-compose-monolith.dev.yml up -d
 services:
   api:
-    image: ghcr.io/prismmarketlabs/api:0.3.28
+    image: ghcr.io/prismmarketlabs/api:0.4.0
     # pull_policy: always
     restart: always
     ports:
@@ -27,6 +27,7 @@ services:
       TESTNET_USDC_ADDRESS: ${TESTNET_USDC_ADDRESS}
       MAINNET_USDC_ADDRESS: ${MAINNET_USDC_ADDRESS}
       AVAILABLE_NETWORKS: ${AVAILABLE_NETWORKS}
+      AVAILABLE_NETWORKS_ADMIN: ${AVAILABLE_NETWORKS_ADMIN}
       PREVIEWNET_SMART_CONTRACT_ID: ${PREVIEWNET_SMART_CONTRACT_ID}
       PREVIEWNET_HCS_TOPIC_ID: ${PREVIEWNET_HCS_TOPIC_ID}
       PREVIEWNET_HEDERA_OPERATOR_ID: ${PREVIEWNET_HEDERA_OPERATOR_ID}
@@ -63,6 +64,7 @@ services:
       CRON_STR: ${CRON_STR}
       JWT_EXPIRY_HOURS: ${JWT_EXPIRY_HOURS}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME}
+      AWS_REGION: ${AWS_REGION}
       # secrets:
       DB_PWORD: ${DB_PWORD}
       PREVIEWNET_HEDERA_OPERATOR_KEY: ${PREVIEWNET_HEDERA_OPERATOR_KEY}
@@ -105,7 +107,7 @@ services:
   #     # secrets:
   #     HTPASSWD: ${HTPASSWD}
   web:
-    image: ghcr.io/prismmarketlabs/web:0.6.16
+    image: ghcr.io/prismmarketlabs/web:0.6.20
     # pull_policy: always
     restart: always
     ports:
@@ -122,7 +124,7 @@ services:
       HTPASSWD: ${HTPASSWD}
   
   web.admin:
-    image: ghcr.io/prismmarketlabs/web.admin:0.0.4
+    image: ghcr.io/prismmarketlabs/web.admin:0.1.1
     # pull_policy: always
     restart: always
     ports:

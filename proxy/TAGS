@@ -66,3 +66,9 @@ web.lp service for landing page
 
 0.1.22
 added missing UAT landing page config
+
+0.1.23
+remove deprecated string regex config
+
+0.1.24
+add localhost:8090 to CORS

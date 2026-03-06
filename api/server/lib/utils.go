@@ -347,9 +347,18 @@ func SaveImageToS3(imageData []byte, fileName string, mimeType string) (string, 
 		return "", ErrorLog("S3_BUCKET_NAME environment variable is not set")
 	}
 
+	awsRegion := os.Getenv("AWS_REGION")
+	if awsRegion == "" {
+		return "", ErrorLog("AWS_REGION environment variable is not set or empty")
+	}
+	// very basic DNS name validation:
+	if strings.ContainsAny(awsRegion, " /\\@:") || len(awsRegion) < 5 {
+		return "", ErrorLog("AWS_REGION environment variable is not a valid region string", "value", awsRegion)
+	}
+
 	// OK now we can save the image to S3 and return the URL
 	// Load AWS config (N.B. uses IAM role if running on EC2/ECS)
-	cfg, err := config.LoadDefaultConfig(context.TODO())
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(awsRegion))
 	if err != nil {
 		return "", ErrorLog("unable to load AWS config", "error", err)
 	}
@@ -361,13 +370,15 @@ func SaveImageToS3(imageData []byte, fileName string, mimeType string) (string, 
 		Key:         aws.String(fileName),
 		Body:        bytes.NewReader(imageData),
 		ContentType: aws.String(mimeType),
-		ACL:         "public-read", // Optional: make public if you want public access
+		// ACL:         "public-read", // Optional: make public if you want public access
 	})
 	if err != nil {
 		return "", ErrorLog("failed to upload to S3", "error", err, "bucket", s3BucketName, "fileName", fileName)
 	}
 
-	return fmt.Sprintf("https://%s.s3.amazonaws.com/%s", s3BucketName, fileName), nil
+	Log(LOG_INFO, "New S3 object uploaded: ", "bucket", s3BucketName, "fileName", fileName)
+
+	return fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", s3BucketName, awsRegion, fileName), nil
 }
 
 func ParseDuration(period string) time.Duration {

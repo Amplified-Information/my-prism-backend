@@ -81,6 +81,11 @@ func (s *server) GetMarkets(ctx context.Context, req *pb_api.LimitOffsetRequest)
 	return result, err
 }
 
+// func (s *server) GetCategories(ctx context.Context, req *pb_api.Empty) (*pb_api.CategoriesResponse, error) {
+// 	result, err := s.marketsService.GetCategories()
+// 	return result, err
+// }
+
 func (s *server) CreateMarket(ctx context.Context, req *pb_api.CreateMarketRequest) (*pb_api.CreateMarketResponse, error) {
 	result, err := s.marketsService.CreateMarket(req)
 	return result, err
@@ -343,6 +348,7 @@ func main() {
 		"TESTNET_USDC_ADDRESS",
 		"MAINNET_USDC_ADDRESS",
 		"AVAILABLE_NETWORKS",
+		"AVAILABLE_NETWORKS_ADMIN",
 		"PREVIEWNET_SMART_CONTRACT_ID",
 		"PREVIEWNET_HCS_TOPIC_ID",
 		"PREVIEWNET_HEDERA_OPERATOR_ID",
@@ -379,6 +385,7 @@ func main() {
 		"CRON_STR",
 		"JWT_EXPIRY_HOURS",
 		"S3_BUCKET_NAME",
+		"AWS_REGION",
 		// secrets:
 		"DB_PWORD",
 		"PREVIEWNET_HEDERA_OPERATOR_KEY",
@@ -567,7 +574,10 @@ func main() {
 	lib.Log(lib.LOG_INFO, "Smart contract ID (testnet): %s", os.Getenv("TESTNET_SMART_CONTRACT_ID"))
 	lib.Log(lib.LOG_INFO, "Smart contract ID (mainnet): %s", os.Getenv("MAINNET_SMART_CONTRACT_ID"))
 
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(
+		// interceptors:
+		grpc.UnaryInterceptor(lib.ValidationInterceptor()),
+	)
 	sharedServer := &server{
 		commentsRepository:          commentsRepository,
 		dbRepository:                dbRepository,

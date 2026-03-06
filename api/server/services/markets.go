@@ -2,7 +2,6 @@ package services
 
 import (
 	pb_api "api/gen"
-	sqlc "api/gen/sqlc"
 	"api/server/lib"
 	repositories "api/server/repositories"
 	"fmt"
@@ -37,11 +36,51 @@ func (ms *MarketsService) GetMarketById(marketId string, isAdmin bool) (*pb_api.
 		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get market by id: %v", err)
 	}
 
-	response, err := ms.mapMarketToMarketResponse(market)
-	if err != nil {
-		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to map market to market response: %v", err)
+	var createdAt string
+	var resolvedAt string
+	if !market.CreatedAt.Valid {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "invalid market: createdAt is null")
 	}
-	return response, nil
+	if !market.ResolvedAt.Valid {
+		resolvedAt = "" // market may not yet be resolved
+	}
+	createdAt = market.CreatedAt.Time.Format("2006-01-02T15:04:05Z")
+	resolvedAt = market.ResolvedAt.Time.Format("2006-01-02T15:04:05Z")
+
+	var imageUrl string
+	if market.ImageUrl.Valid {
+		imageUrl = market.ImageUrl.String
+	} else {
+		imageUrl = ""
+	}
+
+	var outcome *bool
+	if market.Outcome.Valid {
+		outcome = &market.Outcome.Bool
+	}
+
+	priceUsd, err := ms.priceService.GetLatestPriceByMarket(market.MarketID.String())
+	if err != nil {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get latest price for market %s: %v", market.MarketID.String(), err)
+	}
+
+	marketResponse := &pb_api.MarketResponse{
+		MarketId:        market.MarketID.String(),
+		Net:             market.Net,
+		Statement:       market.Statement,
+		IsPaused:        market.IsPaused,
+		IsSuspended:     market.IsSuspended,
+		CreatedAt:       createdAt,
+		ResolvedAt:      resolvedAt,
+		ImageUrl:        imageUrl,
+		PriceUsd:        priceUsd,
+		Description:     market.Description,
+		ClosesAt:        market.ClosesAt.String(),
+		Outcome:         outcome,
+		SmartContractId: market.SmartContractID,
+		CategoryIds:     market.CategoryIds,
+	}
+	return marketResponse, nil
 }
 
 func (ms *MarketsService) GetMarkets(limit int32, offset int32, isAdmin bool) (*pb_api.MarketsResponse, error) {
@@ -62,10 +101,56 @@ func (ms *MarketsService) GetMarkets(limit int32, offset int32, isAdmin bool) (*
 
 	var marketResponses []*pb_api.MarketResponse
 	for _, market := range markets {
-		marketResponse, err := ms.mapMarketToMarketResponse(&market)
-		if err != nil {
-			return nil, lib.LogAndError(lib.LOG_ERROR, "failed to map market to market response: %v", err)
+		var createdAt string
+		var resolvedAt string
+		if !market.CreatedAt.Valid {
+			return nil, lib.LogAndError(lib.LOG_ERROR, "invalid market: createdAt is null")
 		}
+		if !market.ResolvedAt.Valid {
+			resolvedAt = "" // market may not yet be resolved
+		}
+		createdAt = market.CreatedAt.Time.Format("2006-01-02T15:04:05Z")
+		resolvedAt = market.ResolvedAt.Time.Format("2006-01-02T15:04:05Z")
+
+		var imageUrl string
+		if market.ImageUrl.Valid {
+			imageUrl = market.ImageUrl.String
+		} else {
+			imageUrl = ""
+		}
+
+		var outcome *bool
+		if market.Outcome.Valid {
+			outcome = &market.Outcome.Bool
+		}
+
+		priceUsd, err := ms.priceService.GetLatestPriceByMarket(market.MarketID.String())
+		if err != nil {
+			return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get latest price for market %s: %v", market.MarketID.String(), err)
+		}
+
+		// categoryIds, ok := market.Categories.([]int32)
+		// if !ok {
+		// 	categoryIds = []int32{}
+		// }
+
+		marketResponse := &pb_api.MarketResponse{
+			MarketId:        market.MarketID.String(),
+			Net:             market.Net,
+			Statement:       market.Statement,
+			IsPaused:        market.IsPaused,
+			IsSuspended:     market.IsSuspended,
+			CreatedAt:       createdAt,
+			ResolvedAt:      resolvedAt,
+			ImageUrl:        imageUrl,
+			PriceUsd:        priceUsd,
+			Description:     market.Description,
+			ClosesAt:        market.ClosesAt.String(),
+			Outcome:         outcome,
+			SmartContractId: market.SmartContractID,
+			CategoryIds:     market.CategoryIds,
+		}
+
 		marketResponses = append(marketResponses, marketResponse)
 	}
 
@@ -74,6 +159,26 @@ func (ms *MarketsService) GetMarkets(limit int32, offset int32, isAdmin bool) (*
 	}
 	return response, nil
 }
+
+// func (ms *MarketsService) GetCategories() (*pb_api.CategoriesResponse, error) {
+// 	categories, err := ms.marketsRepository.GetCategories()
+// 	if err != nil {
+// 		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get categories: %v", err)
+// 	}
+
+// 	var categoryResponses []*pb_api.Category
+// 	for _, category := range categories {
+// 		categoryResponses = append(categoryResponses, &pb_api.Category{
+// 			Id:   category.ID,
+// 			Name: category.Name,
+// 		})
+// 	}
+
+// 	response := &pb_api.CategoriesResponse{
+// 		Categories: categoryResponses,
+// 	}
+// 	return response, nil
+// }
 
 // TODO - idempotent?
 func (ms *MarketsService) CreateMarket(req *pb_api.CreateMarketRequest) (*pb_api.CreateMarketResponse, error) {
@@ -116,7 +221,9 @@ func (ms *MarketsService) CreateMarket(req *pb_api.CreateMarketRequest) (*pb_api
 	if err != nil {
 		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to parse smart contract ID from env for net=%s: %v", req.Net, err)
 	}
-	market, err := ms.marketsRepository.CreateMarket(req.MarketId, req.Net, req.ImageUrl, req.Statement, closesAt, req.Description, contractID.String())
+
+	categoryIds := []int32{} // v1 endpoint compatibility: empty array
+	market, err := ms.marketsRepository.CreateMarket(req.MarketId, req.Net, req.ImageUrl, req.Statement, closesAt, req.Description, contractID.String(), categoryIds)
 	if err != nil {
 		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to create a new market row (marketId=%s) on the db: %v", req.MarketId, err)
 	}
@@ -124,9 +231,49 @@ func (ms *MarketsService) CreateMarket(req *pb_api.CreateMarketRequest) (*pb_api
 	/////
 	// Output: map the result to MarketResponse
 	/////
-	marketResponse, err := ms.mapMarketToMarketResponse(market)
+	var createdAt string
+	var resolvedAt string
+	if !market.CreatedAt.Valid {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "invalid market: createdAt is null")
+	}
+	if !market.ResolvedAt.Valid {
+		resolvedAt = "" // market may not yet be resolved
+	}
+	createdAt = market.CreatedAt.Time.Format("2006-01-02T15:04:05Z")
+	resolvedAt = market.ResolvedAt.Time.Format("2006-01-02T15:04:05Z")
+
+	var imageUrl string
+	if market.ImageUrl.Valid {
+		imageUrl = market.ImageUrl.String
+	} else {
+		imageUrl = ""
+	}
+
+	var outcome *bool
+	if market.Outcome.Valid {
+		outcome = &market.Outcome.Bool
+	}
+
+	priceUsd, err := ms.priceService.GetLatestPriceByMarket(market.MarketID.String())
 	if err != nil {
-		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to map market to market response: %v", err)
+		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get latest price for market %s: %v", market.MarketID.String(), err)
+	}
+
+	marketResponse := &pb_api.MarketResponse{
+		MarketId:        market.MarketID.String(),
+		Net:             market.Net,
+		Statement:       market.Statement,
+		IsPaused:        market.IsPaused,
+		IsSuspended:     market.IsSuspended,
+		CreatedAt:       createdAt,
+		ResolvedAt:      resolvedAt,
+		ImageUrl:        imageUrl,
+		PriceUsd:        priceUsd,
+		Description:     market.Description,
+		ClosesAt:        market.ClosesAt.String(),
+		Outcome:         outcome,
+		SmartContractId: market.SmartContractID,
+		CategoryIds:     categoryIds,
 	}
 	return &pb_api.CreateMarketResponse{
 		MarketResponse:     marketResponse,
@@ -177,7 +324,7 @@ func (ms *MarketsService) CreateMarketv2(req *pb_api.CreateMarketv2Request) (*pb
 		// YES, use the current X_SMART_CONTRACT_ID loaded from env vars - we're creating a new market
 		os.Getenv(fmt.Sprintf("%s_SMART_CONTRACT_ID", strings.ToUpper(req.Net))),
 	)
-	market, err := ms.marketsRepository.CreateMarket(req.MarketId, req.Net, imgUrl, req.Statement, closesAt, req.Description, contractID.String())
+	market, err := ms.marketsRepository.CreateMarket(req.MarketId, req.Net, imgUrl, req.Statement, closesAt, req.Description, contractID.String(), req.CategoryIds)
 	if err != nil {
 		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to create a new market row (marketId=%s) on the db: %v", req.MarketId, err)
 	}
@@ -185,17 +332,6 @@ func (ms *MarketsService) CreateMarketv2(req *pb_api.CreateMarketv2Request) (*pb
 	/////
 	// Output: map the result to MarketResponse
 	/////
-	marketResponse, err := ms.mapMarketToMarketResponse(market)
-	if err != nil {
-		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to map market to market response: %v", err)
-	}
-	return &pb_api.CreateMarketResponse{
-		MarketResponse:     marketResponse,
-		RemainingAllowance: remainingAllowance,
-	}, nil
-}
-
-func (ms *MarketsService) mapMarketToMarketResponse(market *sqlc.Market) (*pb_api.MarketResponse, error) {
 	var createdAt string
 	var resolvedAt string
 	if !market.CreatedAt.Valid {
@@ -238,9 +374,62 @@ func (ms *MarketsService) mapMarketToMarketResponse(market *sqlc.Market) (*pb_ap
 		ClosesAt:        market.ClosesAt.String(),
 		Outcome:         outcome,
 		SmartContractId: market.SmartContractID,
+		CategoryIds:     req.CategoryIds, // use category IDs from the request, categoryIds not returned from CreateMarket
 	}
-	return marketResponse, nil
+
+	return &pb_api.CreateMarketResponse{
+		MarketResponse:     marketResponse,
+		RemainingAllowance: remainingAllowance,
+	}, nil
 }
+
+// func (ms *MarketsService) mapMarketToMarketResponse(market *sqlc.Market) (*pb_api.MarketResponse, error) {
+// 	var createdAt string
+// 	var resolvedAt string
+// 	if !market.CreatedAt.Valid {
+// 		return nil, lib.LogAndError(lib.LOG_ERROR, "invalid market: createdAt is null")
+// 	}
+// 	if !market.ResolvedAt.Valid {
+// 		resolvedAt = "" // market may not yet be resolved
+// 	}
+// 	createdAt = market.CreatedAt.Time.Format("2006-01-02T15:04:05Z")
+// 	resolvedAt = market.ResolvedAt.Time.Format("2006-01-02T15:04:05Z")
+
+// 	var imageUrl string
+// 	if market.ImageUrl.Valid {
+// 		imageUrl = market.ImageUrl.String
+// 	} else {
+// 		imageUrl = ""
+// 	}
+
+// 	var outcome *bool
+// 	if market.Outcome.Valid {
+// 		outcome = &market.Outcome.Bool
+// 	}
+
+// 	priceUsd, err := ms.priceService.GetLatestPriceByMarket(market.MarketID.String())
+// 	if err != nil {
+// 		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get latest price for market %s: %v", market.MarketID.String(), err)
+// 	}
+
+// 	marketResponse := &pb_api.MarketResponse{
+// 		MarketId:        market.MarketID.String(),
+// 		Net:             market.Net,
+// 		Statement:       market.Statement,
+// 		IsPaused:        market.IsPaused,
+// 		IsSuspended:     market.IsSuspended,
+// 		CreatedAt:       createdAt,
+// 		ResolvedAt:      resolvedAt,
+// 		ImageUrl:        imageUrl,
+// 		PriceUsd:        priceUsd,
+// 		Description:     market.Description,
+// 		ClosesAt:        market.ClosesAt.String(),
+// 		Outcome:         outcome,
+// 		SmartContractId: market.SmartContractID,
+// 		CategoryIds: 	   market.CategoryIds,
+// 	}
+// 	return marketResponse, nil
+// }
 
 func (ms *MarketsService) PriceHistory(req *pb_api.PriceHistoryRequest) (*pb_api.PriceHistoryResponse, error) {
 	// guards

@@ -425,3 +425,38 @@ resource "aws_route53_record" "alb_alias_previewnet" {
     evaluate_target_health = true
   }
 }
+
+# Add an alias record for **www.** subdomain
+resource "aws_route53_record" "alb_alias_www" {
+  zone_id = "Z07868573V3HLWHKP9WV6" # yes, this is fixed
+  name    = "www.${module.shared.domain_name}"
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.alb_$ENV.dns_name
+    zone_id                = aws_lb.alb_$ENV.zone_id
+    evaluate_target_health = true
+  }
+}
+
+# Add ALB listener rule to redirect www to apex domain
+resource "aws_lb_listener_rule" "redirect_www_to_apex" {
+  listener_arn = aws_lb_listener.alb_listener_443.arn
+  priority     = 10
+
+  action {
+    type = "redirect"
+    redirect {
+      host        = module.shared.domain_name
+      protocol    = "HTTPS"
+      port        = "443"
+      status_code = "HTTP_301"
+    }
+  }
+
+  condition {
+    host_header {
+      values = ["www.${module.shared.domain_name}"]
+    }
+  }
+}

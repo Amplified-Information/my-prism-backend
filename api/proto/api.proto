@@ -15,6 +15,7 @@ service ApiServicePublic {
   rpc CreatePredictionIntent(PrismPredictionIntentRequest) returns (StdResponse);
   rpc GetMarketById(MarketIdRequest) returns (MarketResponse);
   rpc GetMarkets(LimitOffsetRequest) returns (MarketsResponse);
+  // rpc GetCategories(Empty) returns (CategoriesResponse);
   rpc CreateMarket(CreateMarketRequest) returns (CreateMarketResponse);
   rpc CreateMarketv2(CreateMarketv2Request) returns (CreateMarketResponse);
   rpc PriceHistory(PriceHistoryRequest) returns (PriceHistoryResponse);
@@ -58,7 +59,7 @@ message PrismPredictionIntentRequest {
   double qty = 8                [json_name = "qty",         (validate.rules).double = {gt: 0.0}];
   string sig = 9                [json_name = "sig",         (validate.rules).string = {pattern: "^[A-Za-z0-9+/]{20,100}={0,2}$"} /* base64-encoded signature (URL-safe base64 without padding, min 20 chars, max 100 chars) */];
   // passing extra key info - i) avoid lookups ii) handle situation where user has changed their key
-  string public_key = 10        [json_name = "publicKey", (validate.rules).string = {pattern: "^(04|03|02)[0-9a-fA-F]{32,256}$"} /* uncompressed (04...) or compressed (02... or 03...) public key (ed25519, ecdsa, etc.) in hex format */];
+  string public_key = 10        [json_name = "publicKey",   (validate.rules).string = {pattern: "^(04[0-9a-fA-F]{128}|0[23][0-9a-fA-F]{64}|[0-9a-fA-F]{64})$"} /* ECDSA (compressed/uncompressed) or Ed25519 public key in hex format, no 0x prefix */];
   string evm_address = 11       [json_name = "evmAddress",  (validate.rules).string = {pattern: "^[0-9a-fA-F]{40}$"} /* 20-byte (40 hex chars) EVM address (no 0x prefix) */];
   uint32 key_type = 12          [json_name = "keyType",     (validate.rules).uint32 = {in: [1, 2]} /* 1 = ed25519, 2 = ecdsa_secp256k1 */];
   // string smart_contract_id = 9  [json_name = "smartContractId"]; // not needed - smart_contract_id is a column in the markets table
@@ -84,18 +85,20 @@ message VerifyChallengeRequest {
 
 message MacroMetadataResponse {
   repeated string available_networks = 1      [json_name = "availableNetworks"];
-  map<string, string> smart_contract_ids = 2  [json_name = "smartContractIds"];
-  map<string, string> usdc_token_ids = 3      [json_name = "usdcTokenIds"];
-  uint32 usdc_decimals = 4                    [json_name = "usdcDecimals"];
-  uint64 market_creation_fee_scaled_usdc = 5  [json_name = "marketCreationFeeScaledUsdc"];
-  uint32 n_markets = 6                        [json_name = "nMarkets"];
-  map<string, string> token_ids = 7           [json_name = "tokenIds"];
-  double min_order_size_usd = 8               [json_name = "minOrderSizeUsd"];
-  double tv_pending_usd = 9                   [json_name = "tvPendingUsd"];
-  double tv_matched_usd = 10                  [json_name = "tvMatchedUsd"];
-  double tvl_usd = 11                         [json_name = "tvlUsd"];
-  map<string, double> total_volume_usd = 12   [json_name = "totalVolumeUsd"];
-  uint32 active_traders = 13                  [json_name = "activeTraders"];
+  repeated string available_networks_admin = 2[json_name = "availableNetworksAdmin"];
+  map<string, string> smart_contract_ids = 3  [json_name = "smartContractIds"];
+  map<string, string> usdc_token_ids = 4      [json_name = "usdcTokenIds"];
+  uint32 usdc_decimals = 5                    [json_name = "usdcDecimals"];
+  uint64 market_creation_fee_scaled_usdc = 6  [json_name = "marketCreationFeeScaledUsdc"];
+  uint32 n_markets = 7                        [json_name = "nMarkets"];
+  map<string, string> token_ids = 8           [json_name = "tokenIds"];
+  double min_order_size_usd = 9               [json_name = "minOrderSizeUsd"];
+  double tv_pending_usd = 10                  [json_name = "tvPendingUsd"];
+  double tv_matched_usd = 11                  [json_name = "tvMatchedUsd"];
+  double tvl_usd = 12                         [json_name = "tvlUsd"];
+  map<string, double> total_volume_usd = 13   [json_name = "totalVolumeUsd"];
+  uint32 active_traders = 14                  [json_name = "activeTraders"];
+  repeated Category categories = 15           [json_name = "categories"];
 }
 
 message NewsLetterRequest {
@@ -153,24 +156,25 @@ message MarketIdRequest {
 
 message LimitOffsetRequest {
   int32 limit = 1  [(validate.rules).int32 = {gt: 0}];
-  int32 offset = 2 [(validate.rules).int32 = {gt: 0}];
+  int32 offset = 2 [(validate.rules).int32 = {gte: 0}];
 }
 
 message MarketResponse {
-  string market_id = 1          [json_name = "marketId"];
-  string net = 2                [json_name = "net"];
-  string statement = 3          [json_name = "statement"];
-  bool is_paused = 4            [json_name = "isPaused"];
-  bool is_suspended = 5         [json_name = "isSuspended"];
-  string created_at = 6         [json_name = "createdAt"];
-  string resolved_at = 7        [json_name = "resolvedAt"];
-  string image_url = 8          [json_name = "imageUrl"];
-  float price_usd = 9           [json_name = "priceUsd"];
+  string market_id = 1             [json_name = "marketId"];
+  string net = 2                   [json_name = "net"];
+  string statement = 3             [json_name = "statement"];
+  bool is_paused = 4               [json_name = "isPaused"];
+  bool is_suspended = 5            [json_name = "isSuspended"];
+  string created_at = 6            [json_name = "createdAt"];
+  string resolved_at = 7           [json_name = "resolvedAt"];
+  string image_url = 8             [json_name = "imageUrl"];
+  float price_usd = 9              [json_name = "priceUsd"];
   // string smart_contract_id = 9  [json_name = "smartContractId"]; // not needed - smart_contract_id is a column in the markets table
-  string description = 10       [json_name = "description"];
-  string closes_at = 11         [json_name = "closesAt"];
-  optional bool outcome = 12    [json_name = "outcome"];
-  string smart_contract_id = 13 [json_name = "smartContractId"];
+  string description = 10          [json_name = "description"];
+  string closes_at = 11            [json_name = "closesAt"];
+  optional bool outcome = 12       [json_name = "outcome"];
+  string smart_contract_id = 13    [json_name = "smartContractId"];
+  repeated int32 category_ids = 14 [json_name = "categoryIds"];
 }
 
 message CreateMarketResponse {
@@ -181,6 +185,15 @@ message CreateMarketResponse {
 message MarketsResponse {
   repeated MarketResponse markets = 1;
 }
+
+message Category {
+  int32 id = 1 [json_name = "id"];
+  string name = 2 [json_name = "name"];
+}
+
+// message CategoriesResponse {
+//   repeated Category categories = 1 [json_name = "categories"];
+// }
 
 message CreateMarketRequest {
   string market_id = 1            [json_name = "marketId",    (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
@@ -198,10 +211,11 @@ message CreateMarketv2Request {
   string statement = 3            [json_name = "statement",   (validate.rules).string = {min_len: 5, max_len: 500}];
   optional string closes_at = 4   [json_name = "closesAt",    (validate.rules).string = {pattern: "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d\\.\\d{3}Z$"} /* UTC ISO 8601 (Zulu time only) */];
   string description = 5          [json_name = "description", (validate.rules).string = {max_len: 2000}];
- 
-  bytes img_chunk = 6             [json_name = "imgChunk",    (validate.rules).bytes = {max_len: 5242880}]; // max 5 MB per chunk
-  string img_file_name = 7        [json_name = "imgFileName", (validate.rules).string = {max_len: 255}]; // max 255 chars for file name
-  string img_mime_type = 8        [json_name = "imgMimeType", (validate.rules).string = {max_len: 255, in: ["image/jpeg", "image/png", "image/gif", "image/svg+xml"]}]; // restrict to common image MIME types
+  repeated int32 category_ids = 6 [json_name = "categoryIds", (validate.rules).repeated = {min_items: 1, max_items: 5}]; // a market must have at least 1 category and at most 5 categories
+  
+  bytes img_chunk = 7             [json_name = "imgChunk",    (validate.rules).bytes = {max_len: 5242880}]; // max 5 MB per chunk
+  string img_file_name = 8        [json_name = "imgFileName", (validate.rules).string = {max_len: 255}]; // max 255 chars for file name
+  string img_mime_type = 9        [json_name = "imgMimeType", (validate.rules).string = {max_len: 255, in: ["image/jpeg", "image/png", "image/gif", "image/svg+xml"]}]; // restrict to common image MIME types
 }
 
 message PriceHistoryRequest {

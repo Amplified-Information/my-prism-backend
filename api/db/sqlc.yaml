@@ -7,3 +7,9 @@ sql:
       go:
         package: "sqlc"
         out: "../gen/sqlc"
+        # # must explicitly give the type for the categories column since sqlc doesn't support array types by default
+        # overrides:
+        #   - column: "*.categories"
+        #     go_type:
+        #       import: "github.com/lib/pq"
+        #       type: "Int32Array"

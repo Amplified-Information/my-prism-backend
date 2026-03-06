@@ -138,8 +138,9 @@ static_resources:
                           prefix: "/"
                           headers:
                             - name: ":authority"
-                              safe_regex_match:
-                                regex: "^admin\\..*"
+                              string_match:
+                                safe_regex:
+                                  regex: "^admin\\..*"
                         route:
                           cluster: web_admin_service
                           timeout: 0s
@@ -151,8 +152,9 @@ static_resources:
                           prefix: "/"
                           headers:
                             - name: ":authority"
-                              safe_regex_match:
-                                regex: "^(testnet|previewnet|mainnet)\\..*"
+                              string_match:
+                                safe_regex:
+                                  regex: "^(testnet|previewnet|mainnet)\\..*"
                         route:
                           cluster: web_service
                           timeout: 0s
@@ -180,7 +182,8 @@ static_resources:
                           - exact: "https://prism.amplified.info"
                           - suffix: ".amplified.info"
                           - exact: "http://localhost:5173"
-                        allow_methods: "POST, OPTIONS"
+                          - exact: "http://localhost:8090"
+                        allow_methods: "GET, POST, OPTIONS"
                         allow_headers: "authorization,content-type,x-grpc-web"
                         max_age: "1728000s"
                         expose_headers: "authorization,grpc-status,grpc-message,grpc-status-details-bin"

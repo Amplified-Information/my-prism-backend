@@ -145,3 +145,17 @@ bug fix - another issue with cost basis calculation
 0.3.28
 add resolution date, outcome, smart contract id to market response object
 
+0.3.29
+update regex to support ed25519 keys. added interceptor to log validation failures
+
+0.3.30
+fix protobuf - offset should be gte:0 and not gt:0
+
+0.3.31
+Add support for categoryIds on markets endpoints
+
+0.3.32
+S3 image upload OK - v2 market factory
+
+0.4.0
+Support for network selection in admin web interface

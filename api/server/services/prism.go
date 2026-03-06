@@ -47,6 +47,9 @@ func (p *Prism) MacroMetadata() (*pb_api.MacroMetadataResponse, error) {
 	networksEnv := os.Getenv("AVAILABLE_NETWORKS")
 	networks := strings.Split(networksEnv, ",")
 
+	networksAdminEnv := os.Getenv("AVAILABLE_NETWORKS_ADMIN")
+	networksAdmin := strings.Split(networksAdminEnv, ",")
+
 	smartContractIdsMap := make(map[string]string)
 	for _, net := range networks { // loop through networks and get the smart contract IDs from env vars
 		netLower := strings.ToLower(strings.TrimSpace(net))
@@ -126,8 +129,21 @@ func (p *Prism) MacroMetadata() (*pb_api.MacroMetadataResponse, error) {
 		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get GetTotalValueMatchedUsdOpenMarkets: %v", err)
 	}
 
+	categories, err := p.marketsRepository.GetCategories()
+	if err != nil {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get categories: %v", err)
+	}
+	categoriesMapped := make([]*pb_api.Category, len(categories))
+	for i, category := range categories {
+		categoriesMapped[i] = &pb_api.Category{
+			Id:   category.ID,
+			Name: category.Name,
+		}
+	}
+
 	response := &pb_api.MacroMetadataResponse{
 		AvailableNetworks:           networks,
+		AvailableNetworksAdmin:      networksAdmin,
 		SmartContractIds:            smartContractIdsMap,
 		UsdcTokenIds:                usdcTokenIdsMap,
 		UsdcDecimals:                6,
@@ -140,6 +156,7 @@ func (p *Prism) MacroMetadata() (*pb_api.MacroMetadataResponse, error) {
 		TvlUsd:                      tvMatchedUsdOpenMarkets, // + tvPendingUsd, // TVL = matched + pending
 		TotalVolumeUsd:              totalVolumeUsd,
 		ActiveTraders:               nActiveTraders,
+		Categories:                  categoriesMapped,
 	}
 
 	return response, nil
