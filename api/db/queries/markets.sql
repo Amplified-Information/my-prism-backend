@@ -93,8 +93,6 @@ WHERE market_id = $1
 RETURNING *;
 
 
-
-
 -- DELETE
 
 

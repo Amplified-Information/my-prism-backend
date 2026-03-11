@@ -24,6 +24,7 @@ type server struct {
 	pb_api.UnimplementedApiServicePublicServer
 	pb_api.UnimplementedApiAuthServer
 
+	categoriesRepository        repositories.CategoriesRepository
 	commentsRepository          repositories.CommentsRepository
 	dbRepository                repositories.DbRepository
 	marketsRepository           repositories.MarketsRepository
@@ -34,6 +35,7 @@ type server struct {
 	userRoleRepository          repositories.UserRoleRepository
 
 	authService              services.AuthService
+	categoriesService        services.CategoriesService
 	commentsService          services.CommentsService
 	cronService              services.CronService
 	hederaService            services.HederaService
@@ -87,11 +89,19 @@ func (s *server) GetMarkets(ctx context.Context, req *pb_api.LimitOffsetRequest)
 // }
 
 func (s *server) CreateMarket(ctx context.Context, req *pb_api.CreateMarketRequest) (*pb_api.CreateMarketResponse, error) {
+	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
+		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
+	}
+
 	result, err := s.marketsService.CreateMarket(req)
 	return result, err
 }
 
 func (s *server) CreateMarketv2(ctx context.Context, req *pb_api.CreateMarketv2Request) (*pb_api.CreateMarketResponse, error) {
+	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
+		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
+	}
+
 	result, err := s.marketsService.CreateMarketv2(req)
 	return result, err
 }
@@ -289,6 +299,21 @@ func (s *server) ToggleMarketSuspend(ctx context.Context, req *pb_api.MarketIdRe
 	}, nil
 }
 
+func (s *server) UpdateMarket(ctx context.Context, req *pb_api.UpdateMarketRequest) (*pb_api.StdResponse, error) {
+	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
+		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
+	}
+
+	result, err := s.categoriesService.SetCategoriesForMarket(req.MarketId, req.CategoryIds)
+	if err != nil {
+		return nil, err
+	}
+	return &pb_api.StdResponse{
+		ErrorCode: 0,
+		Message:   fmt.Sprintf("market categories updated: %v", result),
+	}, nil
+}
+
 func (s *server) DeleteComment(ctx context.Context, req *pb_api.CommentIdRequest) (*pb_api.StdResponse, error) {
 	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
 		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
@@ -325,6 +350,72 @@ func (s *server) ResolveMarket(ctx context.Context, req *pb_api.ResolveMarketReq
 	return &pb_api.StdResponse{
 		ErrorCode: 0,
 		Message:   "Market resolved successfully",
+	}, nil
+}
+
+func (s *server) CreateCategory(ctx context.Context, req *pb_api.CategoryRequest) (*pb_api.CategoryResponse, error) {
+	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
+		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
+	}
+
+	if !(req.CategoryId == nil) || (*req.CategoryId == 0) {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "category ID must not be set for CreateCategory")
+	}
+
+	// OK
+
+	result, err := s.categoriesService.CreateCategory(req.Name, req.IsActive, req.Description)
+	if err != nil {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "create category failed", err)
+	}
+
+	return &pb_api.CategoryResponse{
+		Id:          result.ID,
+		Name:        result.Name,
+		IsActive:    result.IsActive.Bool,
+		Description: result.Description.String,
+	}, nil
+}
+
+func (s *server) UpdateCategory(ctx context.Context, req *pb_api.CategoryRequest) (*pb_api.CategoryResponse, error) {
+	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
+		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
+	}
+
+	if (req.CategoryId == nil) || (*req.CategoryId == 0) {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "category ID must be set for UpdateCategory")
+	}
+
+	// OK
+
+	result, err := s.categoriesService.UpdateCategory(*req.CategoryId, req.Name, req.IsActive, req.Description)
+	if err != nil {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "update category failed", err)
+	}
+
+	return &pb_api.CategoryResponse{
+		Id:          result.ID,
+		Name:        result.Name,
+		IsActive:    result.IsActive.Bool,
+		Description: result.Description.String,
+	}, nil
+}
+
+func (s *server) DeleteCategory(ctx context.Context, req *pb_api.CategoryIdRequest) (*pb_api.StdResponse, error) {
+	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
+		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
+	}
+
+	// OK
+
+	err := s.categoriesService.DeleteCategory(req.CategoryId)
+	if err != nil {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "delete category failed", err)
+	}
+
+	return &pb_api.StdResponse{
+		ErrorCode: 0,
+		Message:   "Category deleted successfully",
 	}, nil
 }
 
@@ -414,7 +505,14 @@ func main() {
 	/////
 	// data layer
 	/////
-	// initialize database
+
+	categoriesRepository := repositories.CategoriesRepository{}
+	err = categoriesRepository.InitDb()
+	if err != nil {
+		fatal("Failed to initialize database: %v", err)
+	}
+	defer categoriesRepository.CloseDb()
+
 	commentsRepository := repositories.CommentsRepository{}
 	err = commentsRepository.InitDb()
 	if err != nil {
@@ -512,6 +610,12 @@ func main() {
 		fatal("Failed to initialize Matches service: %v", err)
 	}
 
+	categoriesService := services.CategoriesService{}
+	err = categoriesService.Init(&categoriesRepository)
+	if err != nil {
+		fatal("Failed to initialize Categories service: %v", err)
+	}
+
 	// initialize Comments service
 	commentsService := services.CommentsService{}
 	err = commentsService.Init(&commentsRepository)
@@ -580,6 +684,7 @@ func main() {
 	)
 	sharedServer := &server{
 		commentsRepository:          commentsRepository,
+		categoriesRepository:        categoriesRepository,
 		dbRepository:                dbRepository,
 		marketsRepository:           marketsRepository,
 		matchesRepository:           matchesRepository,
@@ -589,6 +694,7 @@ func main() {
 		userRoleRepository:          userRoleRepository,
 
 		authService:              authService,
+		categoriesService:        categoriesService,
 		commentsService:          commentsService,
 		cronService:              cronService,
 		hederaService:            hederaService,

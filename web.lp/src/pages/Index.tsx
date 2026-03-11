@@ -6,7 +6,7 @@ import { z } from "zod";
 import { Shield, Eye, Users } from "lucide-react";
 import logo from "@/assets/logo.png";
 import { apiClient } from "../../grpcClient"
-import Countdown from "@/components/Countdown"
+// import Countdown from "@/components/Countdown"
 
 const emailSchema = z.string().trim().email("Please enter a valid email").max(255, "Email is too long");
 
@@ -138,9 +138,9 @@ const Index = () => {
       </header>
 
       {/* Countdown below header */}
-      <div className="relative z-20 flex justify-center px-4 py-4">
+      {/* <div className="relative z-20 flex justify-center px-4 py-4">
         <Countdown />
-      </div>
+      </div> */}
 
       <main className="relative z-10 flex flex-col items-center px-4 py-4">
         <div className="max-w-4xl mx-auto text-center space-y-8">

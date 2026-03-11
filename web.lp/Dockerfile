@@ -1,9 +1,9 @@
 # BUILD stage
 # cd prism # yes, need access to protos in other dirs
 # export VERSION=0.1.0
-# docker build -f ./web.lp/Dockerfile -t ghcr.io/prismmarketlabs/web:$VERSION .
-# docker push ghcr.io/prismmarketlabs/web:$VERSION
-# docker run -p 5173:80 ghcr.io/prismmarketlabs/web:$VERSION
+# docker build -f ./web.lp/Dockerfile -t ghcr.io/prismmarketlabs/web.lp:$VERSION .
+# docker push ghcr.io/prismmarketlabs/web.lp:$VERSION
+# docker run -p 5173:80 ghcr.io/prismmarketlabs/web.lp:$VERSION
 # http://localhost:5173
 
 # BUILD stage

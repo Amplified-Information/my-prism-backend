@@ -14,10 +14,7 @@ service ApiServicePublic {
   rpc NewsLetter(NewsLetterRequest) returns (StdResponse);
   rpc CreatePredictionIntent(PrismPredictionIntentRequest) returns (StdResponse);
   rpc GetMarketById(MarketIdRequest) returns (MarketResponse);
-  rpc GetMarkets(LimitOffsetRequest) returns (MarketsResponse);
-  // rpc GetCategories(Empty) returns (CategoriesResponse);
-  rpc CreateMarket(CreateMarketRequest) returns (CreateMarketResponse);
-  rpc CreateMarketv2(CreateMarketv2Request) returns (CreateMarketResponse);
+  rpc GetMarkets(LimitOffsetRequest) returns (MarketsResponse);  
   rpc PriceHistory(PriceHistoryRequest) returns (PriceHistoryResponse);
   rpc MacroMetadata(Empty) returns (MacroMetadataResponse); // general market data - volume, nMarkets, TVL, liquidity, etc.
   rpc CreateComment(CreateCommentRequest) returns (CreateCommentResponse);
@@ -26,6 +23,9 @@ service ApiServicePublic {
   rpc CancelPredictionIntent(CancelOrderRequest) returns (StdResponse);
 
   // authenticated endpoints
+  rpc CreateMarket(CreateMarketRequest) returns (CreateMarketResponse);
+  rpc CreateMarketv2(CreateMarketv2Request) returns (CreateMarketResponse);
+  rpc UpdateMarket(UpdateMarketRequest) returns (StdResponse);
   rpc GetAllMatches(LimitOffsetRequest) returns (MatchesResponse);
   rpc GetAllPositions(LimitOffsetRequest) returns (PositionsResponse);
   rpc GetAllPredictionIntents(LimitOffsetRequest) returns (PredictionIntentsResponse);
@@ -33,6 +33,9 @@ service ApiServicePublic {
   rpc ToggleMarketSuspend(MarketIdRequest) returns (StdResponse);
   rpc DeleteComment(CommentIdRequest) returns (StdResponse);
   rpc ResolveMarket(ResolveMarketRequest) returns (StdResponse);
+  rpc CreateCategory(CategoryRequest) returns (CategoryResponse);
+  rpc UpdateCategory(CategoryRequest) returns (CategoryResponse);
+  rpc DeleteCategory(CategoryIdRequest) returns (StdResponse);
 }
 
 service ApiServiceInternal {
@@ -218,6 +221,11 @@ message CreateMarketv2Request {
   string img_mime_type = 9        [json_name = "imgMimeType", (validate.rules).string = {max_len: 255, in: ["image/jpeg", "image/png", "image/gif", "image/svg+xml"]}]; // restrict to common image MIME types
 }
 
+message UpdateMarketRequest {
+  string market_id = 1            [json_name = "marketId",    (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
+  repeated int32 category_ids = 6 [json_name = "categoryIds", (validate.rules).repeated = {min_items: 1, max_items: 5}]; // a market must have at least 1 category and at most 5 categories
+}
+
 message PriceHistoryRequest {
   string market_id = 1    [json_name = "marketId", (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
   string net = 2          [json_name = "net",      (validate.rules).string = {in: ["mainnet", "testnet", "previewnet"]} /* Hedera network */];
@@ -310,4 +318,22 @@ message PredictionIntentsResponse {
 message ResolveMarketRequest {
   string market_id = 1      [json_name = "marketId",    (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
   bool outcome = 2          [json_name = "outcome"];
+}
+
+message CategoryRequest {
+  optional int32 category_id = 1  [json_name = "categoryId"];
+  string name = 2                 [json_name = "name", (validate.rules).string = {min_len: 1, max_len: 100}];
+  bool is_active = 3              [json_name = "isActive"];
+  string description = 4          [json_name = "description", (validate.rules).string = {max_len: 500}];
+}
+
+message CategoryIdRequest {
+  int32 category_id = 1    [json_name = "categoryId"];
+}
+
+message CategoryResponse {
+  int32 id = 1            [json_name = "id"];
+  string name = 2         [json_name = "name"];
+  bool is_active = 3      [json_name = "isActive"];
+  string description = 4  [json_name = "description"];
 }

@@ -162,3 +162,6 @@ Support for network selection in admin web interface
 
 0.4.1
 auth and authz changes. augmented markets updates
+
+0.4.2
+added update, create, delete endpoints for categories
