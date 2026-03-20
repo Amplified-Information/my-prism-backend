@@ -6,6 +6,15 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   exit 1
 fi
 
+
+# Detect if the specific AWS profile exists; if so, add it to AWS CLI commands along with the --region
+AWS_PROFILE="prism"
+AWS_OPTS=""
+if aws configure list-profiles 2>/dev/null | grep -q "^$AWS_PROFILE$"; then
+  AWS_OPTS="--profile $AWS_PROFILE --region us-east-1"
+fi
+
+
 # Valid environment options
 VALID_ENVS=("local" "dev" "uat" "prod" "local2")
 
@@ -36,6 +45,9 @@ echo "Loaded configuration from .config and .config.$ENV."
 echo ""
 # 2. load secrets
 echo "*** Loading secrets from .secrets file..."
+
+
+
 sed -i -e '$a\' "$SCRIPT_DIR/.secrets" # .secrets must end with a newline to ensure the last line is processed
 while IFS= read -r key; do # loop through each key in .secrets
   # Ignore lines that start with '#', ';', whitespace, or are empty
@@ -44,7 +56,7 @@ while IFS= read -r key; do # loop through each key in .secrets
   key="${key%%=*}" # extract the part before "="
   # get the value from AWS SSM
   echo "aws ssm get-parameter --name \"/$ENV/$key\" ..."
-  value="$(aws ssm get-parameter --name "/$ENV/$key" --with-decryption | jq '.Parameter.Value' -r)"
+  value="$(aws ssm get-parameter --name "/$ENV/$key" --with-decryption $AWS_OPTS | jq '.Parameter.Value' -r)"
   
   # Check if the value is empty
   if [ -z "$value" ]; then

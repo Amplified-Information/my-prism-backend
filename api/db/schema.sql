@@ -4,7 +4,7 @@
 
 
 -- Dumped from database version 18.1 (Debian 18.1-1.pgdg13+2)
--- Dumped by pg_dump version 18.2 (Debian 18.2-1.pgdg12+1)
+-- Dumped by pg_dump version 18.3 (Debian 18.3-1.pgdg12+1)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -1577,6 +1577,14 @@ CREATE TRIGGER update_markets_updated_at BEFORE UPDATE ON public.markets FOR EAC
 --
 
 CREATE TRIGGER update_order_requests_updated_at BEFORE UPDATE ON public.prediction_intents FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+
+--
+-- Name: market_categories fk_category; Type: FK CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.market_categories
+    ADD CONSTRAINT fk_category FOREIGN KEY (category_id) REFERENCES public.categories(id) ON DELETE CASCADE;
 
 
 --

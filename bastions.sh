@@ -4,4 +4,5 @@
 aws ec2 describe-instances \
   --filters "Name=instance-state-name,Values=running" \
   --query "Reservations[*].Instances[*].[Tags[?Key=='Name']|[0].Value,PublicDnsName]" \
+  --profile "prism" --region "us-east-1" \
   --output text | awk '$1 && $2'

@@ -34,19 +34,20 @@ type server struct {
 	priceRepository             repositories.PriceRepository
 	userRoleRepository          repositories.UserRoleRepository
 
-	authService              services.AuthService
-	categoriesService        services.CategoriesService
-	commentsService          services.CommentsService
-	cronService              services.CronService
-	hederaService            services.HederaService
-	marketsService           services.MarketsService
-	matchesService           services.MatchesService
-	natsService              services.NatsService
-	newsletterService        services.NewsletterService
-	positionsService         services.PositionsService
-	predictionIntentsService services.PredictionIntentsService
-	prismService             services.Prism
-	priceService             services.PriceService
+	authService                services.AuthService
+	categoriesService          services.CategoriesService
+	commentsService            services.CommentsService
+	cronKickOutUnfundedService services.CronKickOutUnfundedService
+	cronLOMService             services.CronLOMService
+	hederaService              services.HederaService
+	marketsService             services.MarketsService
+	matchesService             services.MatchesService
+	natsService                services.NatsService
+	newsletterService          services.NewsletterService
+	positionsService           services.PositionsService
+	predictionIntentsService   services.PredictionIntentsService
+	prismService               services.Prism
+	priceService               services.PriceService
 
 	// don't forget to register in RegisterApiServiceServer grpc call in main()
 }
@@ -358,7 +359,7 @@ func (s *server) CreateCategory(ctx context.Context, req *pb_api.CategoryRequest
 		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
 	}
 
-	if !(req.CategoryId == nil) || (*req.CategoryId == 0) {
+	if req.CategoryId != nil && *req.CategoryId != 0 {
 		return nil, lib.LogAndError(lib.LOG_ERROR, "category ID must not be set for CreateCategory")
 	}
 
@@ -473,7 +474,8 @@ func main() {
 		"TESTNET_TOKEN",
 		"MAINNET_TOKEN",
 		"MIN_ORDER_SIZE_USD",
-		"CRON_STR",
+		"CRON_STR_KICK_UNFUNDED",
+		"CRON_STR_LOM",
 		"JWT_EXPIRY_HOURS",
 		"S3_BUCKET_NAME",
 		"S3_AWS_REGION",
@@ -654,10 +656,16 @@ func main() {
 		fatal("Failed to initialize PredictionIntents service: %v", err)
 	}
 
-	cronService := services.CronService{}
-	err = cronService.Init(&marketsRepository, &predictionIntentsRepository, &hederaService, &predictionIntentsService)
+	cronKickOutUnfundedService := services.CronKickOutUnfundedService{}
+	err = cronKickOutUnfundedService.Init(&marketsRepository, &predictionIntentsRepository, &hederaService, &predictionIntentsService)
 	if err != nil {
-		fatal("Failed to initialize Cron service: %v", err)
+		fatal("Failed to initialize CronKickOutUnfunded service: %v", err)
+	}
+
+	cronLOMService := services.CronLOMService{}
+	err = cronLOMService.Init(&marketsRepository, &predictionIntentsRepository, &hederaService, &predictionIntentsService, &priceRepository)
+	if err != nil {
+		fatal("Failed to initialize CronLOM service: %v", err)
 	}
 
 	// initialize prism service
@@ -693,34 +701,41 @@ func main() {
 		priceRepository:             priceRepository,
 		userRoleRepository:          userRoleRepository,
 
-		authService:              authService,
-		categoriesService:        categoriesService,
-		commentsService:          commentsService,
-		cronService:              cronService,
-		hederaService:            hederaService,
-		marketsService:           marketsService,
-		matchesService:           matchesService,
-		natsService:              natsService,
-		newsletterService:        newsletterService,
-		positionsService:         positionsService,
-		predictionIntentsService: predictionIntentsService,
-		priceService:             priceService,
-		prismService:             prismService,
+		authService:                authService,
+		categoriesService:          categoriesService,
+		commentsService:            commentsService,
+		cronKickOutUnfundedService: cronKickOutUnfundedService,
+		cronLOMService:             cronLOMService,
+		hederaService:              hederaService,
+		marketsService:             marketsService,
+		matchesService:             matchesService,
+		natsService:                natsService,
+		newsletterService:          newsletterService,
+		positionsService:           positionsService,
+		predictionIntentsService:   predictionIntentsService,
+		priceService:               priceService,
+		prismService:               prismService,
 	}
 	// must pass the grpc server to bother internal and the public servers!
 	pb_api.RegisterApiServiceInternalServer(grpcServer, sharedServer)
 	pb_api.RegisterApiServicePublicServer(grpcServer, sharedServer)
 	pb_api.RegisterApiAuthServer(grpcServer, sharedServer)
 
-	// start a cron job
+	// start cron jobs:
 	c := cron.New(cron.WithSeconds())
-	_, err = c.AddFunc(os.Getenv("CRON_STR"), cronService.CronJob)
+
+	_, err = c.AddFunc(os.Getenv("CRON_STR_KICK_UNFUNDED"), cronKickOutUnfundedService.CronJob)
 	if err != nil {
 		fatal("Failed to schedule cron job: %v", err)
 	}
+
+	_, err = c.AddFunc(os.Getenv("CRON_STR_LOM"), cronLOMService.CronJob)
+	if err != nil {
+		fatal("Failed to schedule cron job: %v", err)
+	}
+
 	c.Start()
 	defer c.Stop()
-	// cronService.KickOutOrderIntentsNotBackedByFunds()
 
 	// Start a HTTP health check server on port 8889
 	go func() {

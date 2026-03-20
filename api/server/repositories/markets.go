@@ -109,6 +109,7 @@ func (marketsRepository *MarketsRepository) GetMarkets(limit int32, offset int32
 		for i, category := range categoryIds {
 			categoryIds32[i] = int32(category.ID)
 		}
+		lib.Info("GetMarkets: categoryIds for market", "marketId", market.MarketID, "categoryIds", categoryIds32)
 
 		marketAugs[i] = MarketAug{
 			Market:      market,

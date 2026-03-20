@@ -165,3 +165,12 @@ auth and authz changes. augmented markets updates
 
 0.4.2
 added update, create, delete endpoints for categories
+
+0.4.3
+null pointer dereference panic bug fix
+
+0.4.4
+Added a log line to view categoryIds for a market
+
+0.4.5
+LOM score initial work

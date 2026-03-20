@@ -49,6 +49,11 @@ SELECT COUNT(*) > 0 AS exists
 FROM prediction_intents
 WHERE tx_id = $1;
 
+-- name: GetTotalValueUsdForMarketId :one
+SELECT COALESCE(SUM(price_usd * qty), 0)::double precision AS total_value_usd
+FROM prediction_intents
+WHERE market_id = $1;
+
 
 
 

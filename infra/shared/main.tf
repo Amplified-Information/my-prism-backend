@@ -1098,11 +1098,18 @@ resource "aws_iam_policy" "combined_policy" {
       // EC2 box has ssm read access
       {
         Effect = "Allow",
-        Action = "ssm:GetParameter",
+        Action = [
+          "ssm:GetParameter"
+        ],
         Resource = [
           "arn:aws:ssm:us-east-1:063088900305:parameter/read_ghcr",
-          "arn:aws:ssm:us-east-1:063088900305:parameter/*"    # TODO reduce scope for /prod/*
+          "arn:aws:ssm:us-east-1:063088900305:parameter/*"
         ]
+      },
+      {
+        Effect = "Allow",
+        Action = "ssm:DescribeParameters",
+        Resource = "*"
       },
       // EC2 box has S3 READ access to "prismlabs-deployment"
       {

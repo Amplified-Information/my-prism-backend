@@ -12,55 +12,33 @@ import (
 	hiero "github.com/hiero-ledger/hiero-sdk-go/v2/sdk"
 )
 
-type CronService struct {
-	priceRepository             *repositories.PriceRepository
+type CronKickOutUnfundedService struct {
 	marketsRepository           *repositories.MarketsRepository
 	predictionIntentsRepository *repositories.PredictionIntentsRepository
 	hederaService               *HederaService
 	predictionIntentsService    *PredictionIntentsService
 }
 
-func (cs *CronService) Init(mr *repositories.MarketsRepository, pir *repositories.PredictionIntentsRepository, hs *HederaService, pis *PredictionIntentsService) error {
+func (cs *CronKickOutUnfundedService) Init(mr *repositories.MarketsRepository, pir *repositories.PredictionIntentsRepository, hs *HederaService, pis *PredictionIntentsService) error {
 	// inject deps
 	cs.marketsRepository = mr
 	cs.predictionIntentsRepository = pir
 	cs.hederaService = hs
 	cs.predictionIntentsService = pis
 
-	lib.Log(lib.LOG_INFO, "Service: Cron service initialized successfully")
+	lib.Log(lib.LOG_INFO, "Service: CronKickOutUnfunded service initialized successfully")
 	return nil
 }
 
-func (cs *CronService) CronJob() {
-	lib.Log(lib.LOG_INFO, "CronService: Running CronJob...")
+func (cs *CronKickOutUnfundedService) CronJob() {
+	lib.Log(lib.LOG_INFO, "CronKickOutUnfundedService: Running CronJob...")
 
 	cs.KickOutOrderIntentsNotBackedByFunds()
 
-	cs.CalcUserPoints()
-
-	lib.Log(lib.LOG_INFO, "CronService: CronJob completed.")
+	lib.Log(lib.LOG_INFO, "CronKickOutUnfundedService: CronJob completed.")
 }
 
-func (cs *CronService) CalcUserPoints() error {
-	lib.Log(lib.LOG_INFO, "CalcUserPoints...")
-
-	/*
-		| behaviour | points |
-		| --- | --- |
-		| user connected their wallet in the last 24 hours | 10 |
-		| user entered a limit order in any market within 10% of market price | 10 |
-		| user entered a limit order in any market within 5% of market price | 30 |
-		| user entered a limit order in any market within 2% of market price | 60 |
-		| user entered a limit order in any market within 1% of market price | 90 |
-		| user entered a market order in any market | 30 |
-		| a user order matched | 50 |
-		| | 0 points |
-	*/
-
-	return nil
-}
-
-func (cs *CronService) KickOutOrderIntentsNotBackedByFunds() {
+func (cs *CronKickOutUnfundedService) KickOutOrderIntentsNotBackedByFunds() {
 	lib.Log(lib.LOG_INFO, "KickOutOrderIntentsNotBackedByFunds: Starting process to kick out order intents not backed by funds...")
 
 	markets, err := cs.marketsRepository.GetAllUnresolvedMarkets()

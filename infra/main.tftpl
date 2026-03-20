@@ -15,6 +15,12 @@ module "shared" {
   ec2_type_data = "$EC2_TYPE_DATA"
 }
 
+// so it is always called using the "rex" AWS profile
+// ensure there's no default set in ~/.aws/config or ~/.aws/credentials
+provider "aws" {
+  profile = "prism"
+  region = module.shared.aws_region
+}
 
 resource "aws_instance" "bastion_$ENV" {
   ami           = module.shared.ami

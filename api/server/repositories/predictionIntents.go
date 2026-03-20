@@ -247,3 +247,22 @@ func (pir *PredictionIntentsRepository) GetAllPredictionIntents(limit int, offse
 
 	return predictionIntents, nil
 }
+
+func (pir *PredictionIntentsRepository) GetTotalValueUsdForMarketId(marketId string) (float64, error) {
+	if pir.db == nil {
+		return 0, lib.ErrorLog("database not initialized")
+	}
+
+	marketUUID, err := uuid.Parse(marketId)
+	if err != nil {
+		return 0, lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
+	}
+
+	q := sqlc.New(pir.db)
+	totalValueUsd, err := q.GetTotalValueUsdForMarketId(context.Background(), marketUUID)
+	if err != nil {
+		return 0, lib.ErrorLog("GetTotalValueUsdForMarketId failed", "error", err, "marketId", marketId)
+	}
+
+	return totalValueUsd, nil
+}
