@@ -123,16 +123,18 @@ echo $UUID7
 easyrpc c -a localhost:8888 -i ./api/proto -p api.proto -d '{"marketId":"","net":"testnet","statement":"some statement","description":"some description","img_chunk":"'$BASE64_STR'","img_file_name":"imgFn.png","img_mime_type":"image/png"}' api.ApiServicePublic.CreateMarketv2
 
 # get markets:
-
 easyrpc c -w --tls -a dev.prism.market:443 -d '{"limit":100,"offset":0}' -i ./proto -p api.proto api.ApiServicePublic.GetMarkets
 
 # get markets (locally):
-
 easyrpc c -a localhost:8888 -d '{"limit":100,"offset":0}' -i ./proto -p api.proto api.ApiServicePublic.GetMarkets
 
-# update a market's categories:
+# get a market:
+easyrpc c -a localhost:8888 -d '{"marketId":"019c7644-76f5-77f0-bfe4-f72f22131675"}' -i ./proto -p api.proto api.ApiServicePublic.GetMarketById
 
+# update a market's categories:
 easyrpc c -a localhost:8888 -d '{"marketId":"019c7644-76f5-77f0-bfe4-f72f22131675","categoryIds":[1,2]}' -i ./proto -p api.proto api.ApiServicePublic.UpdateMarket
+
+
 
 # get the orderbook:
 cd clob

@@ -113,13 +113,34 @@ func (categoriesRepository *CategoriesRepository) SetCategoriesForMarket(marketI
 		return nil, lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
 	}
 
-	q := sqlc.New(categoriesRepository.db)
-	err = q.SetCategoriesForMarket(context.Background(), sqlc.SetCategoriesForMarketParams{
-		MarketID: marketUUID,
-		Column2:  categoryIds,
-	})
+	tx, err := categoriesRepository.db.Begin()
 	if err != nil {
-		return nil, lib.ErrorLog("SetCategoriesForMarket failed", "error", err, "marketId", marketId, "categoryIds", categoryIds)
+		return nil, lib.ErrorLog("failed to begin transaction", "error", err)
+	}
+
+	q := sqlc.New(tx)
+
+	// Delete all existing category links for this market
+	err = q.DeleteCategoriesForMarket(context.Background(), marketUUID)
+	if err != nil {
+		tx.Rollback()
+		return nil, lib.ErrorLog("DeleteCategoriesForMarket failed", "error", err, "marketId", marketId)
+	}
+
+	// Insert new category links
+	if len(categoryIds) > 0 {
+		err = q.AssociateMarketCategoriesBatch(context.Background(), sqlc.AssociateMarketCategoriesBatchParams{
+			MarketID: marketUUID,
+			Column2:  categoryIds,
+		})
+		if err != nil {
+			tx.Rollback()
+			return nil, lib.ErrorLog("AssociateMarketCategoriesBatch failed", "error", err, "marketId", marketId, "categoryIds", categoryIds)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, lib.ErrorLog("failed to commit transaction", "error", err)
 	}
 
 	lib.Info("categories set for market", "marketId", marketId, "categoryIds", categoryIds)

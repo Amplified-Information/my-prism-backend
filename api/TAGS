@@ -174,3 +174,10 @@ Added a log line to view categoryIds for a market
 
 0.4.5
 LOM score initial work
+
+0.4.6
+cron job interval - reduce
+
+0.4.7
+fix issue updating categories
+

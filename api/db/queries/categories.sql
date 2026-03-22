@@ -51,17 +51,8 @@ SET name = $1,
 WHERE id = $4
 RETURNING *;
 
--- name: SetCategoriesForMarket :exec
-WITH new_categories AS (
-  SELECT unnest($2::int[]) AS category_id
-)
-DELETE FROM market_categories
-WHERE market_id = $1
-AND category_id NOT IN (SELECT category_id FROM new_categories);
-INSERT INTO market_categories (market_id, category_id)
-SELECT $1, category_id
-FROM new_categories
-ON CONFLICT DO NOTHING;
+-- name: DeleteCategoriesForMarket :exec
+DELETE FROM market_categories WHERE market_id = $1;
 
 
 
