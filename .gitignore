@@ -3,6 +3,8 @@ old
 _old
 .env
 
+.secrets.cache
+
 node_modules/
 
 .vscode

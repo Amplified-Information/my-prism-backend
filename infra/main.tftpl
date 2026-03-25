@@ -13,9 +13,12 @@ module "shared" {
   ec2_type_proxy = "$EC2_TYPE_PROXY"
   ec2_type_monolith = "$EC2_TYPE_MONOLITH"
   ec2_type_data = "$EC2_TYPE_DATA"
+
+  s3_bucket_deployment = "prismlabs-deployment"
+  ghrc_secret_name = "read_ghcr"
 }
 
-// so it is always called using the "rex" AWS profile
+// so it is always called using the "prism" AWS profile
 // ensure there's no default set in ~/.aws/config or ~/.aws/credentials
 provider "aws" {
   profile = "prism"

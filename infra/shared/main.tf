@@ -94,6 +94,17 @@ variable "ec2_type_data" {
 output "ec2_type_data" { value = var.ec2_type_data }
 
 
+variable "s3_bucket_deployment" {
+  type        = string
+}
+output "s3_bucket_deployment" { value = var.s3_bucket_deployment }
+
+variable "ghrc_secret_name" {
+  type        = string
+}
+output "ghrc_secret_name" { value = var.ghrc_secret_name }
+
+
 
 output "ami" { value = "ami-0f9c27b471bdcd702" } // Debian 13
 output "fixed_ip_bastion" { value = "10.0.0.9" } // N.B. bastion is on the public subnet 
@@ -105,138 +116,9 @@ output "install_base" {
   value = <<-EOF
 #!/bin/bash
 
-wait_for_machine_ready() {
-  local retries=100
-  local delay=5
-
-  for ((i=1; i<=retries; i++)); do
-    echo "Checking if the machine is ready (attempt $i)..."
-    if curl -I --silent http://google.com | head -n 1 | grep "HTTP" > /dev/null; then
-      echo "Machine is ready."
-      sleep 10 # for good measure
-      return 0
-    fi
-
-    echo "Machine not ready. Retrying in $delay seconds..."
-    sleep "$delay"
-  done
-
-  echo "Machine did not become ready after $((retries * delay)) seconds."
-  return 1
-}
-
-###
-# First, wait for the machine to be ready
-###
-wait_for_machine_ready || exit 1
-
-sudo apt-get update
-sudo apt-get install -y unzip jq yq
-sudo apt-get install -y dnsutils telnet
-
-# Enable automatic security updates
-sudo apt-get install -y unattended-upgrades
-sudo DEBIAN_FRONTEND=noninteractive dpkg-reconfigure -plow unattended-upgrades
-
-
-# fail2ban
-sudo apt-get install -y fail2ban
-sudo systemctl enable fail2ban
-sudo systemctl start fail2ban
-sudo systemctl status fail2ban
-
-###
-# fluent bit (logging)
-###
-sudo apt-get install -y gpg
-sudo mkdir -p /usr/share/keyrings
-curl -fsSL https://packages.fluentbit.io/fluentbit.key | sudo gpg --dearmor --yes -o /usr/share/keyrings/fluentbit-keyring.gpg
-codename=$(grep -oP '(?<=VERSION_CODENAME=).*' /etc/os-release 2>/dev/null || lsb_release -cs 2>/dev/null)
-echo "deb [signed-by=/usr/share/keyrings/fluentbit-keyring.gpg] https://packages.fluentbit.io/debian/$codename $codename main" | sudo tee /etc/apt/sources.list.d/fluent-bit.list
-sudo apt-get update
-sudo apt-get install -y fluent-bit
-
-
-
-
-
-# want to add the following in the right place in /etc/fluent-bit/fluent-bit.conf:
-# [INPUT]
-#     Name              forward
-#     Listen            0.0.0.0
-#     Port              24224
-
-# append an [INPUT] config right after the last [INPUT] section in /etc/fluent-bit/fluent-bit.conf
-sudo awk '
-/^\[(FILTER|OUTPUT)\]/ && !done {
-  print "[INPUT]"
-  print "    Name              forward"
-  print "    Listen            0.0.0.0"
-  print "    Port              24224"
-  print ""
-  done=1
-}
-{print}
-' /etc/fluent-bit/fluent-bit.conf > /tmp/fb.conf && sudo mv /tmp/fb.conf /etc/fluent-bit/fluent-bit.conf
-
-
-# Reduce the CPU [INPUT] interval from 1s to 60s (reduce log verbosity)
-sudo sed -i 's/\(^\s*interval_sec\s\+\)1/\160/I' /etc/fluent-bit/fluent-bit.conf
-
-
-
-###
-# S3 stream: stream fluent-bit logs to S3 bucket called "prismlabs-fluent-bit":
-###
-# ensure S3 output is configured (idempotent)
-if ! sudo grep -q "^\s*Name\s\+s3\s*$" /etc/fluent-bit/fluent-bit.conf; then
-  sudo mkdir -p /var/log/fluent-bit/s3
-  sudo chown -R fluent-bit:fluent-bit /var/log/fluent-bit/s3 || true
-
-  cat <<'FB_OUT' | sudo tee -a /etc/fluent-bit/fluent-bit.conf > /dev/null
-
-[OUTPUT]
-    Name              s3
-    Match             *
-    bucket            prismlabs-fluent-bit
-    region            ${var.aws_region}
-    s3_key_format     /${var.env}/$TAG/%Y/%m/%d/%H/%M/%S-$UUID.gz
-    store_dir         /var/log/fluent-bit/s3
-    total_file_size   5M
-    upload_timeout    60s
-    compression       gzip
-FB_OUT
-fi
-
-###
-# AWS Cloudwatch log streaming:
-###
-### stream fluent-bit logs to CloudWatch Logs:
-# ensure CloudWatch output is configured (idempotent)
-if ! sudo grep -q "^\s*Name\s\+cloudwatch_logs\s*$" /etc/fluent-bit/fluent-bit.conf; then
-  cat <<FB_CW | sudo tee -a /etc/fluent-bit/fluent-bit.conf > /dev/null
-
-[OUTPUT]
-    Name              cloudwatch_logs
-    Match             *
-    region            ${var.aws_region}
-    # N.B. create this log_group_name (e.g. /prism/dev) manually via clickops (30 day retention, deletion protection) - https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#logsV2:log-groups
-    log_group_name    /prism/${var.env}
-    log_stream_name   $(hostname)
-    auto_create_group true
-FB_CW
-fi
-
-
-
-
-
-# restart fluent-bit and enable on reboot:
-sudo systemctl start fluent-bit
-sudo systemctl enable fluent-bit
-sudo systemctl status fluent-bit
-
-
+aws s3 cp s3://${var.s3_bucket_deployment}/bootstrap-base.sh /home/admin/bootstrap-base.sh --region ${var.aws_region}
+chown admin:admin /home/admin/bootstrap-base.sh
+bash /home/admin/bootstrap-base.sh ${var.aws_region} ${var.env} 
 
 EOF
 }
@@ -245,244 +127,9 @@ output "install_docker_runner" {
   value = <<-EOF
 #!/bin/bash
 
-# S3 cli (for pulling container images and configs):
-sudo apt install -y awscli
-
-# Docker
-# remove any conflicting packages:
-sudo apt remove $(dpkg --get-selections docker.io docker-compose docker-doc podman-docker containerd runc | cut -f1)
-
-# Add Docker's official GPG key:
-sudo apt update
-sudo apt install -y ca-certificates curl 
-sudo install -m 0755 -d /etc/apt/keyrings
-sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
-sudo chmod a+r /etc/apt/keyrings/docker.asc
-
-# Add the repository to Apt sources:
-sudo tee /etc/apt/sources.list.d/docker.sources <<DOCKER_EOF
-Types: deb
-URIs: https://download.docker.com/linux/debian
-Suites: $(. /etc/os-release && echo "$VERSION_CODENAME")
-Components: stable
-Signed-By: /etc/apt/keyrings/docker.asc
-DOCKER_EOF
-
-sudo apt-get update -y && sudo apt-get dist-upgrade -y
-
-sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-newgrp docker # admin user must be in the docker group
-sudo usermod -aG docker admin
-
-sudo systemctl start docker
-sudo systemctl enable docker
-sudo systemctl status docker
-
-sudo usermod -aG docker admin # N.B. 'admin' is the default user on AWS Debian AMIs
-
-sudo systemctl restart docker
-
-newgrp docker # don't have to logout and log back in again...
-
-
-
-#####
-# Devops: Create a 0_pull_latest.sh script
-#####
-cat <<'SCRIPT' > /home/admin/0_pull_latest.sh
-#!/bin/bash
-
-# Variables
-ENVIRONMENT="${var.env}"
-AWS_REGION="${var.aws_region}"
-SECRET_NAME="read_ghcr"
-MACHINE=$(hostname) # should be 'proxy', 'monolith', or 'data'
-S3_BUCKET="prismlabs-deployment"
-
-login_to_github() {
-  echo "Logging in to GitHub Container Registry..."
-  GITHUB_PAT=$(aws ssm get-parameter --name "$SECRET_NAME" --with-decryption --region "$AWS_REGION" | jq ".Parameter.Value" -r)
-  if [ -z "$GITHUB_PAT" ]; then
-    echo "Failed to retrieve GitHub PAT from AWS Secrets Manager."
-    exit 1
-  fi
-  echo "$GITHUB_PAT" | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
-}
-
-pull_docker_compose_files() {
-  echo "Retrieving Docker Compose files from S3..."
-  FILES=$(aws s3 ls "s3://$S3_BUCKET" --region "$AWS_REGION" | awk '{print $4}')
-
-  # Filter for the base file and the environment-specific file
-  BASE_FILE="docker-compose-$MACHINE.yml"
-  ENV_FILE="docker-compose-$MACHINE.$ENVIRONMENT.yml"
-
-  if ! echo "$FILES" | grep -q "$BASE_FILE"; then
-    echo "Base file $BASE_FILE not found in S3 bucket."
-    exit 1
-  fi
-
-  if ! echo "$FILES" | grep -q "$ENV_FILE"; then
-    echo "Environment file $ENV_FILE not found in S3 bucket."
-    exit 1
-  fi
-
-  # Download the base file
-  echo "Downloading $BASE_FILE..."
-  aws s3 cp "s3://$S3_BUCKET/$BASE_FILE" "./$BASE_FILE" --region "$AWS_REGION"
-
-  # Download the environment-specific file
-  echo "Downloading $ENV_FILE..."
-  aws s3 cp "s3://$S3_BUCKET/$ENV_FILE" "./$ENV_FILE" --region "$AWS_REGION"
-
-  # symlink the base file to docker-compose.yml (for docker compose logging, etc.)
-  rm -f docker-compose.yml # if symlink exists
-  ln -s "$BASE_FILE" docker-compose.yml
-}
-
-pull_config_secrets_files() {
-  echo "Retrieving .config* files, .secret file and loadEnv.sh from S3..."
-  # Loop through each service as defined in the docker-compose file under "services"
-  for SERVICE in $(yq '.services | keys | join(" ")' ./docker-compose-$MACHINE.yml | tr -d '"'); do
-    echo "Pulling .config*, .secrets and loadEnv.sh for $SERVICE..."
-    mkdir -p "./$SERVICE" # Ensure the local folder exists
-
-    aws s3 cp "s3://$S3_BUCKET/$SERVICE" "./$SERVICE/" --recursive --region "$AWS_REGION"
-
-    chmod +x "./$SERVICE/loadEnv.sh" # make loadEnv.sh executable
-  done
-}
-
-pull_latest_docker_images() {
-  echo "Pulling latest Docker images as per docker-compose files..."
-  # note: only need to pull images from the environment-specific file
-  docker compose -f "docker-compose-$MACHINE.yml" -f "docker-compose-$MACHINE.$ENVIRONMENT.yml" pull --policy always # N.B. the policy always...
-}
-
-main() {
-  login_to_github
-  pull_docker_compose_files
-  pull_config_secrets_files
-  pull_latest_docker_images
-}
-
-main
-SCRIPT
-
-# Make the 0_pull_latest.sh script executable
-chown admin:admin /home/admin/0_pull_latest.sh
-chmod +x /home/admin/0_pull_latest.sh
-
-
-
-
-
-
-
-
-
-
-#####
-# Devops: Create a 1_loadEnvVars.sh script
-#####
-cat <<'SCRIPT' > /home/admin/1_loadEnvVars.sh
-#!/bin/bash
-
-# Detect if the script is being sourced
-# If $BASH_SOURCE[0] == $0, the script is executed, not sourced
-if [[ "$${BASH_SOURCE[0]}" == "$0" ]]; then
-  echo "ERROR: This script must be sourced, not executed."
-  echo "Usage: source $0"
-  exit 1  # exit script execution
-fi
-
-
-ENVIRONMENT="${var.env}"
-MACHINE=$(hostname) # should be 'proxy', 'monolith', or 'data'
-
-echo "Loading config and secrets..."
-# Load environment variables (reads .config* files and loads .secrets from AWS SSM)
-for SERVICE in $(yq '.services | keys | join(" ")' ./docker-compose-$MACHINE.yml | tr -d '"'); do
-  source ./$SERVICE/loadEnv.sh $ENVIRONMENT
-done
-
-SCRIPT
-
-# Make the 1_loadEnvVars.sh script executable
-chown admin:admin /home/admin/1_loadEnvVars.sh
-# chmod +x /home/admin/1_loadEnvVars.sh # can only source this script - exec not needed
-
-
-
-
-
-
-
-
-
-
-
-
-#####
-# Devops: Create a 2_dockerComposeUp.sh script
-#####
-cat <<'SCRIPT' > /home/admin/2_dockerComposeUp.sh
-#!/bin/bash
-
-ENVIRONMENT="${var.env}"
-MACHINE=$(hostname) # should be 'proxy', 'monolith', or 'data'
-
-BASE_FILE="docker-compose-$MACHINE.yml"
-ENV_FILE="docker-compose-$MACHINE.$ENVIRONMENT.yml"
-
-
-echo "Starting docker compose..."
-docker compose -f "$BASE_FILE" -f "$ENV_FILE" up -d # daemon mode
-
-# List running containers:
-docker ps
-
-
-
-### svg deployment badge generation and upload (for rendering on README.md):
-
-lines=$(docker compose ps --format "table {{.Service}}\t{{.Image}}" 2>/dev/null | tail -n +2 | while read svc img; do
-   tag=$(echo "$img" | awk -F: '{print $2}')
-   echo "$svc $tag"
-done)
-
-count=$(echo "$lines" | wc -l)
-height=$((70 + 20 * count))
-DEPLOY_TIME=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
-
-echo "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"300\" height=\"$height\" style=\"font-family:monospace\">" > "$MACHINE.svg"
-echo "<text x=\"10\" y=\"20\" font-size=\"16\" fill=\"green\">$ENVIRONMENT.$MACHINE</text>" >> "$MACHINE.svg"
-echo "<text x=\"10\" y=\"40\" font-size=\"13\" fill=\"orange\">$DEPLOY_TIME</text>" >> "$MACHINE.svg"
-
-y=60
-echo "$lines" | while read svc tag; do
-  echo "<text x=\"30\" y=\"$y\" font-size=\"14\"><tspan fill=\"blue\">$svc</tspan>:<tspan fill=\"purple\">$tag</tspan></text>" >> "$MACHINE.svg"
-  y=$((y + 20))
-done
-
-echo "</svg>" >> "$MACHINE.svg"
-
-echo "Uploading svg to s3://pl-deployment-badges/$ENVIRONMENT/$MACHINE.svg..."
-aws s3 cp "$MACHINE.svg" "s3://pl-deployment-badges/$ENVIRONMENT/$MACHINE.svg" --content-type image/svg+xml
-aws s3 cp "s3://pl-deployment-badges/$ENVIRONMENT/$MACHINE.svg" "s3://pl-deployment-badges/$ENVIRONMENT/$MACHINE.svg" --metadata-directive REPLACE --content-type image/svg+xml --cache-control "no-cache, no-store, must-revalidate"
-rm "$MACHINE.svg"
-
-echo "svg badge uploaded successfully."
-
-SCRIPT
-
-# Make the 2_dockerComposeUp.sh script executable
-chown admin:admin /home/admin/2_dockerComposeUp.sh
-chmod +x /home/admin/2_dockerComposeUp.sh
-
-
-
+aws s3 cp s3://${var.s3_bucket_deployment}/bootstrap-docker.sh /home/admin/bootstrap-docker.sh --region ${var.aws_region}
+chown admin:admin /home/admin/bootstrap-docker.sh
+bash /home/admin/bootstrap-docker.sh ${var.aws_region} ${var.env} ${var.s3_bucket_deployment} ${var.ghrc_secret_name}
 
 EOF
 }
@@ -491,13 +138,10 @@ output "install_bastion" {
   value = <<-EOF
 #!/bin/bash
 
-sudo apt-get install ufw -y
+aws s3 cp s3://${var.s3_bucket_deployment}/bootstrap-bastion.sh /home/admin/bootstrap-bastion.sh --region ${var.aws_region}
+chown admin:admin /home/admin/bootstrap-bastion.sh
+bash /home/admin/bootstrap-bastion.sh
 
-# UFW - only allow ssh
-ufw default deny incoming
-ufw default allow outgoing
-ufw allow ssh
-ufw enable
 EOF
 }
 
@@ -505,33 +149,12 @@ output "install_data" {
   value = <<-EOF
 #!/bin/bash
 
-# this maps to /dev/xvdf
-DEVICE="/dev/nvme1n1"
-
-# journal recovery, if needed
-fsck $DEVICE
-
-# Check if volume is formatted; format only if needed (i.e. only format on first boot, not on reboots)
-if ! file -s $DEVICE | grep -q "filesystem"; then
-  mkfs -t ext4 $DEVICE
-fi
-
-# prepare mount point for postgres data volume
-mkdir -p /mnt/external
-
-# Add to fstab if not present (auto-mount on reboots)
-grep -q "$DEVICE" /etc/fstab || echo "$DEVICE /mnt/external ext4 defaults,nofail 0 2" >> /etc/fstab
-
-# Now mount all:
-mount -a
-
-mkdir -p /mnt/external/postgresdata
-# N.B. must give permission to the 999/systemd-journal user!
-sudo chown -R 999:999 /mnt/external/postgresdata
+aws s3 cp s3://${var.s3_bucket_deployment}/bootstrap-data.sh /home/admin/bootstrap-data.sh --region ${var.aws_region}
+chown admin:admin /home/admin/bootstrap-data.sh
+bash /home/admin/bootstrap-data.sh
 
 EOF
 }
-
 
 
 #####
@@ -671,11 +294,6 @@ resource "aws_route_table_association" "public" {
   subnet_id      = aws_subnet.public.id
   route_table_id = aws_route_table.public.id
 }
-
-
-
-
-
 
 
 #####
@@ -1181,6 +799,13 @@ resource "aws_iam_policy" "combined_policy" {
   })
 }
 
+# IAM for SSM Session Manager (for AWS Console "Connect" via Session Manager)
+# check with: `sudo systemctl status amazon-ssm-agent`
+resource "aws_iam_role_policy_attachment" "ssm_managed_instance_core" {
+  role       = aws_iam_role.combined_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
 
 resource "aws_iam_role_policy_attachment" "combined_policy_attach" {
   role       = aws_iam_role.combined_role.name
@@ -1191,16 +816,6 @@ resource "aws_iam_instance_profile" "combined_instance_profile" {
   name = "${var.env}-combined-instance-profile"
   role = aws_iam_role.combined_role.name
 }
-
-
-
-
-
-
-
-
-
-
 
 
 

@@ -8,6 +8,7 @@
 # db/schema.sql must exist (location is set in sqlc.yaml config file)
 if [ ! -f "db/schema.sql" ]; then
   echo "Error: db/schema.sql does not exist."
+  echo "Genrate it with: \`pg_dump $DB_URL --schema-only | sed '/^\\/d' > ./db/schema.sql\`"
   exit 1
 fi
 

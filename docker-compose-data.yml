@@ -1,11 +1,6 @@
-# source ./db/loadEnv.sh local
-# source ./eventbus/loadEnv.sh local
-
-# docker compose -f docker-compose-data.yml -f docker-compose-data.dev.yml up -d
 services:
   db:
-    image: ghcr.io/prismmarketlabs/db:0.1.2
-    # pull_policy: always
+    image: ghcr.io/prismmarketlabs/db:0.1.3
     restart: always
     volumes:
       - /mnt/external/postgresdata:/var/lib/postgresql
@@ -19,12 +14,9 @@ services:
     environment:
       POSTGRES_USER: ${DB_UNAME}
       POSTGRES_DB: ${DB_NAME}
-      # secrets
       POSTGRES_PASSWORD: ${DB_PWORD}
-
   eventbus:
-    image: ghcr.io/prismmarketlabs/eventbus:0.1.1
-    # pull_policy: always
+    image: ghcr.io/prismmarketlabs/eventbus:0.1.4
     restart: always
     ports:
       - "4222:4222"

@@ -1,22 +1,16 @@
-# source ./api/loadEnv.sh local
-# source ./clob/loadEnv.sh local
-
-# docker compose -f docker-compose-monolith.yml -f docker-compose-monolith.dev.yml up -d
 services:
   api:
-    image: ghcr.io/prismmarketlabs/api:0.4.7
-    # pull_policy: always
+    image: ghcr.io/prismmarketlabs/api:0.4.8
     restart: always
     ports:
       - "8888:8888"
-      - "8889:8889" # /health
+      - "8889:8889"
     logging:
       driver: "fluentd"
       options:
         fluentd-address: localhost:24224
         tag: "{{.Name}}"
     environment:
-      # keep in sync with main.go, docker-compose-monolith.yml, .config and .secrets and the run command in Dockerfile
       API_SELF_HOST: ${API_SELF_HOST}
       API_SELF_PORT: ${API_SELF_PORT}
       API_SELF_PORT_HEALTH: ${API_SELF_PORT_HEALTH}
@@ -66,20 +60,17 @@ services:
       JWT_EXPIRY_HOURS: ${JWT_EXPIRY_HOURS}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME}
       S3_AWS_REGION: ${S3_AWS_REGION}
-      # secrets:
       DB_PWORD: ${DB_PWORD}
       PREVIEWNET_HEDERA_OPERATOR_KEY: ${PREVIEWNET_HEDERA_OPERATOR_KEY}
       TESTNET_HEDERA_OPERATOR_KEY: ${TESTNET_HEDERA_OPERATOR_KEY}
       MAINNET_HEDERA_OPERATOR_KEY: ${MAINNET_HEDERA_OPERATOR_KEY}
       SMTP_PWORD: ${SMTP_PWORD}
       JWT_SECRET: ${JWT_SECRET}
-
   clob:
-    image: ghcr.io/prismmarketlabs/clob:0.2.13
-    # pull_policy: always
+    image: ghcr.io/prismmarketlabs/clob:0.2.14
     restart: always
     depends_on:
-      - api # API must be running so the clob can re-create orderbooks from the API on startup
+      - api
     ports:
       - "50051:50051"
     logging:
@@ -88,7 +79,6 @@ services:
         fluentd-address: localhost:24224
         tag: "{{.Name}}"
     environment:
-      # keep in sync with main.rs, docker-compose-monolith.yml, .config and .secrets and the run command in clob Dockerfile
       CLOB_SELF_HOST: ${CLOB_SELF_HOST}
       CLOB_SELF_PORT: ${CLOB_SELF_PORT}
       API_HOST: ${API_HOST}
@@ -96,20 +86,8 @@ services:
       CLOB_MATCHING_INTERVAL_SECONDS: ${CLOB_MATCHING_INTERVAL_SECONDS}
       NATS_HOST: ${NATS_HOST}
       NATS_PORT: ${NATS_PORT}
-  # mw:
-  #   image: ghcr.io/prismmarketlabs/mw:0.0.1
-  #   # pull_policy: always
-  #   restart: always
-  #   ports:
-  #     - "5173:80"
-  #   environment:
-  #     IS_PASSWORD_PROTECTED: ${IS_PASSWORD_PROTECTED}
-  #     HTUSER: ${HTUSER}
-  #     # secrets:
-  #     HTPASSWD: ${HTPASSWD}
   web:
-    image: ghcr.io/prismmarketlabs/web:0.6.24
-    # pull_policy: always
+    image: ghcr.io/prismmarketlabs/web:0.6.26
     restart: always
     ports:
       - "5173:80"
@@ -121,12 +99,9 @@ services:
     environment:
       IS_PASSWORD_PROTECTED: ${IS_PASSWORD_PROTECTED}
       HTUSER: ${HTUSER}
-      # secrets:
       HTPASSWD: ${HTPASSWD}
-  
   web.admin:
-    image: ghcr.io/prismmarketlabs/web.admin:0.1.5
-    # pull_policy: always
+    image: ghcr.io/prismmarketlabs/web.admin:0.1.7
     restart: always
     ports:
       - "8080:80"
@@ -138,12 +113,9 @@ services:
     environment:
       WEB_ADMIN_IS_PASSWORD_PROTECTED: ${WEB_ADMIN_IS_PASSWORD_PROTECTED}
       WEB_ADMIN_HTUSER: ${WEB_ADMIN_HTUSER}
-      # secrets:
       WEB_ADMIN_HTPASSWD: ${WEB_ADMIN_HTPASSWD}
-  
   web.lp:
-    image: ghcr.io/prismmarketlabs/web.lp:0.3.8
-    # pull_policy: always
+    image: ghcr.io/prismmarketlabs/web.lp:0.3.9
     restart: always
     ports:
       - "8081:80"
@@ -152,4 +124,3 @@ services:
       options:
         fluentd-address: localhost:24224
         tag: "{{.Name}}"
-

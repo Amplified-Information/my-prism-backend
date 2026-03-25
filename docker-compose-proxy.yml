@@ -1,21 +1,16 @@
-# source ./proxy/loadEnv.sh local
-
-# docker compose -f docker-compose-proxy.yml -f docker-compose-proxy.dev.yml up -d 
 services:
   proxy:
-    image: ghcr.io/prismmarketlabs/proxy:0.1.24
-    # pull_policy: always
+    image: ghcr.io/prismmarketlabs/proxy:0.1.25
     restart: always
     ports:
       - "8090:8090"
-      - "9901:9901" # admin port - be careful!
+      - "9901:9901"
     logging:
       driver: "fluentd"
       options:
         fluentd-address: localhost:24224
         tag: "{{.Name}}"
     environment:
-      # IS_BASIC_AUTH_DISABLED: ${IS_BASIC_AUTH_DISABLED}
       ENVOY_HOST_CLOB: ${ENVOY_HOST_CLOB}
       ENVOY_HOST_API: ${ENVOY_HOST_API}
       ENVOY_HOST_WEB: ${ENVOY_HOST_WEB}

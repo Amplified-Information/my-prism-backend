@@ -5,7 +5,7 @@ set -e
 echo "Starting local DB..."
 cd db
 source loadEnv.sh local
-docker run -d \
+docker run --pull always -d \
   -p 5432:5432 \
   -v /mnt/external/postgresdata:/var/lib/postgresql \
   -e POSTGRES_USER="${DB_UNAME}" \
@@ -16,14 +16,14 @@ docker run -d \
 echo "Starting local EventBus..."
 cd ../eventbus
 source loadEnv.sh local
-docker run -d \
+docker run --pull always -d \
   -p 4222:4222 -p 6222:6222 \
   ghcr.io/prismmarketlabs/eventbus:latest
 
 echo "Starting local Proxy..."
 cd ../proxy
 source loadEnv.sh local2
-docker run -d --network host \
+docker run --pull always -d --network host \
   -p 8090:8090 -p 9901:9901 \
   -e ENVOY_HOST_CLOB="${ENVOY_HOST_CLOB}" \
   -e ENVOY_HOST_API="${ENVOY_HOST_API}" \

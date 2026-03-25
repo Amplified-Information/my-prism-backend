@@ -5,21 +5,36 @@
 #   exit 1
 # fi
 
-# ...existing code...
+GITHUB_ORG="prismmarketlabs"
+
+
 IMAGE_LINE=$(yq -r ".services | to_entries[] | select(.key == \"${SERVICE}\") | .value.image" "$FILE" 2>/dev/null)
 echo "Checking $FILE: $IMAGE_LINE"
 IMAGE_TAG=$(echo "$IMAGE_LINE" | grep -oE '[^:]+$')
 if [ "$IMAGE_TAG" = "$TAG_DST" ]; then
   FOUND_TAG=true
-  break
+  # break
 fi
-# ...existing code...#!/bin/bash
+
 
 ####
 # part 1 - prompt user input
 ####
-read -p "Enter SERVICE (api, clob, proxy, eventbus, web, web.admin, web.eng, web.uat, web.lp): " SERVICE
-SERVICE=${SERVICE:-api}
+
+SERVICES=$(yq  -r '.services // {} | keys | .[]' docker-compose-*.yml 2>/dev/null | sort -u | xargs)
+read -p "Enter SERVICE ($SERVICES): " SERVICE
+SERVICE=${SERVICE}
+# validate service:
+if [ -z "$SERVICE" ]; then
+  echo "ERROR: SERVICE must not be empty."
+  exit 1
+fi
+# validate service exists in docker-compose files:
+if ! yq -r '.services // {} | to_entries[] | .key' docker-compose-*.yml 2>/dev/null | grep -q "^${SERVICE}$"; then
+  echo "ERROR: SERVICE '$SERVICE' not found in any docker-compose-*.yml files. Please ensure it exists and is spelled correctly."
+  exit 1
+fi
+
 
 docker info > /dev/null 2>&1
 if [ $? -ne 0 ]; then
@@ -31,77 +46,54 @@ fi
 read -p "Enter TAG_SRC ***ensure your build pipeline has completed successfully*** (default: latest): " TAG_SRC
 TAG_SRC=${TAG_SRC:-latest}
 
-# Find latest tag in ${SERVICE}/TAGS
-if [ -f "${SERVICE}/TAGS" ]; then
-  TAG_DST_DEFAULT=$(grep -E '^[0-9]+(\.[0-9]+)+$' "${SERVICE}/TAGS" | tail -n 1)
-  TAG_DST_DEFAULT=${TAG_DST_DEFAULT:-latest}
-elif [ -d "${SERVICE}/TAGS" ] && [ "$(ls -A "${SERVICE}/TAGS" 2>/dev/null)" ]; then
-  TAG_DST_DEFAULT=$(ls -1 "${SERVICE}/TAGS" | sort -V | tail -n 1)
-else
-  TAG_DST_DEFAULT="latest"
-fi
-read -p "Enter TAG_DST (default: ${TAG_DST_DEFAULT}): " TAG_DST
-TAG_DST=${TAG_DST:-$TAG_DST_DEFAULT}
 
-IMAGE_SRC_DEFAULT="ghcr.io/prismmarketlabs/${SERVICE}"
+
+
+# Find latest tag in the relevant docker-compose file
+HIGHEST_VER=$(
+  yq -r '.services // {} | to_entries[] | .value.image // empty' docker-compose-*.yml 2>/dev/null \
+    | grep "/${SERVICE}:" \
+    | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' \
+    | sort -t. -k1,1n -k2,2n -k3,3n \
+    | tail -1
+)
+# validate this is a semver:
+if ! [[ "$HIGHEST_VER" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "ERROR: Could not determine the highest version from docker-compose files. Please ensure they contain valid semver tags."
+  exit 1
+fi
+
+# Increment patch version
+NEXT_VER=$(echo "$HIGHEST_VER" | awk -F. '{print $1"."$2"."$3+1}' 2>/dev/null)
+
+# validate this is a semver:
+if ! [[ "$NEXT_VER" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "ERROR: Could not determine the highest version from docker-compose files. Please ensure they contain valid semver tags."
+  exit 1
+fi
+
+echo "Incrementing: $HIGHEST_VER -> $NEXT_VER"
+
+read -p "Enter TAG_DST (default: ${NEXT_VER}): " TAG_DST
+TAG_DST=${TAG_DST:-$NEXT_VER}
+
+
+
+IMAGE_SRC_DEFAULT="ghcr.io/$GITHUB_ORG/${SERVICE}"
 read -p "Enter IMAGE_SRC (default: ${IMAGE_SRC_DEFAULT}): " IMAGE_SRC
 IMAGE_SRC=${IMAGE_SRC:-$IMAGE_SRC_DEFAULT}
 
-# read -p "Enter IMAGE_DST (default: ${IMAGE_SRC}): " IMAGE_DST
-# IMAGE_DST=${IMAGE_DST:-$IMAGE_SRC}
 
-echo "Before proceeding, please confirm that the tags in docker-compose-${SERVICE}.yml and docker-compose-${SERVICE}.{ENV}.yml correspond to the version you specified in the ${SERVICE}/TAGS file."
-read -p "Have you verified the version of the tags? (y/N): " CONFIRM
+
+read -p "Has the pipeline successfully built + pushed the image, and have you verified the version of the tag? (y/N): " CONFIRM
 if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
   echo "Aborting. Please verify the version of the tags before proceeding."
   exit 1
 fi
 
-# Auto-verify that TAG_DST exists in docker-compose files:
-# Note: ensure you're using the Python version of yq
-FOUND_TAG=false
-for FILE in docker-compose-*.yml; do
-  [ -f "$FILE" ] || continue
-  IMAGE_LINE=$(yq -r '.services[]?.image' "$FILE" 2>/dev/null)
-  while read -r LINE; do
-    echo "Checking $FILE: $LINE"
-    IMAGE_NAME=$(echo "$LINE" | cut -d':' -f1)
-    IMAGE_TAG=$(echo "$LINE" | cut -d':' -f2)
-    if [[ "$IMAGE_NAME" == *"${SERVICE}"* && "$IMAGE_TAG" == "$TAG_DST" ]]; then
-      FOUND_TAG=true
-      break 2
-    fi
-  done <<< "$IMAGE_LINE"
-done
-if [ "$FOUND_TAG" = false ]; then
-  echo "ERROR: Tag '${TAG_DST}' not found in any docker-compose-*.yml for image containing '${SERVICE}'"
-  exit 1
-fi
-# FOUND_TAG=false
-# for FILE in docker-compose-*.yml; do
-#   [ -f "$FILE" ] || continue
-#   IMAGE_LINE=$(yq -r ".services | to_entries[] | select(.key == \"${SERVICE}\") | .value.image" "$FILE" 2>/dev/null)
-#   echo "Checking $FILE: $IMAGE_LINE"
-#   IMAGE_TAG=$(echo "$IMAGE_LINE" | grep -oE '[^:]+$')
-#   if [ "$IMAGE_TAG" = "$TAG_DST" ]; then
-#     FOUND_TAG=true
-#     break
-#   fi
-#   # IMAGE_LINE=$(yq -r ".services.${SERVICE}.image" "$FILE" 2>/dev/null)
-#   # echo "Checking $FILE: $IMAGE_LINE"
-#   # IMAGE_TAG=$(echo "$IMAGE_LINE" | grep -oE '[^:]+$')
-#   # if [ "$IMAGE_TAG" = "$TAG_DST" ]; then
-#   #   FOUND_TAG=true
-#   #   break
-#   # fi
-# done
-# if [ "$FOUND_TAG" = false ]; then
-#   echo "ERROR: Tag '${TAG_DST}' not found in any docker-compose-*.yml under services.${SERVICE}.image"
-#   exit 1
-# fi
 
-echo "OK. Found the version specified in the TAG file. Proceeding..."
 sleep 1
+
 
 
 
@@ -117,15 +109,65 @@ echo "Tagging and pushing image..."
 IMAGE_DST=$IMAGE_SRC # for now, same image
 
 docker pull $IMAGE_SRC:$VER_SRC
+if [ $? -ne 0 ]; then
+  echo "ERROR: Failed to pull image $IMAGE_SRC:$VER_SRC"
+  exit 1
+fi
+
 # never add a tag to derived namespaces such as web.eng!
 docker tag $IMAGE_SRC:$VER_SRC $IMAGE_DST:$VER_DST
+if [ $? -ne 0 ]; then
+  echo "ERROR: Failed to tag image $IMAGE_SRC:$VER_SRC as $IMAGE_DST:$VER_DST"
+  exit 1
+fi
 
 docker images | grep $IMAGE_DST
-
+if [ $? -ne 0 ]; then
+  echo "ERROR: Tagged image $IMAGE_DST not found in local images."
+  exit 1
+fi
 
 # now do:
 docker push $IMAGE_DST:$VER_DST
-
+if [ $? -ne 0 ]; then
+  echo "ERROR: Failed to push image $IMAGE_DST:$VER_DST"
+  exit 1
+fi
 
 echo "Pushed $IMAGE_DST:$VER_DST"
 echo "Done."
+
+
+#####
+# part 3 - update docker-compose files
+#####
+echo "Updating docker-compose files..."
+UPDATED=false
+for FILE in docker-compose-*.yml; do
+  # Only match files like docker-compose-X.yml, not docker-compose-X.dev.yml, etc.
+  if [[ ! "$FILE" =~ ^docker-compose-[^.]+\.yml$ ]]; then
+    continue
+  fi
+  [ -f "$FILE" ] || continue
+  IMAGE_LINE=$(yq -r ".services.\"${SERVICE}\".image // empty" "$FILE" 2>/dev/null)
+  [ -z "$IMAGE_LINE" ] && continue
+  IMAGE_NAME=$(echo "$IMAGE_LINE" | cut -d: -f1)
+  echo "Updating $FILE: ${IMAGE_NAME}:${TAG_DST}"
+  yq -Yi ".services.\"${SERVICE}\".image = \"${IMAGE_NAME}:${TAG_DST}\"" "$FILE"
+  UPDATED=true
+done
+
+if [ "$UPDATED" = false ]; then
+  echo "WARNING: Service '${SERVICE}' not found in any docker-compose-*.yml files. No files updated."
+fi
+
+### finally, push the changes to the docker-compose file to git:
+read -p "Do you want to commit and push the updated docker-compose files to git? (y/N): " PUSH_GIT
+if [[ "$PUSH_GIT" =~ ^[Yy]$ ]]; then
+  git add docker-compose-*.yml
+  git commit -m "tag: ${SERVICE}:${TAG_DST}"
+  git push
+  echo "Changes pushed to git."
+else
+  echo "Please remember to commit and push the updated docker-compose files to git."
+fi

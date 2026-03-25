@@ -41,3 +41,8 @@ jobs:
               --include ".secrets" \
               --include "loadEnv.sh"
           done
+
+      - name: Sync bootstrap files to S3
+        run: |
+          set -x
+          aws s3 cp infra s3://prismlabs-deployment/ --recursive --no-follow-symlinks --exclude "*" --include "bootstrap-*.sh"
