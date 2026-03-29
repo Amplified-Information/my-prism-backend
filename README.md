@@ -11,6 +11,7 @@ deployable services:
 - `web.admin`: a separate web app for administrating Prism [`prism-front-end`](https://github.com/PrismMarketLabs/prism-admin) (Note: this is a git **submodule** to a *separate* front-end repo)
 - `proxy`: a proxy to marshall traffic
 - `eventbus`: event bus for pub/sub message communication
+- `modsec`: modsecurity filtering for Prism
 - `mw`: middleware for web app (server-side control of preview links across social media platforms)
 
 modular components:
@@ -34,6 +35,7 @@ https://github.com/PrismMarketLabs/prism/actions
 ![clob](https://github.com/PrismMarketLabs/prism/actions/workflows/build-clob.yml/badge.svg)
 ![db](https://github.com/PrismMarketLabs/prism/actions/workflows/build-db.yml/badge.svg)
 ![eventbus](https://github.com/PrismMarketLabs/prism/actions/workflows/build-eventbus.yml/badge.svg)
+![modsec](https://github.com/PrismMarketLabs/prism/actions/workflows/build-modsec.yml/badge.svg)
 ![mw](https://github.com/PrismMarketLabs/prism/actions/workflows/build-mw.yml/badge.svg)
 ![proxy](https://github.com/PrismMarketLabs/prism/actions/workflows/build-proxy.yml/badge.svg)
 ![web](https://github.com/PrismMarketLabs/prism/actions/workflows/build-web__submodule__.yml/badge.svg)
@@ -46,21 +48,21 @@ To release a new version of a service, follow the release procedure here: https:
 
 `dev`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1774453741) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1774453741) | [data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1774453741) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1774818015) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1774818015) | [data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1774818015) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1774453741) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1774453741) | ![data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1774453741) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1774818015) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1774818015) | ![data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1774818015) |
 
 `uat`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1774453741) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1774453741) | [data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1774453741) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1774818015) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1774818015) | [data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1774818015) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1774453741) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1774453741) | ![data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1774453741) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1774818015) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1774818015) | ![data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1774818015) |
 
 `prod`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1774453741) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1774453741) | [data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1774453741) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1774818015) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1774818015) | [data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1774818015) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1774453741) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1774453741) | ![data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1774453741) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1774818015) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1774818015) | ![data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1774818015) |
 
 *Note: see .git/hooks/pre-commit to see how to update the cache-busting nonce*
 
@@ -124,42 +126,26 @@ To develop the application locally, start up each of the following services (in 
 - `web`: see [web/README.md](web/README.md)
 - `proxy`: see [proxy/README.md](proxy/README.md)
 
-## database
+## login with SSM
+
+Run the utility script:
+
+`./ec2_instanceIds.sh`
+
+And follow the instructions
+
+Once you connect, do:
+
+`sudo su - admin`
+
+## connect to a database (local, dev, uat, prod, etc.)
 
 Connect to the database as follows:
 
-| environment | host       | port |
-|-------------|------------|------|
-| local       | localhost  | 5432 |
-| dev         | localhost* | 9999 |
-| uat         | localhost* | 9999 |
-| ...         |            |      |
-| prod        | localhost* | 9999 |
+database
 
-**via ssh tunnel - see instructions below to start an ssh tunnel to the environment you want to connect to*
+`aws ssm start-session --target $EC2ID --document-name AWS-StartPortForwardingSession --parameters "portNumber"=["9999"],"localPortNumber"=["5432"]`
 
-To connect to a remote database (e.g. `dev`), in a separate terminal, open up an ssh tunnel:
-
-```bash
-# first, ensure you have added the keys for all the environments to your ssh agent
-# these keys can be downloaded from the Prism Bitwarden account
-ssh-add ~/Desktop/dev-bastion.pem
-ssh-add ~/Desktop/dev.pem
-ssh-add ~/Desktop/uat-bastion.pem
-ssh-add ~/Desktop/uat.pem
-ssh-add ~/Desktop/prod-bastion.pem
-ssh-add ~/Desktop/prod.pem
-
-#remove all keys with:
-ssh-add -D
-
-# You can now connect to a remote box using `ssh -A ...` and the ssh agent will automatically use the appropriate key you loaded into the ssh agent using the ssh-add command above
-
-# example of setting up the tunnel for a remote db connection:
-./bastions.sh # get the HOST
-export HOST=ec2-44-222-140-176.compute-1.amazonaws.com # retrieve from the AWS EC2 web UI
-ssh -A -L 9999:10.0.1.12:5432 -N admin@$HOST
-```
 Use the VSCode plugin called "Database Client"
 
 ![Database Client plugin](resources/db.png)
@@ -168,15 +154,25 @@ Login details:
 
 ![login details](<resources/loginInfo.png>)
 
-## login with SSM
+## openappsec
 
-The bastion boxes are to be deprecated.
+openappsec is running as a kind of WAF
 
-Run the utility script:
+see docker-compose-proxy.yml
 
-`./ec2_instanceIds.sh`
+Connect to the web UI with:
 
-And follow the instructions
+```bash
+./ec2_instanceIds.sh
+
+export EC2ID=...
+
+aws ssm start-session --profile prism --region us-east-1 --target $EC2ID --document-name AWS-StartPortForwardingSession --parameters "portNumber"=["8080"],"localPortNumber"=["8080"]
+```
+
+Now do:
+
+http://localhost:8080
 
 ## yaak/Postman
 
@@ -323,7 +319,7 @@ There is an **intentional separation** between **configuration** (`.config.ENV`)
 1. tag the image
 2. update the docker-compose-<SERVICE>.<ENV>.yml file
 3. push the source code
-4. login to the box (via bastion) and refresh the running image(s)
+4. login to the box (via `aws ssm`) and refresh the running image(s)
 
 ### 1. tag the image
 
@@ -368,7 +364,7 @@ docker images | grep $IMAGE_DST
 docker push $IMAGE_DST:$VER_DST
 ```
 
-### 4. login to the box (via bastion) and refresh the running image
+### 4. login to the box (via aws ssm) and refresh the running image
 
 ```bash
 ./0_pull_latest.sh
@@ -639,3 +635,41 @@ on:
 6. Note: may need to do the following to update the "web" submodule:
 
 `git submodule update --remote -- web`
+
+
+## OLD
+
+bastion boxes are deprecated
+
+| environment | host       | port |
+|-------------|------------|------|
+| local       | localhost  | 5432 |
+| dev         | localhost* | 9999 |
+| uat         | localhost* | 9999 |
+| ...         |            |      |
+| prod        | localhost* | 9999 |
+
+**via ssh tunnel - see instructions below to start an ssh tunnel to the environment you want to connect to*
+
+To connect to a remote database (e.g. `dev`), in a separate terminal, open up an ssh tunnel:
+
+```bash
+# first, ensure you have added the keys for all the environments to your ssh agent
+# these keys can be downloaded from the Prism Bitwarden account
+ssh-add ~/Desktop/dev-bastion.pem
+ssh-add ~/Desktop/dev.pem
+ssh-add ~/Desktop/uat-bastion.pem
+ssh-add ~/Desktop/uat.pem
+ssh-add ~/Desktop/prod-bastion.pem
+ssh-add ~/Desktop/prod.pem
+
+#remove all keys with:
+ssh-add -D
+
+# You can now connect to a remote box using `ssh -A ...` and the ssh agent will automatically use the appropriate key you loaded into the ssh agent using the ssh-add command above
+
+# example of setting up the tunnel for a remote db connection:
+./bastions.sh # get the HOST
+export HOST=ec2-44-222-140-176.compute-1.amazonaws.com # retrieve from the AWS EC2 web UI
+ssh -A -L 9999:10.0.1.12:5432 -N admin@$HOST
+```

@@ -19,9 +19,6 @@ admin:
 #   subdirectory: envoy
 #   override_subdirectory: override
 
-# TODO 
-# - add a subset of endpoints to port 8090 for public access
-# - full suite of endpoints is available on 8080 - only for access on 10.0.1.0/24
 static_resources:
   listeners:
     - name: listener_0
@@ -39,6 +36,79 @@ static_resources:
               stat_prefix: ingress_http
               upgrade_configs:
                 - upgrade_type: websocket
+
+              access_log:
+                - name: envoy.access_loggers.file
+                  typed_config:
+                    "@type": type.googleapis.com/envoy.extensions.access_loggers.file.v3.FileAccessLog
+                    path: /tmp/envoy_access.log
+
+              http_filters:
+                # CORS filter
+                - name: envoy.filters.http.cors # this must be high priority!
+                  typed_config:
+                    "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.Cors
+                # grpc-web filter - must be before router and before any rate limit filters, otherwise the content-type won't be correctly identified and gRPC requests will be treated as regular HTTP requests, which breaks everything!
+                - name: envoy.filters.http.grpc_web
+                  typed_config:
+                    "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_web.v3.GrpcWeb
+                # ratelimit (global level) filter - see https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/local_rate_limit_filter
+                - name: envoy.filters.http.local_ratelimit
+                  typed_config:
+                    "@type": type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+                    stat_prefix: global_ratelimit
+                    # use_per_filter_config: true # must be true for specifying different rate limits for different routes/domains
+                    token_bucket:
+                      max_tokens: 180        # burst size
+                      tokens_per_fill: 180   # refill amount
+                      fill_interval: 60s     # refill interval
+                    filter_enabled:
+                      default_value: { numerator: 100, denominator: HUNDRED } # 100% of requests are filtered by default
+                    filter_enforced:
+                      default_value: { numerator: 100, denominator: HUNDRED } # 100% of requests are enforced by default
+                    response_headers_to_add:
+                      - append: false
+                        header:
+                          key: "x-rate-limit" # mark all requests that have undergone rate limiting
+                          value: "global"
+                # security headers filter - add security headers globally
+                - name: envoy.filters.http.header_mutation
+                  typed_config:
+                    "@type": type.googleapis.com/envoy.extensions.filters.http.header_mutation.v3.HeaderMutation
+                    response_mutations:
+                      - set_header:
+                          key: "Content-Security-Policy"
+                          value: "default-src 'self'; object-src 'none'; frame-ancestors 'none';"
+                      - set_header:
+                          key: "X-Frame-Options"
+                          value: "DENY"
+                      - set_header:
+                          key: "X-Content-Type-Options"
+                          value: "nosniff"
+                      - set_header:
+                          key: "Strict-Transport-Security"
+                          value: "max-age=63072000; includeSubDomains; preload"
+                      - set_header:
+                          key: "Referrer-Policy"
+                          value: "strict-origin-when-cross-origin"
+                      - set_header:
+                          key: "Permissions-Policy"
+                          value: "geolocation=(), microphone=()"
+                # gRPC-REST transcoder filter - must be before router and after grpc_web, otherwise gRPC-Web requests won't be correctly identified and transcoded, which breaks everything!
+                # - name: envoy.filters.http.grpc_json_transcoder # auto-magically translates REST to gRPC
+                #   typed_config:
+                #     "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_json_transcoder.v3.GrpcJsonTranscoder
+                #     proto_descriptor: "/path/to/descriptor.pb"
+                #     services: ["clob_service", "api_service"]
+                #     print_options:
+                #       add_whitespace: true
+                #       always_print_primitive_fields: true
+                #       always_print_enums_as_ints: false
+                #       preserve_proto_field_names: false
+                # router filter - must be last in the chain
+                - name: envoy.filters.http.router
+                  typed_config:
+                    "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
               
               route_config:
                 name: local_route
@@ -46,6 +116,26 @@ static_resources:
                   # service routes
                   - name: service_routes
                     domains: ["*"] # ["dev.prism.market", "uat.prism.market", "prism.market", etc.]
+                    typed_per_filter_config:
+                      # domain level CORS config
+                      envoy.filters.http.cors:
+                        "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.CorsPolicy
+                        allow_origin_string_match:
+                          # - exact: "https://f7faefde-e59f-4956-9496-bd84da96dad3.lovableproject.com"
+                          - suffix: ".prism.market" # allow subdomains e.g. admin.prism.market, admin.dev.prism.market, etc.
+                          - suffix: ".lovableproject.com"
+                          - suffix: ".lovable.app"
+                          - suffix: ".getrichwithai.tech"
+                          - exact: "https://amplified.info"
+                          - exact: "https://prism.amplified.info"
+                          - suffix: ".amplified.info"
+                          - exact: "http://localhost:5173"
+                          - exact: "http://localhost:8090"
+                        allow_methods: "GET, POST, OPTIONS"
+                        allow_headers: "authorization,content-type,x-grpc-web"
+                        max_age: "1728000s"
+                        expose_headers: "authorization,grpc-status,grpc-message,grpc-status-details-bin"
+                        allow_credentials: true # N.B. this is required to allow cookies to be sent with CORS requests
                     routes:
                       ###
                       # 🩺 Health check
@@ -56,15 +146,14 @@ static_resources:
                           cluster: health_service
                           timeout: 0s
                       ###
-                      # Route gRPC-Web requests (identified by content-type: application/grpc-web)
+                      # Route gRPC{-Web} requests (identified by path. Previously identified by content-type: application/grpc{-web})
                       ###
-                      # whitelist /clob.ClobPublic*
                       - match:
                           prefix: "/clob.ClobPublic/"   # proto package 'clob'
-                          headers:
-                            - name: "content-type"
-                              string_match:
-                                prefix: "application/grpc-web"
+                          # headers:
+                          #   - name: "content-type"
+                          #     string_match:
+                          #       prefix: "application/grpc-web"
                         route:
                           cluster: clob_service
                           timeout: 0s
@@ -72,10 +161,10 @@ static_resources:
                             grpc_timeout_header_max: 0s
                       - match:
                           prefix: "/api.ApiServicePublic/"   # proto package 'api'
-                          headers:
-                            - name: "content-type"
-                              string_match:
-                                prefix: "application/grpc-web"
+                          # headers:
+                          #   - name: "content-type"
+                          #     string_match:
+                          #       prefix: "application/grpc-web"
                         route:
                           cluster: api_service
                           timeout: 0s
@@ -83,53 +172,33 @@ static_resources:
                             grpc_timeout_header_max: 0s
                       - match:
                           prefix: "/api.ApiAuth/"            # proto package 'api'
-                          headers:
-                            - name: "content-type"
-                              string_match:
-                                prefix: "application/grpc-web"
+                          # headers:
+                          #   - name: "content-type"
+                          #     string_match:
+                          #       prefix: "application/grpc-web"
                         route:
                           cluster: api_service
                           timeout: 0s
                           max_stream_duration:
                             grpc_timeout_header_max: 0s
-                      ###
-                      # Route gRPC requests (identified by content-type: application/grpc) 
-                      ###
-                      - match:
-                          prefix: "/clob.ClobPublic/"   # proto package 'clob'
-                          headers:
-                            - name: "content-type"
-                              string_match:
-                                prefix: "application/grpc"
-                        route:
-                          cluster: clob_service
-                          timeout: 0s
-                          idle_timeout: 0s
-                          max_stream_duration:
-                            grpc_timeout_header_max: 0s
-                      - match:
-                          prefix: "/api.ApiServicePublic/"   # proto package 'api'
-                          headers:
-                            - name: "content-type"
-                              string_match:
-                                prefix: "application/grpc"
-                        route:
-                          cluster: api_service
-                          timeout: 0s
-                          max_stream_duration:
-                            grpc_timeout_header_max: 0s
-                      - match:
-                          prefix: "/api.ApiAuth/"            # proto package 'api'
-                          headers:
-                            - name: "content-type"
-                              string_match:
-                                prefix: "application/grpc"
-                        route:
-                          cluster: api_service
-                          timeout: 0s
-                          max_stream_duration:
-                            grpc_timeout_header_max: 0s
-                      
+                        # ratelimit at the route level
+                        typed_per_filter_config:
+                          envoy.filters.http.local_ratelimit:
+                            "@type": type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+                            stat_prefix: rexsystems_route_ratelimit
+                            token_bucket:
+                              max_tokens: 5
+                              tokens_per_fill: 5
+                              fill_interval: 60s
+                            filter_enabled:
+                              default_value: { numerator: 100, denominator: HUNDRED }
+                            filter_enforced:
+                              default_value: { numerator: 100, denominator: HUNDRED }
+                            response_headers_to_add:
+                              - append: false
+                                header:
+                                  key: x-rate-limit
+                                  value: prism-route
                       ###
                       # web.admin service
                       # runs at: https://admin.prism.market, https://admin.dev.prism.market, https://admin.uat.prism.market, etc.
@@ -168,53 +237,6 @@ static_resources:
                           timeout: 0s
                           # prefix_rewrite: "/" # SPA routing (React)! - No. Do this on the nginx level in the web service
 
-                    # applied to everything...
-                    typed_per_filter_config: 
-                      envoy.filters.http.cors:
-                        "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.CorsPolicy
-                        allow_origin_string_match:
-                          # - exact: "https://f7faefde-e59f-4956-9496-bd84da96dad3.lovableproject.com"
-                          - suffix: ".prism.market" # allow subdomains e.g. admin.prism.market, admin.dev.prism.market, etc.
-                          - suffix: ".lovableproject.com"
-                          - suffix: ".lovable.app"
-                          - suffix: ".getrichwithai.tech"
-                          - exact: "https://amplified.info"
-                          - exact: "https://prism.amplified.info"
-                          - suffix: ".amplified.info"
-                          - exact: "http://localhost:5173"
-                          - exact: "http://localhost:8090"
-                        allow_methods: "GET, POST, OPTIONS"
-                        allow_headers: "authorization,content-type,x-grpc-web"
-                        max_age: "1728000s"
-                        expose_headers: "authorization,grpc-status,grpc-message,grpc-status-details-bin"
-                        allow_credentials: true # N.B. this is required to allow cookies to be sent with CORS requests
-              access_log:
-                - name: envoy.access_loggers.file
-                  typed_config:
-                    "@type": type.googleapis.com/envoy.extensions.access_loggers.file.v3.FileAccessLog
-                    path: /tmp/envoy_access.log
-              http_filters:
-                - name: envoy.filters.http.cors # this must be high priority!
-                  typed_config:
-                    "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.Cors
-                # basic_auth would go here...
-                - name: envoy.filters.http.grpc_web
-                  typed_config:
-                    "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_web.v3.GrpcWeb
-                
-                - name: envoy.filters.http.router
-                  typed_config:
-                    "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
-                # - name: envoy.filters.http.grpc_json_transcoder # auto-magically translates REST to gRPC
-                #   typed_config:
-                #     "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_json_transcoder.v3.GrpcJsonTranscoder
-                #     proto_descriptor: "/path/to/descriptor.pb"
-                #     services: ["clob_service", "api_service"]
-                #     print_options:
-                #       add_whitespace: true
-                #       always_print_primitive_fields: true
-                #       always_print_enums_as_ints: false
-                #       preserve_proto_field_names: false
   clusters:
     - name: clob_service
       connect_timeout: 1s

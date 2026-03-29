@@ -2,14 +2,14 @@ module "shared" {
   source = "../shared"
   
   env  = "$ENV"
-  aws_key_bastion = "$ENV-bastion"
+  # aws_key_bastion = "$ENV-bastion"
   aws_key_internal = "$ENV"
   domain_name = "$DOMAIN_NAME"
   ebs_volume_id = "$EBS_VOLUME_ID"
   ssl_cert_arn = "$SSL_CERT_ARN"
   ssl_cert_arn_wildcard = "$SSL_CERT_ARN_WILDCARD"
 
-  ec2_type_bastion = "$EC2_TYPE_BASTION"
+  # ec2_type_bastion = "$EC2_TYPE_BASTION"
   ec2_type_proxy = "$EC2_TYPE_PROXY"
   ec2_type_monolith = "$EC2_TYPE_MONOLITH"
   ec2_type_data = "$EC2_TYPE_DATA"
@@ -25,40 +25,40 @@ provider "aws" {
   region = module.shared.aws_region
 }
 
-resource "aws_instance" "bastion_$ENV" {
-  ami           = module.shared.ami
-  instance_type = module.shared.ec2_type_bastion
-  key_name      = module.shared.aws_key_bastion
-  availability_zone = module.shared.aws_az
+# resource "aws_instance" "bastion_$ENV" {
+#   ami           = module.shared.ami
+#   instance_type = module.shared.ec2_type_bastion
+#   key_name      = module.shared.aws_key_bastion
+#   availability_zone = module.shared.aws_az
   
-  associate_public_ip_address = true                            # bastion needs a public IP
+#   associate_public_ip_address = true                            # bastion needs a public IP
   
-  subnet_id              = module.shared.aws_subnet_public_id   # PUBLIC subnet
-  private_ip             = module.shared.fixed_ip_bastion
+#   subnet_id              = module.shared.aws_subnet_public_id   # PUBLIC subnet
+#   private_ip             = module.shared.fixed_ip_bastion
 
-  vpc_security_group_ids = [
-    module.shared.allow_web_egress_id,
-    module.shared.allow_web_ingress_id,
-    module.shared.allow_internal_vpc_id,
-    # module.shared.allow_internal_private_subnet_id,
-    module.shared.allow_ssh_ingress_id                          # SSH is allowed to Bastion
-    # module.shared.allow_ssh_from_public_subnet_id,
-    # module.shared.allow_8090_from_internet_id
-  ]
+#   vpc_security_group_ids = [
+#     module.shared.allow_web_egress_id,
+#     module.shared.allow_web_ingress_id,
+#     module.shared.allow_internal_vpc_id,
+#     # module.shared.allow_internal_private_subnet_id,
+#     module.shared.allow_ssh_ingress_id                          # SSH is allowed to Bastion
+#     # module.shared.allow_ssh_from_public_subnet_id,
+#     # module.shared.allow_8090_from_internet_id
+#   ]
 
-  tags = {
-    Name = "${module.shared.env}.bastion"
-  }
+#   tags = {
+#     Name = "${module.shared.env}.bastion"
+#   }
 
-  user_data = <<-EOF
-    #!/bin/bash
-    ${module.shared.install_base}
-    ${module.shared.install_bastion}
+#   user_data = <<-EOF
+#     #!/bin/bash
+#     ${module.shared.install_base}
+#     ${module.shared.install_bastion}
 
-    # for good measure
-    reboot
-  EOF
-}
+#     # for good measure
+#     reboot
+#   EOF
+# }
 
 
 
@@ -168,7 +168,7 @@ resource "aws_instance" "data_$ENV" {
     # module.shared.allow_8090_from_internet_id,
     # module.shared.allow_proxy_ingress_id,
     # module.shared.allow_monolith_egress_id,
-    module.shared.allow_bastion_db_id # Warning: allow 5432 from bastion
+    # module.shared.allow_bastion_db_id # Warning: allow 5432 from bastion
   ]
 
   iam_instance_profile = module.shared.combined_iam_policy_name # combined IAM
@@ -223,15 +223,15 @@ output "data_${ENV}_private_dns" {
   value       = aws_instance.data_$ENV.private_dns
 }
 
-output "bastion_${ENV}_public_dns" {
-  description = "Public DNS name of the bastion_$ENV instance"
-  value       = aws_instance.bastion_$ENV.public_dns
-}
+# output "bastion_${ENV}_public_dns" {
+#   description = "Public DNS name of the bastion_$ENV instance"
+#   value       = aws_instance.bastion_$ENV.public_dns
+# }
 
-output "bastion_${ENV}_private_dns" {
-  description = "Private DNS name of the bastion_$ENV instance"
-  value       = aws_instance.bastion_$ENV.private_dns
-}
+# output "bastion_${ENV}_private_dns" {
+#   description = "Private DNS name of the bastion_$ENV instance"
+#   value       = aws_instance.bastion_$ENV.private_dns
+# }
 
 output "alb_name" {
   value = aws_lb.alb_$ENV.name
@@ -467,5 +467,16 @@ resource "aws_lb_listener_rule" "redirect_www_to_apex" {
     host_header {
       values = ["www.${module.shared.domain_name}"]
     }
+  }
+}
+
+
+
+# want to be able to easily reference the EC2 instance IDs (e.g. ec2_instanceIds.sh)
+output "ec2_instance_ids" {
+  value = {
+    proxy    = aws_instance.proxy_${ENV}.id
+    monolith = aws_instance.monolith_${ENV}.id
+    data     = aws_instance.data_${ENV}.id
   }
 }

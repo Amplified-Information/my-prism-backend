@@ -1,10 +1,11 @@
 services:
   proxy:
-    image: ghcr.io/prismmarketlabs/proxy:0.1.25
+    image: ghcr.io/prismmarketlabs/proxy:0.1.27
     restart: always
     ports:
-      - "8090:8090"
       - "9901:9901"
+    expose:
+      - "8090"
     logging:
       driver: "fluentd"
       options:
@@ -16,3 +17,15 @@ services:
       ENVOY_HOST_WEB: ${ENVOY_HOST_WEB}
       ENVOY_HOST_WEB_ADMIN: ${ENVOY_HOST_WEB_ADMIN}
       ENVOY_HOST_WEB_LP: ${ENVOY_HOST_WEB_LP}
+  modsec:
+    image: ghcr.io/prismmarketlabs/modsec:0.0.3
+    restart: unless-stopped
+    ports:
+      - "8090:8080"
+    depends_on:
+      - proxy
+    environment:
+      - BACKEND=${MODSEC_BACKEND}
+      - PARANOIA=${MODSEC_PARANOIA}
+      - ANOMALY_INBOUND=${MODSEC_ANOMALY_INBOUND}
+      - ANOMALY_OUTBOUND=${MODSEC_ANOMALY_OUTBOUND}

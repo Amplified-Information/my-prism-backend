@@ -40,6 +40,26 @@ cd api
 ./genInterfaces.sh
 ```
 
+## documentation generation
+
+```bash
+# install the protoc-gen-doc plugin:
+go install github.com/pseudomuto/protoc-gen-doc/cmd/protoc-gen-doc@latest
+
+cd api/proto
+mkdir -p gen/html
+mkdir -p gen/md
+
+# now do:
+protoc --doc_out=./gen/html --doc_opt=html,index.html api.proto
+protoc --doc_out=./gen/md --doc_opt=markdown,index.md api.proto
+
+# render the web page with:
+http-server ./gen/docs
+
+# N.B. --> remove the Internal endpoints from published documentation
+```
+
 
 ## easyrpc
 

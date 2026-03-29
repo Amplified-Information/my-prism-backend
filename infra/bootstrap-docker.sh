@@ -229,13 +229,16 @@ set -o pipefail
 
 ENVIRONMENT="${ENV}"
 MACHINE=$(hostname) # should be 'proxy', 'monolith', or 'data'
+S3_BUCKET="pl-deployment-badges"
 
 BASE_FILE="docker-compose-\$MACHINE.yml"
 ENV_FILE="docker-compose-\$MACHINE.\$ENVIRONMENT.yml"
 
 
 echo "Starting docker compose..."
-docker compose -f "\$BASE_FILE" -f "\$ENV_FILE" up -d # daemon mode
+# -d - daemon mode
+#  --force-recreate - always recreate containers (e.g. apply new env vars - configChange.sh script)
+docker compose -f "\$BASE_FILE" -f "\$ENV_FILE" up -d --force-recreate --remove-orphans
 
 # List running containers:
 docker ps
@@ -257,7 +260,7 @@ if [ -n "\$recently_started" ]; then
   done)
 
   count=\$(echo "\$lines" | wc -l)
-  height=$((70 + 20 * count))
+  height=\$((70 + 20 * count))
   DEPLOY_TIME=\$(date -u +"%Y-%m-%d %H:%M:%S UTC")
 
   echo "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"300\" height=\"\$height\" style=\"font-family:monospace\">" > "\$MACHINE.svg"
@@ -267,14 +270,14 @@ if [ -n "\$recently_started" ]; then
   y=60
   echo "\$lines" | while read svc tag; do
     echo "<text x=\"30\" y=\"\$y\" font-size=\"14\"><tspan fill=\"blue\">\$svc</tspan>:<tspan fill=\"purple\">\$tag</tspan></text>" >> "\$MACHINE.svg"
-    y=$((y + 20))
+    y=\$((y + 20))
   done
 
   echo "</svg>" >> "\$MACHINE.svg"
 
-  echo "Uploading svg to s3://pl-deployment-badges/\$ENVIRONMENT/\$MACHINE.svg..."
-  aws s3 cp "\$MACHINE.svg" "s3://pl-deployment-badges/\$ENVIRONMENT/\$MACHINE.svg" --content-type image/svg+xml
-  aws s3 cp "s3://pl-deployment-badges/\$ENVIRONMENT/\$MACHINE.svg" "s3://pl-deployment-badges/\$ENVIRONMENT/\$MACHINE.svg" --metadata-directive REPLACE --content-type image/svg+xml --cache-control "no-cache, no-store, must-revalidate"
+  echo "Uploading svg to s3://\$S3_BUCKET/\$ENVIRONMENT/\$MACHINE.svg..."
+  aws s3 cp "\$MACHINE.svg" "s3://\$S3_BUCKET/\$ENVIRONMENT/\$MACHINE.svg" --content-type image/svg+xml
+  aws s3 cp "s3://\$S3_BUCKET/\$ENVIRONMENT/\$MACHINE.svg" "s3://\$S3_BUCKET/\$ENVIRONMENT/\$MACHINE.svg" --metadata-directive REPLACE --content-type image/svg+xml --cache-control "no-cache, no-store, must-revalidate"
   rm "\$MACHINE.svg"
 
   echo "svg badge uploaded successfully."

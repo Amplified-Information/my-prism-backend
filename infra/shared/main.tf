@@ -19,11 +19,11 @@ variable "domain_name" {
 }
 output "domain_name" { value = var.domain_name }
 
-variable "aws_key_bastion" {
-  description = "The name of the key pair to use for SSH access to the bastion host"
-  type        = string
-}
-output "aws_key_bastion" { value = var.aws_key_bastion }
+# variable "aws_key_bastion" {
+#   description = "The name of the key pair to use for SSH access to the bastion host"
+#   type        = string
+# }
+# output "aws_key_bastion" { value = var.aws_key_bastion }
 
 variable "aws_az" {
   description = "The AWS availability zone"
@@ -73,10 +73,10 @@ output "ebs_volume_id" { value = var.ebs_volume_id }
 
 
 
-variable "ec2_type_bastion" {
-  type        = string
-}
-output "ec2_type_bastion" { value = var.ec2_type_bastion }
+# variable "ec2_type_bastion" {
+#   type        = string
+# }
+# output "ec2_type_bastion" { value = var.ec2_type_bastion }
 
 variable "ec2_type_proxy" {
   type        = string
@@ -107,7 +107,7 @@ output "ghrc_secret_name" { value = var.ghrc_secret_name }
 
 
 output "ami" { value = "ami-0f9c27b471bdcd702" } // Debian 13
-output "fixed_ip_bastion" { value = "10.0.0.9" } // N.B. bastion is on the public subnet 
+# output "fixed_ip_bastion" { value = "10.0.0.9" } // N.B. bastion is on the public subnet 
 output "fixed_ip_proxy" { value = "10.0.1.10" }     // private subnet 
 output "fixed_ip_monolith" { value = "10.0.1.11" }  // private subnet 
 output "fixed_ip_data" { value = "10.0.1.12" }      // private subnet 
@@ -134,16 +134,16 @@ bash /home/admin/bootstrap-docker.sh ${var.aws_region} ${var.env} ${var.s3_bucke
 EOF
 }
 
-output "install_bastion" {
-  value = <<-EOF
-#!/bin/bash
+# output "install_bastion" {
+#   value = <<-EOF
+# #!/bin/bash
 
-aws s3 cp s3://${var.s3_bucket_deployment}/bootstrap-bastion.sh /home/admin/bootstrap-bastion.sh --region ${var.aws_region}
-chown admin:admin /home/admin/bootstrap-bastion.sh
-bash /home/admin/bootstrap-bastion.sh
+# aws s3 cp s3://${var.s3_bucket_deployment}/bootstrap-bastion.sh /home/admin/bootstrap-bastion.sh --region ${var.aws_region}
+# chown admin:admin /home/admin/bootstrap-bastion.sh
+# bash /home/admin/bootstrap-bastion.sh
 
-EOF
-}
+# EOF
+# }
 
 output "install_data" {
   value = <<-EOF
@@ -593,25 +593,25 @@ resource "aws_security_group" "allow_monolith_egress" {
   }
 }
 
-resource "aws_security_group" "allow_bastion_db" {
-  name        = "allow_bastion_db"
-  description = "Allow internal traffic from bastion to database"
-  vpc_id      = aws_vpc.main.id
+# resource "aws_security_group" "allow_bastion_db" {
+#   name        = "allow_bastion_db"
+#   description = "Allow internal traffic from bastion to database"
+#   vpc_id      = aws_vpc.main.id
 
-  ingress {
-    from_port   = 5432
-    to_port     = 5432
-    protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/24"] # Allow from public network
-  }
+#   ingress {
+#     from_port   = 5432
+#     to_port     = 5432
+#     protocol    = "tcp"
+#     cidr_blocks = ["10.0.0.0/24"] # Allow from public network
+#   }
 
-  egress {
-    from_port   = 5432
-    to_port     = 5432
-    protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/24"]  # Allow from public network
-  }
-}
+#   egress {
+#     from_port   = 5432
+#     to_port     = 5432
+#     protocol    = "tcp"
+#     cidr_blocks = ["10.0.0.0/24"]  # Allow from public network
+#   }
+# }
 
 resource "aws_security_group" "allow_alb_egress" {
   name        = "allow_alb_egress"
@@ -862,9 +862,9 @@ output "allow_monolith_egress_id" {
   value       = aws_security_group.allow_monolith_egress.id
 }
 
-output "allow_bastion_db_id" {
-  value       = aws_security_group.allow_bastion_db.id
-}
+# output "allow_bastion_db_id" {
+#   value       = aws_security_group.allow_bastion_db.id
+# }
 
 output "allow_alb_egress_id" {
   value       = aws_security_group.allow_alb_egress.id

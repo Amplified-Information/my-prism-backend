@@ -48,7 +48,7 @@ sudo DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::="--force-confdef"
 sudo DEBIAN_FRONTEND=noninteractive dpkg --configure -a -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
 
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y unzip jq yq -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y dnsutils telnet -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y dnsutils telnet net-tools lsof -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
 
 # Enable automatic security updates
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y unattended-upgrades -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"

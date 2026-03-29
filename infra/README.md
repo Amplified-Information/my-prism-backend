@@ -318,7 +318,19 @@ Enable the following checkboxes:
   - storage class transition: Glacier Flexible Retrieval (retrieve in minutes -> hours)
 - "Permanently delete noncurrent versions of objects"
   - Days after object creation: 35
-- 
+
+## modsec
+
+modsec is installed on the proxy EC2 box. See: docker-compose-proxy.yml
+
+Example of a malicious request:
+
+```bash
+curl "http://dev.prism.market/?q=<script>alert(1)</script>"
+
+# You should get 403 Forbidden from ModSecurity logs
+# proxy> docker compose logs modsec -f
+```
 
 ## Cloudwatch
 
@@ -390,6 +402,14 @@ Note: please don't create in terraform. Manually create a cloudwatch log group f
 # }
 ```
 
+If delete protection is on, may need to do:
+
+```bash
+terraform state list | grep log_group
+# followed by
+terraform state rm module.shared.aws_cloudwatch_log_group.fluent_bit
+```
+
 ### EC2 boxes accessing the files on S3
 
 *Note: Terraform applies a (combined) policy (./infra/shared) to allow S3 reads to happen.*
@@ -437,36 +457,9 @@ Use your AWS access key from above.
 
 ## Access the boxes
 
-The terraform file has configured the boxes to require a specific key (e.g. `dev`, `dev-bastion`, etc.)
+The terraform file has configured the boxes for login via the aws ssm cli command.
 
-**Note: you cannot login directly from the Internet to `proxy`, `monolith` or `data`. You must connect via `bastion`.**
-
-The `dev` key and `dev-bastion` key are .pem files (ed25519 key type) and were generated using the AWS Web UI:
-
-https://us-east-1.console.aws.amazon.com/ec2/home?region=us-east-1#CreateKeyPair:
-
-Please contact Ethan or the CTO to get the key to enable you to login.
-
-**Do not share these keys! Do not check this file in to source code!**
-
-To login without the keys ever leaving your laptop, do:
-
-```bash
-# start ssh agent:
-eval "$(ssh-agent -s)"
-# add the bastion key and the key for the internal boxes:
-ssh-add ~/Desktop/dev-bastion.pem
-ssh-add ~/Desktop/dev.pem
-ssh-add ~/Desktop/uat-bastion.pem
-ssh-add ~/Desktop/uat.pem
-ssh-add ~/Desktop/prod-bastion.pem
-ssh-add ~/Desktop/prod.pem
-# Can now do:
-ssh -A admin@<bastion_hostname_aws>
-ssh -A admin@10.0.1.11
-```
-
-**Do NOT save keys on the bastion**
+**Note: you cannot login directly from the Internet to `proxy`, `monolith` or `data`. You must connect via `aws ssm`.**
 
 ## Architecture
 

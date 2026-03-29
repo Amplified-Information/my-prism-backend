@@ -27,8 +27,6 @@ Note: enable debugging on a live Envoy proxy: `curl -X POST "http://127.0.0.1:99
 
 Access the admin panel at: http://localhost:9901/
 
-###
-
 Test the proxy locally:
 
 Should return 200:
@@ -42,16 +40,17 @@ Should return 401:
 Should return 401 Unauthorized:
 `easyrpc c -a localhost:8090 -w -i ./proto -p api.proto api.ApiServicePublic.Health`
 
-### OLD
+## rate limiting
 
-Envoy proxy on local:
+Rate limiting is enabled (see: `envoy.filters.http.local_ratelimit` in [envoy.tmpl.yaml](envoy.tmpl.yaml)):
+
+- global rate limit for the application (180 requests/min)
+- per route rate limiting (/api.ApiAuth/ - 5 requests/min)
+
+Test rate limit with:
 
 ```bash
-cd proxy
-source ./loadEnv.sh local2
-# template to config:
-envsubst < ./envoy.tmpl.yaml > /tmp/envoy/envoy.yaml
-# docker run --network=host --rm -it -p $ENVOY_PORT:$ENVOY_PORT -p $ENVOY_PORT_ADMIN:$ENVOY_PORT_ADMIN -v $(pwd)/envoy.yaml:/etc/envoy/envoy.yaml envoyproxy/envoy:contrib-v1.35-latest
-docker run --network=host --rm -it -v /tmp/envoy/envoy.yaml:/etc/envoy/envoy.yaml envoyproxy/envoy:contrib-v1.35-latest
-
+for i in {1..10}; do curl -I https://dev.prism.market/api.ApiAuth/; done
 ```
+
+Should see HTTP 429 responsed with "x-rate-limit" header when the rate limit is hit
