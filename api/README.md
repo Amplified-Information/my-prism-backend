@@ -154,6 +154,10 @@ easyrpc c -a localhost:8888 -d '{"marketId":"019c7644-76f5-77f0-bfe4-f72f2213167
 # update a market's categories:
 easyrpc c -a localhost:8888 -d '{"marketId":"019c7644-76f5-77f0-bfe4-f72f22131675","categoryIds":[1,2]}' -i ./proto -p api.proto api.ApiServicePublic.UpdateMarket
 
+# get the user's portfolio:
+cd api
+easyrpc c -a localhost:8888 -d '{"evmAddress":"440a1d7af93b92920bce50b4c0d2a8e6dcfebfd6","net":"testnet"}' -i ./proto -p api.proto api.ApiServicePublic.GetUserPortfolio
+
 
 
 # get the orderbook:

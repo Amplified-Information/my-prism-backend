@@ -71,29 +71,6 @@ static_resources:
                         header:
                           key: "x-rate-limit" # mark all requests that have undergone rate limiting
                           value: "global"
-                # security headers filter - add security headers globally
-                - name: envoy.filters.http.header_mutation
-                  typed_config:
-                    "@type": type.googleapis.com/envoy.extensions.filters.http.header_mutation.v3.HeaderMutation
-                    response_mutations:
-                      - set_header:
-                          key: "Content-Security-Policy"
-                          value: "default-src 'self'; object-src 'none'; frame-ancestors 'none';"
-                      - set_header:
-                          key: "X-Frame-Options"
-                          value: "DENY"
-                      - set_header:
-                          key: "X-Content-Type-Options"
-                          value: "nosniff"
-                      - set_header:
-                          key: "Strict-Transport-Security"
-                          value: "max-age=63072000; includeSubDomains; preload"
-                      - set_header:
-                          key: "Referrer-Policy"
-                          value: "strict-origin-when-cross-origin"
-                      - set_header:
-                          key: "Permissions-Policy"
-                          value: "geolocation=(), microphone=()"
                 # gRPC-REST transcoder filter - must be before router and after grpc_web, otherwise gRPC-Web requests won't be correctly identified and transcoded, which breaks everything!
                 # - name: envoy.filters.http.grpc_json_transcoder # auto-magically translates REST to gRPC
                 #   typed_config:
@@ -115,6 +92,33 @@ static_resources:
                 virtual_hosts:
                   # service routes
                   - name: service_routes
+                    # add security headers to all responses
+                    response_headers_to_add:
+                      # - header:
+                      #     key: "Content-Security-Policy"
+                      #     value: "default-src 'self'; connect-src 'self' https://explorer-api.walletconnect.com wss://relay.walletconnect.com; img-src 'self' https://bonzo.finance https://cdn.prod.website-files.com https://www.saucerswap.finance https://academy-public.coinmarketcap.com https://m.media-amazon.com https://gateway.pinata.cloud https://cdnuploads.aa.com.tr https://pbs.twimg.com https://static.news.bitcoin.com https://www.crypto-news-flash.com https://encrypted-tbn0.gstatic.com; object-src 'none'; frame-ancestors 'none'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline';"
+                      #   append: false
+                      - header:
+                          key: "X-Frame-Options"
+                          value: "DENY"
+                        append: false
+                      - header:
+                          key: "X-Content-Type-Options"
+                          value: "nosniff"
+                        append: false
+                      - header:
+                          key: "Strict-Transport-Security"
+                          value: "max-age=63072000; includeSubDomains; preload"
+                        append: false
+                      - header:
+                          key: "Referrer-Policy"
+                          value: "strict-origin-when-cross-origin"
+                        append: false
+                      - header:
+                          key: "Permissions-Policy"
+                          value: "geolocation=(), microphone=()"
+                        append: false
+                    
                     domains: ["*"] # ["dev.prism.market", "uat.prism.market", "prism.market", etc.]
                     typed_per_filter_config:
                       # domain level CORS config
@@ -185,7 +189,7 @@ static_resources:
                         typed_per_filter_config:
                           envoy.filters.http.local_ratelimit:
                             "@type": type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
-                            stat_prefix: rexsystems_route_ratelimit
+                            stat_prefix: prism_route_ratelimit
                             token_bucket:
                               max_tokens: 5
                               tokens_per_fill: 5

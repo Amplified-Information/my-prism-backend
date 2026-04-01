@@ -14,16 +14,18 @@ import (
 )
 
 type MarketsService struct {
-	marketsRepository *repositories.MarketsRepository
-	hederaService     *HederaService
-	priceService      *PriceService
-	priceRepository   *repositories.PriceRepository
+	marketsRepository  *repositories.MarketsRepository
+	hederaService      *HederaService
+	priceService       *PriceService
+	prismPointsService *PrismPointsService
+	priceRepository    *repositories.PriceRepository
 }
 
-func (ms *MarketsService) Init(marketsRepository *repositories.MarketsRepository, hederaService *HederaService, priceService *PriceService) error {
+func (ms *MarketsService) Init(marketsRepository *repositories.MarketsRepository, hederaService *HederaService, priceService *PriceService, prismPointsService *PrismPointsService) error {
 	ms.marketsRepository = marketsRepository
 	ms.hederaService = hederaService
 	ms.priceService = priceService
+	ms.prismPointsService = prismPointsService
 	ms.priceRepository = priceService.priceRepository
 
 	lib.Log(lib.LOG_INFO, "Service: Market service initialized successfully")
@@ -550,6 +552,15 @@ func (ms *MarketsService) ResolveMarket(marketId string, noYes bool) (bool, erro
 	}
 	if !isOK {
 		return false, lib.LogAndError(lib.LOG_ERROR, "failed to resolve market on db for unknown reasons")
+	}
+
+	// step 3 - award Prism points - https://docs.prism.market/protocol/prism-points-campaign
+	isOK, err = ms.prismPointsService.AwardPrismPoints(marketId)
+	if err != nil {
+		return false, lib.LogAndError(lib.LOG_ERROR, "failed to award Prism points: %v", err)
+	}
+	if !isOK {
+		return false, lib.LogAndError(lib.LOG_ERROR, "failed to award Prism points for unknown reasons")
 	}
 
 	return true, nil

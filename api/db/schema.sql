@@ -3,7 +3,7 @@
 --
 
 
--- Dumped from database version 18.1 (Debian 18.1-1.pgdg13+2)
+-- Dumped from database version 18.3 (Debian 18.3-1.pgdg13+1)
 -- Dumped by pg_dump version 18.3 (Debian 18.3-1.pgdg12+1)
 
 SET statement_timeout = 0;
@@ -367,6 +367,7 @@ CREATE TABLE public.positions (
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP CONSTRAINT positions_created_at_not_null1 NOT NULL,
     cost_basis_price_yes_usd double precision DEFAULT 0.0 NOT NULL,
     cost_basis_price_no_usd double precision DEFAULT 0.0 NOT NULL,
+    points_awarded_at timestamp with time zone,
     CONSTRAINT positions_account_id_check CHECK ((length(evm_address) >= 5)),
     CONSTRAINT positions_cost_basis_price_no_usd_check CHECK (((cost_basis_price_no_usd >= (0.00)::double precision) AND (cost_basis_price_no_usd <= (1.00)::double precision))),
     CONSTRAINT positions_cost_basis_price_yes_usd_check CHECK (((cost_basis_price_yes_usd >= (0.00)::double precision) AND (cost_basis_price_yes_usd <= (1.00)::double precision))),
@@ -648,6 +649,45 @@ CREATE TABLE public.price_history_p20260311 (
 ALTER TABLE public.price_history_p20260311 OWNER TO your_db_user;
 
 --
+-- Name: prism_points; Type: TABLE; Schema: public; Owner: your_db_user
+--
+
+CREATE TABLE public.prism_points (
+    id integer NOT NULL,
+    market_id character varying(255) NOT NULL,
+    evm_address character varying(255) NOT NULL,
+    points_awarded double precision DEFAULT 0.0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    claimed_at timestamp with time zone
+);
+
+
+ALTER TABLE public.prism_points OWNER TO your_db_user;
+
+--
+-- Name: prism_points_id_seq; Type: SEQUENCE; Schema: public; Owner: your_db_user
+--
+
+CREATE SEQUENCE public.prism_points_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.prism_points_id_seq OWNER TO your_db_user;
+
+--
+-- Name: prism_points_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: your_db_user
+--
+
+ALTER SEQUENCE public.prism_points_id_seq OWNED BY public.prism_points.id;
+
+
+--
 -- Name: roles; Type: TABLE; Schema: public; Owner: your_db_user
 --
 
@@ -914,6 +954,13 @@ ALTER TABLE ONLY public.positions ALTER COLUMN id SET DEFAULT nextval('public.po
 
 
 --
+-- Name: prism_points id; Type: DEFAULT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.prism_points ALTER COLUMN id SET DEFAULT nextval('public.prism_points_id_seq'::regclass);
+
+
+--
 -- Name: roles id; Type: DEFAULT; Schema: public; Owner: your_db_user
 --
 
@@ -1148,6 +1195,22 @@ ALTER TABLE ONLY public.price_history_p20260304
 
 ALTER TABLE ONLY public.price_history_p20260311
     ADD CONSTRAINT price_history_p20260311_pkey PRIMARY KEY (market_id, ts);
+
+
+--
+-- Name: prism_points prism_points_market_id_evm_address_key; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.prism_points
+    ADD CONSTRAINT prism_points_market_id_evm_address_key UNIQUE (market_id, evm_address);
+
+
+--
+-- Name: prism_points prism_points_pkey; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.prism_points
+    ADD CONSTRAINT prism_points_pkey PRIMARY KEY (id);
 
 
 --
@@ -1580,6 +1643,13 @@ CREATE TRIGGER update_order_requests_updated_at BEFORE UPDATE ON public.predicti
 
 
 --
+-- Name: prism_points update_prism_points_updated_at; Type: TRIGGER; Schema: public; Owner: your_db_user
+--
+
+CREATE TRIGGER update_prism_points_updated_at BEFORE UPDATE ON public.prism_points FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+
+--
 -- Name: market_categories fk_category; Type: FK CONSTRAINT; Schema: public; Owner: your_db_user
 --
 
@@ -1593,14 +1663,6 @@ ALTER TABLE ONLY public.market_categories
 
 ALTER TABLE ONLY public.comments
     ADD CONSTRAINT fk_market FOREIGN KEY (market_id) REFERENCES public.markets(market_id) ON DELETE CASCADE;
-
-
---
--- Name: market_categories market_categories_category_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: your_db_user
---
-
-ALTER TABLE ONLY public.market_categories
-    ADD CONSTRAINT market_categories_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.categories(id) ON DELETE CASCADE;
 
 
 --

@@ -238,7 +238,7 @@ ENV_FILE="docker-compose-\$MACHINE.\$ENVIRONMENT.yml"
 echo "Starting docker compose..."
 # -d - daemon mode
 #  --force-recreate - always recreate containers (e.g. apply new env vars - configChange.sh script)
-docker compose -f "\$BASE_FILE" -f "\$ENV_FILE" up -d --force-recreate --remove-orphans
+docker compose -f "\$BASE_FILE" -f "\$ENV_FILE" up -d --remove-orphans
 
 # List running containers:
 docker ps

@@ -15,15 +15,15 @@ import (
 type CronKickOutUnfundedService struct {
 	marketsRepository           *repositories.MarketsRepository
 	predictionIntentsRepository *repositories.PredictionIntentsRepository
-	hederaService               *HederaService
-	predictionIntentsService    *PredictionIntentsService
+	// hederaService               *HederaService
+	predictionIntentsService *PredictionIntentsService
 }
 
-func (cs *CronKickOutUnfundedService) Init(mr *repositories.MarketsRepository, pir *repositories.PredictionIntentsRepository, hs *HederaService, pis *PredictionIntentsService) error {
+func (cs *CronKickOutUnfundedService) Init(mr *repositories.MarketsRepository, pir *repositories.PredictionIntentsRepository, pis *PredictionIntentsService) error {
 	// inject deps
 	cs.marketsRepository = mr
 	cs.predictionIntentsRepository = pir
-	cs.hederaService = hs
+	// cs.hederaService = hs
 	cs.predictionIntentsService = pis
 
 	lib.Log(lib.LOG_INFO, "Service: CronKickOutUnfunded service initialized successfully")
@@ -97,18 +97,20 @@ func (cs *CronKickOutUnfundedService) KickOutOrderIntentsNotBackedByFunds() {
 				continue
 			}
 
-			allowance, err := cs.hederaService.GetSpenderAllowanceUsd(*net, accountId, smartContractId, usdcAddress, usdcDecimals)
+			allowance, err := lib.GetSpenderAllowanceUsd(*net, accountId, smartContractId, usdcAddress, usdcDecimals)
 			if err != nil {
 				lib.Log(lib.LOG_ERROR, "Failed to fetch allowance for account ID %s: %v", accountIdStr, err)
 				continue
 			}
 			lib.Log(lib.LOG_INFO, "-> Account ID %s has allowance %f", accountIdStr, allowance)
 
-			usdcBalance, err := cs.hederaService.GetUsdcBalanceUsd(*net, accountId)
+			usdcBalanceInt64, err := lib.GetUsdcBalanceUsd(*net, accountId)
 			if err != nil {
 				lib.Log(lib.LOG_ERROR, "Failed to fetch USDC balance for account ID %s: %v", accountIdStr, err)
 				continue
 			}
+			usdcBalance := float64(usdcBalanceInt64) / math.Pow(10, float64(usdcDecimals))
+
 			lib.Log(lib.LOG_INFO, "-> Account ID %s has USDC balance %f", accountIdStr, usdcBalance)
 
 			// retrieve all live orderIntents for this market, for this specific accountId

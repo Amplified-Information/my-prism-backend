@@ -26,3 +26,8 @@ services:
       options:
         fluentd-address: localhost:24224
         tag: "{{.Name}}"
+  redis:
+    image: ghcr.io/prismmarketlabs/redis:0.0.1
+    restart: always
+    ports:
+      - "6379:6379"

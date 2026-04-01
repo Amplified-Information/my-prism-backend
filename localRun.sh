@@ -24,12 +24,23 @@ echo "Starting local Proxy..."
 cd ../proxy
 source loadEnv.sh local2
 docker run --pull always -d --network host \
-  -p 8090:8090 -p 9901:9901 \
+  -p 9901:9901 -p 8090:8090 \
   -e ENVOY_HOST_CLOB="${ENVOY_HOST_CLOB}" \
   -e ENVOY_HOST_API="${ENVOY_HOST_API}" \
   -e ENVOY_HOST_WEB="${ENVOY_HOST_WEB}" \
   -e ENVOY_HOST_WEB_ADMIN="${ENVOY_HOST_WEB_ADMIN}" \
   -e ENVOY_HOST_WEB_LP="${ENVOY_HOST_WEB_LP}" \
   ghcr.io/prismmarketlabs/proxy:latest
+
+# echo "Starting local modsec..."
+# cd ../modsec
+# source loadEnv.sh local
+# docker run --pull always -d --network host \
+#   -p 8090:8080 \
+#   -e BACKEND=${MODSEC_BACKEND} \
+#   -e PARANOIA=${MODSEC_PARANOIA} \
+#   -e ANOMALY_INBOUND=${MODSEC_ANOMALY_INBOUND} \
+#   -e ANOMALY_OUTBOUND=${MODSEC_ANOMALY_OUTBOUND} \
+#   ghcr.io/prismmarketlabs/modsec:latest
 
 echo "All services started."

@@ -18,13 +18,10 @@ import (
 
 type AuthService struct {
 	userRoleRepository *repositories.UserRoleRepository
-
-	hederaService *HederaService
 }
 
-func (a *AuthService) Init(d *repositories.UserRoleRepository, h *HederaService) error {
+func (a *AuthService) Init(d *repositories.UserRoleRepository) error {
 	a.userRoleRepository = d
-	a.hederaService = h
 
 	lib.Log(lib.LOG_INFO, "Service: Auth service initialized successfully")
 	return nil
@@ -70,7 +67,7 @@ func (as *AuthService) VerifyChallenge(walletIdStr string, network string, sigBa
 	}
 
 	// look up the public key from the walletId and network
-	publicKey, _, err := as.hederaService.GetPublicKey(walletId, network) // keyType is implicit
+	publicKey, _, err := lib.GetPublicKey(walletId, network) // keyType is implicit
 	if err != nil {
 		return false, lib.LogAndError(lib.LOG_ERROR, "failed to get public key: %v", err)
 	}

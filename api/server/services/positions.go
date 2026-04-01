@@ -6,21 +6,32 @@ import (
 	"api/server/lib"
 	repositories "api/server/repositories"
 	"context"
+	"fmt"
+	"os"
+	"strings"
 	"time"
+
+	hiero "github.com/hiero-ledger/hiero-sdk-go/v2/sdk"
 )
 
 type PositionsService struct {
 	positionsRepository         *repositories.PositionsRepository
 	marketsRepository           *repositories.MarketsRepository
 	predictionIntentsRepository *repositories.PredictionIntentsRepository
-	priceService                *PriceService
+	prismPointsRepository       *repositories.PrismPointsRepository
+
+	hederaService *HederaService
+	priceService  *PriceService
 }
 
-func (ps *PositionsService) Init(positionsRepository *repositories.PositionsRepository, marketsRepository *repositories.MarketsRepository, predictionIntentsRepository *repositories.PredictionIntentsRepository, priceService *PriceService) error {
+func (ps *PositionsService) Init(positionsRepository *repositories.PositionsRepository, marketsRepository *repositories.MarketsRepository, predictionIntentsRepository *repositories.PredictionIntentsRepository, prismPointsRepository *repositories.PrismPointsRepository, hederaService *HederaService, priceService *PriceService) error {
 	// and inject the deps:
 	ps.positionsRepository = positionsRepository
 	ps.marketsRepository = marketsRepository
 	ps.predictionIntentsRepository = predictionIntentsRepository
+	ps.prismPointsRepository = prismPointsRepository
+
+	ps.hederaService = hederaService
 	ps.priceService = priceService
 
 	lib.Log(lib.LOG_INFO, "Service: Positions service initialized successfully")
@@ -46,6 +57,8 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 	response := &pb_api.UserPortfolioResponse{
 		Positions:             make(map[string]*pb_api.PositionInfo),
 		OpenPredictionIntents: make(map[string]*pb_api.PredictionIntents),
+		PrismPoints:           []*pb_api.PrismPoints{},
+		PrismTokenBalance:     uint64(0),
 	}
 
 	for _, userPosition := range userPositions {
@@ -104,26 +117,74 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 		response.OpenPredictionIntents[pi.MarketID.String()].PredictionIntents = append(response.OpenPredictionIntents[pi.MarketID.String()].PredictionIntents, orderbookPosition)
 	}
 
+	// retrieve this user's prism balance:
+	// Perhaps this should be done from the front-end?
+	// validate that the network sent is valid
+	netSelectedByUser := strings.ToLower(req.Net)
+	if !lib.IsValidNetwork(netSelectedByUser) {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "invalid network: %s", req.Net)
+	}
+	_networkSelected, err := hiero.LedgerIDFromString(netSelectedByUser)
+	if err != nil {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get network selected: %v", err)
+	}
+
+	prismTokenIdStr := os.Getenv(fmt.Sprintf("%s_TOKEN", strings.ToUpper(req.Net)))
+	if prismTokenIdStr == "" {
+		lib.Log(lib.LOG_ERROR, "%s_TOKEN environment variable is not set", strings.ToUpper(req.Net))
+	} else {
+		lib.Log(lib.LOG_INFO, "%s_TOKEN: %s", strings.ToUpper(req.Net), prismTokenIdStr)
+	}
+	prismTokenId, err := hiero.TokenIDFromString(prismTokenIdStr)
+	if err != nil {
+		lib.Log(lib.LOG_ERROR, "invalid %s_TOKEN: %v", strings.ToUpper(req.Net), err)
+	}
+
+	userAccountId, err := lib.EvmAddressToHederaAccountId(*_networkSelected, req.EvmAddress)
+	if err != nil {
+		lib.Log(lib.LOG_ERROR, "failed to convert evm address to hedera account ID: %v", err)
+	} else {
+		lib.Log(lib.LOG_INFO, "userAccountId: %s", userAccountId.String())
+	}
+	userBalanceInt64, err := lib.GetTokenBalance(*_networkSelected, prismTokenId, *userAccountId)
+	if err != nil {
+		lib.Log(lib.LOG_ERROR, "failed to get user's prism token balance: %v", err)
+	} else {
+		response.PrismTokenBalance = uint64(userBalanceInt64)
+	}
+
+	// and retrieve the number of Prism Points this user has for a given season:
+	// look up database
+	prismPointsRows, err := ps.prismPointsRepository.GetPrismPointsByUser(req.EvmAddress)
+	if err != nil {
+		lib.Log(lib.LOG_ERROR, "failed to get prism points for user: %v", err)
+	}
+	// process prismPointsRows: aggregate points by season
+	// lib.seasons is [][2]int64 (start, end) unix timestamps
+	// prismPointsRows is []sqlc.PrismPoint (CreatedAt, PointsAwarded)
+
+	// Prepare a slice to hold the sum of points for each season
+	seasonPoints := make([]float64, len(lib.Seasons)) // placeholder, will fix to lib.seasons
+
+	for _, row := range prismPointsRows {
+		createdAtUnix := row.CreatedAt.Unix()
+		for i, rng := range lib.Seasons {
+			if createdAtUnix >= rng[0] && createdAtUnix <= rng[1] {
+				seasonPoints[i] += row.PointsAwarded
+				break // a point can only belong to one season
+			}
+		}
+	}
+
+	// Populate response.PrismPoints
+	for i, pts := range seasonPoints {
+		response.PrismPoints = append(response.PrismPoints, &pb_api.PrismPoints{
+			SeasonId: uint32(i), // season_id is 0-based
+			Points:   float32(pts),
+		})
+	}
+
 	return response, nil
-
-	// On-chain query equivalent:
-	// contractID, err := hiero.ContractIDFromString(
-	// be careful - is _SMART_CONTRACT_ID the correct one here?
-	// 	os.Getenv(fmt.Sprintf("%s_SMART_CONTRACT_ID", strings.ToUpper(req.Net))),
-	// )
-	// if err != nil {
-	// 	return nil, fmt.Errorf("invalid contract ID: %v", err)
-	// }
-	// params := hiero.NewContractFunctionParameters()
-	// params.AddUint128BigInt(marketIdBig)
-	// params.AddAddress(req.EvmAddress)
-
-	// query := hiero.NewContractCallQuery().
-	// 	SetContractID(contractID).
-	// 	SetGas(100_000).
-	// 	SetFunction("getUserTokens", params)
-	// 	// TODO - remove this print!
-	// fmt.Println(query.GetContractID().String())
 }
 
 func (ps *PositionsService) GetAllPositions(limit int32, offset int32) ([]*pb_api.Position, error) {

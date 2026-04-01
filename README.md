@@ -38,6 +38,7 @@ https://github.com/PrismMarketLabs/prism/actions
 ![modsec](https://github.com/PrismMarketLabs/prism/actions/workflows/build-modsec.yml/badge.svg)
 ![mw](https://github.com/PrismMarketLabs/prism/actions/workflows/build-mw.yml/badge.svg)
 ![proxy](https://github.com/PrismMarketLabs/prism/actions/workflows/build-proxy.yml/badge.svg)
+![redis](https://github.com/PrismMarketLabs/prism/actions/workflows/build-redis.yml/badge.svg)
 ![web](https://github.com/PrismMarketLabs/prism/actions/workflows/build-web__submodule__.yml/badge.svg)
 ![web.admin](https://github.com/PrismMarketLabs/prism/actions/workflows/build-web.admin__submodule__.yml/badge.svg)
 ![web.lp](https://github.com/PrismMarketLabs/prism/actions/workflows/build-web.lp.yml/badge.svg)
@@ -48,21 +49,21 @@ To release a new version of a service, follow the release procedure here: https:
 
 `dev`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1774818015) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1774818015) | [data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1774818015) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1774946294) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1774946294) | [data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1774946294) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1774818015) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1774818015) | ![data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1774818015) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1774946294) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1774946294) | ![data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1774946294) |
 
 `uat`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1774818015) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1774818015) | [data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1774818015) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1774946294) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1774946294) | [data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1774946294) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1774818015) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1774818015) | ![data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1774818015) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1774946294) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1774946294) | ![data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1774946294) |
 
 `prod`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1774818015) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1774818015) | [data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1774818015) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1774946294) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1774946294) | [data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1774946294) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1774818015) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1774818015) | ![data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1774818015) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1774946294) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1774946294) | ![data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1774946294) |
 
 *Note: see .git/hooks/pre-commit to see how to update the cache-busting nonce*
 
@@ -91,6 +92,18 @@ You can now open the application at:
 ## Quickstart (docker-compose)
 
 ```bash
+# convenience script:
+./localRun.sh
+docker ps
+
+# then:
+./localStop.sh
+docker ps
+
+
+###
+# Alternatively, run manually:
+###
 # load all env vars
 source ./api/loadEnv.sh local
 source ./clob/loadEnv.sh local
@@ -144,7 +157,7 @@ Connect to the database as follows:
 
 database
 
-`aws ssm start-session --target $EC2ID --document-name AWS-StartPortForwardingSession --parameters "portNumber"=["9999"],"localPortNumber"=["5432"]`
+`aws ssm start-session --target $EC2ID --document-name AWS-StartPortForwardingSession --parameters "portNumber"=["5432"],"localPortNumber"=["9999"] --profile prism --region us-east-1`
 
 Use the VSCode plugin called "Database Client"
 
@@ -153,26 +166,6 @@ Use the VSCode plugin called "Database Client"
 Login details:
 
 ![login details](<resources/loginInfo.png>)
-
-## openappsec
-
-openappsec is running as a kind of WAF
-
-see docker-compose-proxy.yml
-
-Connect to the web UI with:
-
-```bash
-./ec2_instanceIds.sh
-
-export EC2ID=...
-
-aws ssm start-session --profile prism --region us-east-1 --target $EC2ID --document-name AWS-StartPortForwardingSession --parameters "portNumber"=["8080"],"localPortNumber"=["8080"]
-```
-
-Now do:
-
-http://localhost:8080
 
 ## yaak/Postman
 
@@ -314,6 +307,18 @@ There is an **intentional separation** between **configuration** (`.config.ENV`)
 - observe a green build for the service you're interested in: https://github.com/prismmarketlabs/prism/actions
 - run ./tag.sh
 
+### reload a service (keep the same version)
+
+Login to the box directly.
+
+e.g. reload `modsec`:
+
+```bash
+./0_pull_latest.sh 
+source 1_loadEnvVars.sh <ENV>
+docker compose pull modsec && docker compose up -d --force-recreate modsec
+```
+
 ### Manual release procedure:
 
 1. tag the image
@@ -427,6 +432,7 @@ aws ssm delete-parameter --name "/$ENV/DB_PWORD"
 ### local
 
 ```bash
+# run manually
 # load all config/secrets:
 source ./api/loadEnv.sh local
 source ./clob/loadEnv.sh local

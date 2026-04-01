@@ -7,7 +7,7 @@ import { componentTagger } from "lovable-tagger";
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
-    port: 5173,
+    port: 8081, // this port MUST map to the port in proxy/envoy.tmpl.yaml
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {

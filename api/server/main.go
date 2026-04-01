@@ -32,6 +32,7 @@ type server struct {
 	positionsRepository         repositories.PositionsRepository
 	predictionIntentsRepository repositories.PredictionIntentsRepository
 	priceRepository             repositories.PriceRepository
+	prismPointsRepository       repositories.PrismPointsRepository
 	userRoleRepository          repositories.UserRoleRepository
 
 	authService                services.AuthService
@@ -46,8 +47,9 @@ type server struct {
 	newsletterService          services.NewsletterService
 	positionsService           services.PositionsService
 	predictionIntentsService   services.PredictionIntentsService
-	prismService               services.Prism
 	priceService               services.PriceService
+	prismService               services.Prism
+	prismPointsService         services.PrismPointsService
 
 	// don't forget to register in RegisterApiServiceServer grpc call in main()
 }
@@ -350,7 +352,7 @@ func (s *server) ResolveMarket(ctx context.Context, req *pb_api.ResolveMarketReq
 
 	return &pb_api.StdResponse{
 		ErrorCode: 0,
-		Message:   "Market resolved successfully",
+		Message:   "Market resolved successfully. Prism points allocated to users based on their positions.",
 	}, nil
 }
 
@@ -557,6 +559,13 @@ func main() {
 	}
 	defer priceRepository.CloseDb()
 
+	prismPointsRepository := repositories.PrismPointsRepository{}
+	err = prismPointsRepository.InitDb()
+	if err != nil {
+		fatal("Failed to initialize database: %v", err)
+	}
+	defer prismPointsRepository.CloseDb()
+
 	matchesRepository := repositories.MatchesRepository{}
 	err = matchesRepository.InitDb()
 	if err != nil {
@@ -586,7 +595,7 @@ func main() {
 
 	// initialize Auth service
 	authService := services.AuthService{}
-	err = authService.Init(&userRoleRepository, &hederaService)
+	err = authService.Init(&userRoleRepository)
 	if err != nil {
 		fatal("Failed to initialize Auth service: %v", err)
 	}
@@ -596,13 +605,6 @@ func main() {
 	err = priceService.InitPriceService(&priceRepository)
 	if err != nil {
 		fatal("Failed to initialize Price service: %v", err)
-	}
-
-	// initialize Markets service
-	marketsService := services.MarketsService{}
-	err = marketsService.Init(&marketsRepository, &hederaService, &priceService)
-	if err != nil {
-		fatal("Failed to initialize Markets service: %v", err)
 	}
 
 	// initialize Matches service
@@ -634,9 +636,23 @@ func main() {
 
 	// initialize Positions service
 	positionsService := services.PositionsService{}
-	err = positionsService.Init(&positionsRepository, &marketsRepository, &predictionIntentsRepository, &priceService)
+	err = positionsService.Init(&positionsRepository, &marketsRepository, &predictionIntentsRepository, &prismPointsRepository, &hederaService, &priceService)
 	if err != nil {
 		fatal("Failed to initialize Positions service: %v", err)
+	}
+
+	// initialize PrismPoints service
+	prismPointsService := services.PrismPointsService{}
+	err = prismPointsService.Init(&marketsRepository, &positionsRepository, &prismPointsRepository)
+	if err != nil {
+		fatal("Failed to initialize PrismPoints service: %v", err)
+	}
+
+	// initialize Markets service
+	marketsService := services.MarketsService{}
+	err = marketsService.Init(&marketsRepository, &hederaService, &priceService, &prismPointsService)
+	if err != nil {
+		fatal("Failed to initialize Markets service: %v", err)
 	}
 
 	// initialize NATS
@@ -651,13 +667,13 @@ func main() {
 
 	// initialize PredictionIntents service
 	predictionIntentsService := services.PredictionIntentsService{}
-	err = predictionIntentsService.Init(&dbRepository, &marketsRepository, &natsService, &hederaService, &predictionIntentsRepository)
+	err = predictionIntentsService.Init(&dbRepository, &marketsRepository, &natsService, &predictionIntentsRepository)
 	if err != nil {
 		fatal("Failed to initialize PredictionIntents service: %v", err)
 	}
 
 	cronKickOutUnfundedService := services.CronKickOutUnfundedService{}
-	err = cronKickOutUnfundedService.Init(&marketsRepository, &predictionIntentsRepository, &hederaService, &predictionIntentsService)
+	err = cronKickOutUnfundedService.Init(&marketsRepository, &predictionIntentsRepository, &predictionIntentsService)
 	if err != nil {
 		fatal("Failed to initialize CronKickOutUnfunded service: %v", err)
 	}
@@ -699,6 +715,7 @@ func main() {
 		positionsRepository:         positionsRepository,
 		predictionIntentsRepository: predictionIntentsRepository,
 		priceRepository:             priceRepository,
+		prismPointsRepository:       prismPointsRepository,
 		userRoleRepository:          userRoleRepository,
 
 		authService:                authService,

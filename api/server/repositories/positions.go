@@ -114,3 +114,23 @@ func (positionsRepository *PositionsRepository) GetAllPositions(ctx context.Cont
 
 	return result, nil
 }
+
+func (positionsRepository *PositionsRepository) GetPositionsByMarketIdNoPointsAwardedMarketNotResolved(marketId string) (error, []sqlc.Position) {
+	if positionsRepository.db == nil {
+		return lib.ErrorLog("database not initialized"), nil
+	}
+
+	q := sqlc.New(positionsRepository.db)
+
+	marketIdUUID, err := uuid.Parse(marketId)
+	if err != nil {
+		return lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId), nil
+	}
+
+	result, err := q.GetPositionsByMarketIdNoPointsAwardedMarketNotResolved(context.Background(), marketIdUUID)
+	if err != nil {
+		return lib.ErrorLog("GetPositionsByMarketIdNoPointsAwardedMarketNotResolved failed", "error", err, "marketId", marketId), nil
+	}
+
+	return nil, result
+}

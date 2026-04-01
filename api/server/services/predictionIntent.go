@@ -27,17 +27,17 @@ type PredictionIntentsService struct {
 	marketsRepository           *repositories.MarketsRepository
 	predictionIntentsRepository *repositories.PredictionIntentsRepository
 
-	natsService   *NatsService
-	hederaService *HederaService
+	natsService *NatsService
+	// hederaService *HederaService
 }
 
-func (pis *PredictionIntentsService) Init(dbRepository *repositories.DbRepository, marketsRepository *repositories.MarketsRepository, natsService *NatsService, hederaService *HederaService, predictionIntentRepository *repositories.PredictionIntentsRepository) error {
+func (pis *PredictionIntentsService) Init(dbRepository *repositories.DbRepository, marketsRepository *repositories.MarketsRepository, natsService *NatsService, predictionIntentRepository *repositories.PredictionIntentsRepository) error {
 	pis.dbRepository = dbRepository
 	pis.marketsRepository = marketsRepository
 	pis.predictionIntentsRepository = predictionIntentRepository
 
 	pis.natsService = natsService
-	pis.hederaService = hederaService
+	// pis.hederaService = hederaService
 
 	lib.Log(lib.LOG_INFO, "Service: PredictionIntents service initialized successfully, %p", pis)
 
@@ -101,7 +101,7 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PrismPre
 	}
 
 	// First look up the Hedera accountId against the mirror node
-	publicKeyLookedUp, keyTypeLookedUp, err := pis.hederaService.GetPublicKey(accountId, netSelectedByUser)
+	publicKeyLookedUp, keyTypeLookedUp, err := lib.GetPublicKey(accountId, netSelectedByUser)
 	if err != nil {
 		return "", lib.LogAndError(lib.LOG_ERROR, "failed to get public key: %v", err)
 	}
@@ -173,7 +173,7 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PrismPre
 	}
 
 	// ensure user has provided enough of an allowance to the smart contract:
-	spenderAllowanceUsd, err := pis.hederaService.GetSpenderAllowanceUsd(*_networkSelected, accountId, _smartContractId, usdcAddress, usdcDecimals)
+	spenderAllowanceUsd, err := lib.GetSpenderAllowanceUsd(*_networkSelected, accountId, _smartContractId, usdcAddress, usdcDecimals)
 	if err != nil {
 		return "", lib.LogAndError(lib.LOG_ERROR, "failed to get spender allowance: %v", err)
 	}
@@ -189,10 +189,12 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PrismPre
 	}
 
 	// ensure the spenderAllowanceUsd is <= usdc balance currently in the user's wallet
-	currentUserBalanceUsdc, err := pis.hederaService.GetUsdcBalanceUsd(*_networkSelected, accountId)
+	currentUserBalanceUsdcInt64, err := lib.GetUsdcBalanceUsd(*_networkSelected, accountId)
 	if err != nil {
 		return "", lib.LogAndError(lib.LOG_ERROR, "failed to get user's USDC balance: %v", err)
 	}
+	currentUserBalanceUsdc := float64(currentUserBalanceUsdcInt64) / math.Pow(10, float64(usdcDecimals))
+
 	lib.Log(lib.LOG_INFO, "Current USDC balance for account %s: $%.2f", accountId.String(), currentUserBalanceUsdc)
 	lib.Log(lib.LOG_INFO, "Spender allowance for account %s: $%.2f", accountId.String(), spenderAllowanceUsd)
 	if spenderAllowanceUsd <= currentUserBalanceUsdc {

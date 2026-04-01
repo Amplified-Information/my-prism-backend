@@ -25,6 +25,10 @@ Note: disable the admin config in production!
 
 Note: enable debugging on a live Envoy proxy: `curl -X POST "http://127.0.0.1:9901/logging?level=debug"`
 
+To switch it back:
+
+`curl -X POST "http://127.0.0.1:9901/logging?level=info"`
+
 Access the admin panel at: http://localhost:9901/
 
 Test the proxy locally:

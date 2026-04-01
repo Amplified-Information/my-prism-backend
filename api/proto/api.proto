@@ -144,9 +144,16 @@ message PositionInfo {
   string resolved_at = 4        [json_name = "resolvedAt"];
 }
 
+message PrismPoints {
+  uint32 season_id = 1          [json_name = "seasonId"];
+  float points = 2              [json_name = "points"];
+}
+
 message UserPortfolioResponse {
   map<string, PositionInfo> positions = 1                      [json_name = "positions"];
   map<string, PredictionIntents> open_prediction_intents = 2   [json_name = "openPredictionIntents"];
+  repeated PrismPoints prism_points = 3                        [json_name = "prismPoints"];
+  uint64 prism_token_balance = 4                               [json_name = "prismTokenBalance"];
 }
 
 message CommentIdRequest {
