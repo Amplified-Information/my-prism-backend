@@ -49,21 +49,21 @@ To release a new version of a service, follow the release procedure here: https:
 
 `dev`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1774946294) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1774946294) | [data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1774946294) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1775493877) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1775493877) | [data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1775493877) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1774946294) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1774946294) | ![data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1774946294) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1775493877) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1775493877) | ![data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1775493877) |
 
 `uat`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1774946294) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1774946294) | [data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1774946294) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1775493877) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1775493877) | [data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1775493877) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1774946294) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1774946294) | ![data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1774946294) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1775493877) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1775493877) | ![data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1775493877) |
 
 `prod`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1774946294) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1774946294) | [data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1774946294) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1775493877) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1775493877) | [data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1775493877) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1774946294) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1774946294) | ![data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1774946294) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1775493877) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1775493877) | ![data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1775493877) |
 
 *Note: see .git/hooks/pre-commit to see how to update the cache-busting nonce*
 
@@ -164,6 +164,8 @@ Use the VSCode plugin called "Database Client"
 ![Database Client plugin](resources/db.png)
 
 Login details:
+
+Now that the tunnel is running, you can now connect to the remote Postgresql database on localhost port 9999 as shown:
 
 ![login details](<resources/loginInfo.png>)
 
@@ -303,9 +305,33 @@ There is an **intentional separation** between **configuration** (`.config.ENV`)
 
 ### Automatic release procedure:
 
-- check in changes
-- observe a green build for the service you're interested in: https://github.com/prismmarketlabs/prism/actions
-- run ./tag.sh
+- `cd prism`
+- ensure all changes are checked in
+- ~~pull any changes in the sub-modules (e.g. `cd web.lp` `git pull`)~~
+- observe a green build for the service you're interested in releasing: https://github.com/prismmarketlabs/prism/actions
+- after a green build, an (untagged) image should now be available in https://github.com/orgs/PrismMarketLabs/packages
+- run `./tag.sh` for each of the (untagged, `latest`) services you wish to tag
+- follow the interactive prompts. *note: tag.sh automatically increments the patch version for you. You can (optionally) update the major and minor versions, as appropriate*
+- wait for the deployment to `dev` (it takes about 30 seconds to 60 seconds for the AWS EC2 instance to pick up the change)
+- monitor logs for an appropriate burn-in period
+
+Roll-back procedure:
+
+- In the event of observing an error, if possible, roll back to the previous version by reverting the version number to the previous number that was running nominally
+- check in the change to the `docker-compose-*.yml` file(s) as appropriate
+- wait for the deployment to complete (it takes about 30 seconds to 60 seconds for the AWS EC2 instance to pick up the change)
+- monitor logs for an appropriate burn-in period
+- **Note**: some application versions cannot be rolled back - developers should design their applications so that they can be rolled back (e.g. always include database down migrations)
+- If the application still cannot be rolled back, you must fix-forward the error with a new patched release
+
+To elevate to a higher environment (e.g. `prod`):
+
+- open the `docker-compose-*.yml` file for a lower environment that you are happy with: copy the stable version
+- **make sure the version you have copied is stable in a lower environment and is compatible with all other services in the Prism application**
+- carefully paste this version into `docker-compose-*.prod.yml`
+- check in changes to the `docker-compose-*.prod.yml` file
+- wait for the deployment to `prod` (it takes about 30 seconds to 60 seconds for the AWS EC2 instance to pick up the change)
+- monitor logs for an appropriate burn-in period
 
 ### reload a service (keep the same version)
 
@@ -399,7 +425,7 @@ Store a secret:
 
 ```bash
 export ENV=local
- aws ssm put-parameter --name "/$ENV/DB_PWORD" --value "XXXX" --type SecureString --overwrite
+ aws ssm put-parameter --name "/$ENV/DB_PWORD" --value "XXXX" --type SecureString --overwrite --profile prism --region us-east-1
 ```
 
 Retrieve all secrets:

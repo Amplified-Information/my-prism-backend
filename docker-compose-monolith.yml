@@ -87,7 +87,7 @@ services:
       NATS_HOST: ${NATS_HOST}
       NATS_PORT: ${NATS_PORT}
   web:
-    image: ghcr.io/prismmarketlabs/web:0.6.29
+    image: ghcr.io/prismmarketlabs/web:0.6.31
     restart: always
     ports:
       - "5173:80"
@@ -115,7 +115,7 @@ services:
       WEB_ADMIN_HTUSER: ${WEB_ADMIN_HTUSER}
       WEB_ADMIN_HTPASSWD: ${WEB_ADMIN_HTPASSWD}
   web.lp:
-    image: ghcr.io/prismmarketlabs/web.lp:0.3.9
+    image: ghcr.io/prismmarketlabs/web.lp:0.4.4
     restart: always
     ports:
       - "8081:80"
@@ -124,3 +124,7 @@ services:
       options:
         fluentd-address: localhost:24224
         tag: "{{.Name}}"
+    environment:
+      WEB_LP_IS_PASSWORD_PROTECTED: ${WEB_LP_IS_PASSWORD_PROTECTED}
+      WEB_LP_HTUSER: ${WEB_LP_HTUSER}
+      WEB_LP_HTPASSWD: ${WEB_LP_HTPASSWD}

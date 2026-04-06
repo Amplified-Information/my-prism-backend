@@ -3,3 +3,5 @@ services:
     image: ghcr.io/prismmarketlabs/db:0.1.3
   eventbus:
     image: ghcr.io/prismmarketlabs/eventbus:0.1.4
+  redis:
+    image: ghcr.io/prismmarketlabs/redis:0.0.1

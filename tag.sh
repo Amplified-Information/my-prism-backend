@@ -8,8 +8,36 @@
 GITHUB_ORG="prismmarketlabs"
 
 
+
+# Detect if running on Windows (not WSL)
+case "$(uname -s)" in
+  CYGWIN*|MINGW*|MSYS*)
+    echo "ERROR: This script is not supported on native Windows shells."
+    echo "Please run it using Windows Subsystem for Linux (WSL) or a compatible Unix-like environment."
+    exit 1
+    ;;
+esac
+
+
+# Check all dependencies are installed
+REQUIRED_TOOLS=("docker" "git" "yq")
+MISSING_TOOLS=()
+
+for tool in "${REQUIRED_TOOLS[@]}"; do
+  if ! command -v "$tool" &> /dev/null; then
+    MISSING_TOOLS+=("$tool")
+  fi
+done
+
+if [ ${#MISSING_TOOLS[@]} -gt 0 ]; then
+  echo "ERROR: The following required tools are not installed: ${MISSING_TOOLS[*]}"
+  echo "Please install them and try again."
+  exit 1
+fi
+
+
 IMAGE_LINE=$(yq -r ".services | to_entries[] | select(.key == \"${SERVICE}\") | .value.image" "$FILE" 2>/dev/null)
-echo "Checking $FILE: $IMAGE_LINE"
+# echo "Checking $FILE: $IMAGE_LINE"
 IMAGE_TAG=$(echo "$IMAGE_LINE" | grep -oE '[^:]+$')
 if [ "$IMAGE_TAG" = "$TAG_DST" ]; then
   FOUND_TAG=true
