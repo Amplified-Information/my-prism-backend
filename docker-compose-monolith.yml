@@ -1,6 +1,6 @@
 services:
   api:
-    image: ghcr.io/prismmarketlabs/api:0.4.10
+    image: ghcr.io/prismmarketlabs/api:0.4.12
     restart: always
     ports:
       - "8888:8888"

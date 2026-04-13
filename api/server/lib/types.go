@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -35,6 +36,17 @@ const (
 	// Future roles
 )
 
+// price/distance/duration tiers:
+type PriceDistanceTier struct {
+	Threshold float64 // percent distance from market price (e.g., 0.20 for 20%)
+	Weight    int
+}
+type OrderDurationTier struct {
+	Duration time.Duration
+	Weight   int
+}
+
+// Zap logger setup
 var zapLogger = zap.NewNop().Sugar()
 
 func SetZapLogger(l *zap.SugaredLogger) {
