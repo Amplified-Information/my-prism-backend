@@ -51,6 +51,7 @@ services:
       IAM_USERNAME: ${IAM_USERNAME}
       SMTP_USERNAME: ${SMTP_USERNAME}
       MARKET_CREATION_FEE_USDC: ${MARKET_CREATION_FEE_USDC}
+      TOKEN_DECIMALS: ${TOKEN_DECIMALS}
       PREVIEWNET_TOKEN: ${PREVIEWNET_TOKEN}
       TESTNET_TOKEN: ${TESTNET_TOKEN}
       MAINNET_TOKEN: ${MAINNET_TOKEN}
@@ -101,7 +102,7 @@ services:
       HTUSER: ${HTUSER}
       HTPASSWD: ${HTPASSWD}
   web.admin:
-    image: ghcr.io/prismmarketlabs/web.admin:0.1.9
+    image: ghcr.io/prismmarketlabs/web.admin:0.1.10
     restart: always
     ports:
       - "8080:80"
@@ -115,7 +116,7 @@ services:
       WEB_ADMIN_HTUSER: ${WEB_ADMIN_HTUSER}
       WEB_ADMIN_HTPASSWD: ${WEB_ADMIN_HTPASSWD}
   web.lp:
-    image: ghcr.io/prismmarketlabs/web.lp:0.4.4
+    image: ghcr.io/prismmarketlabs/web.lp:0.4.5
     restart: always
     ports:
       - "8081:80"

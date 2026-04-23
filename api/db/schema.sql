@@ -204,6 +204,180 @@ ALTER SEQUENCE public.comments_comment_id_seq OWNED BY public.comments.comment_i
 
 
 --
+-- Name: event_market_resolved; Type: TABLE; Schema: public; Owner: your_db_user
+--
+
+CREATE TABLE public.event_market_resolved (
+    id integer NOT NULL,
+    net character varying(20) NOT NULL,
+    smart_contract_id character varying(256) NOT NULL,
+    timestamp_nano timestamp(6) without time zone NOT NULL,
+    tx_hash character varying(256) NOT NULL,
+    hostname character varying(256) NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    md5_uniq character varying(32) NOT NULL,
+    market_id integer NOT NULL,
+    outcome boolean NOT NULL,
+    CONSTRAINT event_market_resolved_net_check CHECK (((net)::text = ANY ((ARRAY['previewnet'::character varying, 'testnet'::character varying, 'mainnet'::character varying])::text[])))
+);
+
+
+ALTER TABLE public.event_market_resolved OWNER TO your_db_user;
+
+--
+-- Name: event_market_resolved_id_seq; Type: SEQUENCE; Schema: public; Owner: your_db_user
+--
+
+CREATE SEQUENCE public.event_market_resolved_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.event_market_resolved_id_seq OWNER TO your_db_user;
+
+--
+-- Name: event_market_resolved_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: your_db_user
+--
+
+ALTER SEQUENCE public.event_market_resolved_id_seq OWNED BY public.event_market_resolved.id;
+
+
+--
+-- Name: event_position_tokens_purchased; Type: TABLE; Schema: public; Owner: your_db_user
+--
+
+CREATE TABLE public.event_position_tokens_purchased (
+    id integer NOT NULL,
+    net character varying(20) NOT NULL,
+    smart_contract_id character varying(256) NOT NULL,
+    timestamp_nano timestamp(6) without time zone NOT NULL,
+    tx_hash character varying(256) NOT NULL,
+    hostname character varying(256) NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    md5_uniq character varying(32) NOT NULL,
+    market_id integer NOT NULL,
+    buyer text NOT NULL,
+    collateral_usd double precision NOT NULL,
+    qty_scaled double precision NOT NULL,
+    CONSTRAINT event_position_tokens_purchased_net_check CHECK (((net)::text = ANY ((ARRAY['previewnet'::character varying, 'testnet'::character varying, 'mainnet'::character varying])::text[])))
+);
+
+
+ALTER TABLE public.event_position_tokens_purchased OWNER TO your_db_user;
+
+--
+-- Name: event_position_tokens_purchased_id_seq; Type: SEQUENCE; Schema: public; Owner: your_db_user
+--
+
+CREATE SEQUENCE public.event_position_tokens_purchased_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.event_position_tokens_purchased_id_seq OWNER TO your_db_user;
+
+--
+-- Name: event_position_tokens_purchased_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: your_db_user
+--
+
+ALTER SEQUENCE public.event_position_tokens_purchased_id_seq OWNED BY public.event_position_tokens_purchased.id;
+
+
+--
+-- Name: event_token_associated; Type: TABLE; Schema: public; Owner: your_db_user
+--
+
+CREATE TABLE public.event_token_associated (
+    id integer NOT NULL,
+    net character varying(20) NOT NULL,
+    smart_contract_id character varying(256) NOT NULL,
+    timestamp_nano timestamp(6) without time zone NOT NULL,
+    tx_hash character varying(256) NOT NULL,
+    hostname character varying(256) NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    md5_uniq character varying(32) NOT NULL,
+    token text NOT NULL,
+    CONSTRAINT event_token_associated_net_check CHECK (((net)::text = ANY ((ARRAY['previewnet'::character varying, 'testnet'::character varying, 'mainnet'::character varying])::text[])))
+);
+
+
+ALTER TABLE public.event_token_associated OWNER TO your_db_user;
+
+--
+-- Name: event_token_associated_id_seq; Type: SEQUENCE; Schema: public; Owner: your_db_user
+--
+
+CREATE SEQUENCE public.event_token_associated_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.event_token_associated_id_seq OWNER TO your_db_user;
+
+--
+-- Name: event_token_associated_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: your_db_user
+--
+
+ALTER SEQUENCE public.event_token_associated_id_seq OWNED BY public.event_token_associated.id;
+
+
+--
+-- Name: event_winnings_redeemed; Type: TABLE; Schema: public; Owner: your_db_user
+--
+
+CREATE TABLE public.event_winnings_redeemed (
+    id integer NOT NULL,
+    net character varying(20) NOT NULL,
+    smart_contract_id character varying(256) NOT NULL,
+    timestamp_nano timestamp(6) without time zone NOT NULL,
+    tx_hash character varying(256) NOT NULL,
+    hostname character varying(256) NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    md5_uniq character varying(32) NOT NULL,
+    market_id integer NOT NULL,
+    winner text NOT NULL,
+    amount double precision NOT NULL,
+    CONSTRAINT event_winnings_redeemed_net_check CHECK (((net)::text = ANY ((ARRAY['previewnet'::character varying, 'testnet'::character varying, 'mainnet'::character varying])::text[])))
+);
+
+
+ALTER TABLE public.event_winnings_redeemed OWNER TO your_db_user;
+
+--
+-- Name: event_winnings_redeemed_id_seq; Type: SEQUENCE; Schema: public; Owner: your_db_user
+--
+
+CREATE SEQUENCE public.event_winnings_redeemed_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.event_winnings_redeemed_id_seq OWNER TO your_db_user;
+
+--
+-- Name: event_winnings_redeemed_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: your_db_user
+--
+
+ALTER SEQUENCE public.event_winnings_redeemed_id_seq OWNED BY public.event_winnings_redeemed.id;
+
+
+--
 -- Name: global_data; Type: TABLE; Schema: public; Owner: your_db_user
 --
 
@@ -649,6 +823,47 @@ CREATE TABLE public.price_history_p20260311 (
 ALTER TABLE public.price_history_p20260311 OWNER TO your_db_user;
 
 --
+-- Name: prism_lom; Type: TABLE; Schema: public; Owner: your_db_user
+--
+
+CREATE TABLE public.prism_lom (
+    id integer NOT NULL,
+    market_id uuid NOT NULL,
+    account_id character varying(255) NOT NULL,
+    prediction_intent_tx_id uuid NOT NULL,
+    total_lom_score double precision NOT NULL,
+    cron_ran_at timestamp with time zone NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    hedera_tx_hash character varying(255) NOT NULL,
+    CONSTRAINT prism_lom_account_id_check CHECK (((account_id)::text ~ '^\d+\.\d+\.\d+$'::text))
+);
+
+
+ALTER TABLE public.prism_lom OWNER TO your_db_user;
+
+--
+-- Name: prism_lom_id_seq; Type: SEQUENCE; Schema: public; Owner: your_db_user
+--
+
+CREATE SEQUENCE public.prism_lom_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.prism_lom_id_seq OWNER TO your_db_user;
+
+--
+-- Name: prism_lom_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: your_db_user
+--
+
+ALTER SEQUENCE public.prism_lom_id_seq OWNED BY public.prism_lom.id;
+
+
+--
 -- Name: prism_points; Type: TABLE; Schema: public; Owner: your_db_user
 --
 
@@ -926,6 +1141,34 @@ ALTER TABLE ONLY public.comments ALTER COLUMN comment_id SET DEFAULT nextval('pu
 
 
 --
+-- Name: event_market_resolved id; Type: DEFAULT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.event_market_resolved ALTER COLUMN id SET DEFAULT nextval('public.event_market_resolved_id_seq'::regclass);
+
+
+--
+-- Name: event_position_tokens_purchased id; Type: DEFAULT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.event_position_tokens_purchased ALTER COLUMN id SET DEFAULT nextval('public.event_position_tokens_purchased_id_seq'::regclass);
+
+
+--
+-- Name: event_token_associated id; Type: DEFAULT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.event_token_associated ALTER COLUMN id SET DEFAULT nextval('public.event_token_associated_id_seq'::regclass);
+
+
+--
+-- Name: event_winnings_redeemed id; Type: DEFAULT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.event_winnings_redeemed ALTER COLUMN id SET DEFAULT nextval('public.event_winnings_redeemed_id_seq'::regclass);
+
+
+--
 -- Name: global_data id; Type: DEFAULT; Schema: public; Owner: your_db_user
 --
 
@@ -951,6 +1194,13 @@ ALTER TABLE ONLY public.newsletter ALTER COLUMN id SET DEFAULT nextval('public.n
 --
 
 ALTER TABLE ONLY public.positions ALTER COLUMN id SET DEFAULT nextval('public.positions_id_seq'::regclass);
+
+
+--
+-- Name: prism_lom id; Type: DEFAULT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.prism_lom ALTER COLUMN id SET DEFAULT nextval('public.prism_lom_id_seq'::regclass);
 
 
 --
@@ -1003,6 +1253,70 @@ ALTER TABLE ONLY public.categories
 
 ALTER TABLE ONLY public.comments
     ADD CONSTRAINT comments_pkey PRIMARY KEY (comment_id);
+
+
+--
+-- Name: event_market_resolved event_market_resolved_md5_uniq_key; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.event_market_resolved
+    ADD CONSTRAINT event_market_resolved_md5_uniq_key UNIQUE (md5_uniq);
+
+
+--
+-- Name: event_market_resolved event_market_resolved_pkey; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.event_market_resolved
+    ADD CONSTRAINT event_market_resolved_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: event_position_tokens_purchased event_position_tokens_purchased_md5_uniq_key; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.event_position_tokens_purchased
+    ADD CONSTRAINT event_position_tokens_purchased_md5_uniq_key UNIQUE (md5_uniq);
+
+
+--
+-- Name: event_position_tokens_purchased event_position_tokens_purchased_pkey; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.event_position_tokens_purchased
+    ADD CONSTRAINT event_position_tokens_purchased_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: event_token_associated event_token_associated_md5_uniq_key; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.event_token_associated
+    ADD CONSTRAINT event_token_associated_md5_uniq_key UNIQUE (md5_uniq);
+
+
+--
+-- Name: event_token_associated event_token_associated_pkey; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.event_token_associated
+    ADD CONSTRAINT event_token_associated_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: event_winnings_redeemed event_winnings_redeemed_md5_uniq_key; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.event_winnings_redeemed
+    ADD CONSTRAINT event_winnings_redeemed_md5_uniq_key UNIQUE (md5_uniq);
+
+
+--
+-- Name: event_winnings_redeemed event_winnings_redeemed_pkey; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.event_winnings_redeemed
+    ADD CONSTRAINT event_winnings_redeemed_pkey PRIMARY KEY (id);
 
 
 --
@@ -1195,6 +1509,22 @@ ALTER TABLE ONLY public.price_history_p20260304
 
 ALTER TABLE ONLY public.price_history_p20260311
     ADD CONSTRAINT price_history_p20260311_pkey PRIMARY KEY (market_id, ts);
+
+
+--
+-- Name: prism_lom prism_lom_account_id_market_id_prediction_intent_tx_id_key; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.prism_lom
+    ADD CONSTRAINT prism_lom_account_id_market_id_prediction_intent_tx_id_key UNIQUE (account_id, market_id, prediction_intent_tx_id);
+
+
+--
+-- Name: prism_lom prism_lom_pkey; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.prism_lom
+    ADD CONSTRAINT prism_lom_pkey PRIMARY KEY (id);
 
 
 --

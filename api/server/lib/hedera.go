@@ -74,6 +74,11 @@ func EvmAddressToHederaAccountId(networkSelected hiero.LedgerID, evmAddressWith0
 	if !strings.HasPrefix(evmAddressWith0x, "0x") || len(evmAddressWith0x) != 42 {
 		return nil, LogAndError(LOG_ERROR, "invalid EVM address format: %s", evmAddressWith0x)
 	}
+	// make sure evemAddressWith0x has length > 0
+	if len(evmAddressWith0x) == 0 {
+		return nil, LogAndError(LOG_ERROR, "EVM address is empty")
+	}
+
 	mirrorNodeURL := fmt.Sprintf("https://%s.mirrornode.hedera.com/api/v1/accounts/%s", networkSelected.String(), evmAddressWith0x)
 	resp, err := Fetch(GET, mirrorNodeURL, nil)
 	if err != nil {

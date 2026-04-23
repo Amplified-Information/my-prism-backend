@@ -5,7 +5,8 @@ set -e
 echo "Starting local DB..."
 cd db
 source loadEnv.sh local
-docker run --pull always -d \
+docker rm prism-db --force
+docker run --pull always -d --name prism-db \
   -p 5432:5432 \
   -v /mnt/external/postgresdata:/var/lib/postgresql \
   -e POSTGRES_USER="${DB_UNAME}" \
@@ -13,17 +14,23 @@ docker run --pull always -d \
   -e POSTGRES_DB="${DB_NAME}" \
   ghcr.io/prismmarketlabs/db:latest
 
+
+
 echo "Starting local EventBus..."
 cd ../eventbus
 source loadEnv.sh local
-docker run --pull always -d \
+docker rm prism-eventbus --force
+docker run --pull always -d --name prism-eventbus \
   -p 4222:4222 -p 6222:6222 \
   ghcr.io/prismmarketlabs/eventbus:latest
+
+
 
 echo "Starting local Proxy..."
 cd ../proxy
 source loadEnv.sh local2
-docker run --pull always -d --network host \
+docker rm prism-proxy --force
+docker run --pull always -d --name prism-proxy --network host \
   -p 9901:9901 -p 8090:8090 \
   -e ENVOY_HOST_CLOB="${ENVOY_HOST_CLOB}" \
   -e ENVOY_HOST_API="${ENVOY_HOST_API}" \
@@ -43,4 +50,23 @@ docker run --pull always -d --network host \
 #   -e ANOMALY_OUTBOUND=${MODSEC_ANOMALY_OUTBOUND} \
 #   ghcr.io/prismmarketlabs/modsec:latest
 
+
+echo "Starting local blocknode..."
+cd ../blocknode
+source loadEnv.sh local
+docker rm prism-blocknode --force
+docker run --pull always -d --name prism-blocknode --network host \
+  -e BN_QUERY_FREQ_SECS="${BN_QUERY_FREQ_SECS}" \
+  -e BN_QUERY_LOOKBACK_SECS="${BN_QUERY_LOOKBACK_SECS}" \
+  -e BN_SUPPORTED_NETWORKS="${BN_SUPPORTED_NETWORKS}" \
+  -e BN_NATS_HOST="${BN_NATS_HOST}" \
+  -e BN_NATS_PORT="${BN_NATS_PORT}" \
+  -e BN_SMART_CONTRACT_IDS_PREVIEWNET="${BN_SMART_CONTRACT_IDS_PREVIEWNET}" \
+  -e BN_SMART_CONTRACT_IDS_TESTNET="${BN_SMART_CONTRACT_IDS_TESTNET}" \
+  -e BN_SMART_CONTRACT_IDS_MAINNET="${BN_SMART_CONTRACT_IDS_MAINNET}" \
+  -e ABI_TESTNET_0_0_7907066="${ABI_TESTNET_0_0_7907066}" \
+  ghcr.io/prismmarketlabs/blocknode:latest
+
+
+docker ps
 echo "All services started."

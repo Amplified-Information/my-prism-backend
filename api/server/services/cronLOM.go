@@ -13,17 +13,21 @@ type CronLOMService struct {
 	priceRepository             *repositories.PriceRepository
 	marketsRepository           *repositories.MarketsRepository
 	predictionIntentsRepository *repositories.PredictionIntentsRepository
-	hederaService               *HederaService
-	predictionIntentsService    *PredictionIntentsService
+	prismLomRepository          *repositories.PrismLomRepository
+
+	hederaService            *HederaService
+	predictionIntentsService *PredictionIntentsService
 }
 
-func (cs *CronLOMService) Init(mr *repositories.MarketsRepository, pir *repositories.PredictionIntentsRepository, hs *HederaService, pis *PredictionIntentsService, pr *repositories.PriceRepository) error {
+func (cs *CronLOMService) Init(mr *repositories.MarketsRepository, pir *repositories.PredictionIntentsRepository, hs *HederaService, pis *PredictionIntentsService, pr *repositories.PriceRepository, plr *repositories.PrismLomRepository) error {
 	// inject deps
+	cs.priceRepository = pr
 	cs.marketsRepository = mr
 	cs.predictionIntentsRepository = pir
+	cs.prismLomRepository = plr
+
 	cs.hederaService = hs
 	cs.predictionIntentsService = pis
-	cs.priceRepository = pr
 
 	lib.Log(lib.LOG_INFO, "Service: CronLOM service initialized successfully")
 	return nil
@@ -44,7 +48,7 @@ func (cs *CronLOMService) CalcLOM() error {
 	/////
 	// pause for a random duration between 0-55 minutes to mitigate gaming the system by timing orders right before the cron job runs
 	/////
-	randomMinutes := rand.Intn(1) // random integer between 0 and 55 minutes
+	randomMinutes := rand.Intn(56) // random integer between 0 and 55 minutes
 	lib.Log(lib.LOG_INFO, "Pausing for a random duration [0-55] minutes to mitigate gaming: %d minute pause...", randomMinutes)
 	lib.Log(lib.LOG_INFO, "CronLOMService: Sleeping...")
 	time.Sleep(time.Duration(randomMinutes) * time.Minute)
@@ -52,6 +56,7 @@ func (cs *CronLOMService) CalcLOM() error {
 	lib.Log(lib.LOG_INFO, "CronLOMService: Resuming CalcLOM after a %d minute pause...", randomMinutes)
 	cronRanAt := time.Now() // need to store this on the prism_lom table to identify the epoch of orders we are calculating the LOM for
 
+	// TODO - centralise this configuration information:
 	var vestingPeriodYears = 6.0
 	if lib.LaunchDate.After(time.Now().AddDate(int(vestingPeriodYears), 0, 0)) {
 		return lib.ErrorLog("LOM initiative has finished. Date is too far in the future.")
@@ -128,7 +133,7 @@ func (cs *CronLOMService) CalcLOM() error {
 			continue
 		}
 
-		// Calculate LOM for each user
+		// Calculate LOM for each accountId
 		for _, accountIdStr := range accountIds {
 			// userValueUsd := 0.0
 			predictionIntentsForUserInMarket, err := cs.predictionIntentsRepository.GetAllOpenPredictionIntentsByMarketIdAndAccountId(market.MarketID, accountIdStr)
@@ -188,11 +193,10 @@ func (cs *CronLOMService) CalcLOM() error {
 				LOMScore:    float64(distance2durationRatio) * (float64(totalDistancePointsForUser) + float64(totalDurationPointsForUser)),
 			}
 			var market_id = market.MarketID.String()
-			var account_id = accountIdStr
-			if _, ok := lom_scores[account_id]; !ok { // if the account_id key doesn't exist in lom_scores, initialize it with an empty map
-				lom_scores[account_id] = make(map[string]UserLOMSummary)
+			if _, ok := lom_scores[accountIdStr]; !ok { // if the account_id key doesn't exist in lom_scores, initialize it with an empty map
+				lom_scores[accountIdStr] = make(map[string]UserLOMSummary)
 			}
-			lom_scores[account_id][market_id] = lomSummaryForUserInMarket
+			lom_scores[accountIdStr][market_id] = lomSummaryForUserInMarket
 
 			lib.Log(lib.LOG_INFO, "LOM for account ID %s in market ID %s: %f (buyOrders: $%f, sellOrders: $%f, distance points: %d, duration points: %d). Total amount USD in this market: %f", accountIdStr, market.MarketID.String(), lomSummaryForUserInMarket.LOMScore, dollarValueBuyOrdersForUser, dollarValueSellOrdersForUser, totalDistancePointsForUser, totalDurationPointsForUser, totalAmountInMarketUsd)
 		}
@@ -219,9 +223,12 @@ func (cs *CronLOMService) CalcLOM() error {
 		totalLOMScoreCompounded += v
 	}
 
+	// TODO - apply the execution bonus (in proportion to dollar amount):
+	// if no execution bonus to be allocated, roll it forward
+
 	// Final pass: print totals and send PRISM
-	lib.Log(lib.LOG_INFO, "Total DollarValue across all users and markets: %.2f", totalDollarValue)
-	lib.Log(lib.LOG_INFO, "Total LOMScore across all users and markets: %.2f", totalLOMScore)
+	lib.Log(lib.LOG_INFO, "Total DollarValue across all accountIds and markets: %.2f", totalDollarValue)
+	lib.Log(lib.LOG_INFO, "Total LOMScore across all accountIds and markets: %.2f", totalLOMScore)
 	lib.Log(lib.LOG_INFO, "-> PRISM tokens to be allocated to %d accountIds in this epoch", len(lom_scores))
 	for accountID := range lom_scores {
 		dollarTotalByAccount := totalDollarValueByAccount[accountID]
@@ -235,14 +242,39 @@ func (cs *CronLOMService) CalcLOM() error {
 		}
 		lib.Log(lib.LOG_INFO, "*** PRISM available to be allocated today: %f", PRISMperDay)
 		lib.Log(lib.LOG_INFO, "*** PRISM available to be allocated this run: %f", prismToBeAllocatedThisRun)
-		lib.Log(lib.LOG_INFO, "*** Transfer %f PRISM (%%%f.2 of the allocation) to user: %s (epoch: %s)", prismToSendUser, prismToSendUser/prismToBeAllocatedThisRun*100, accountID, cronRanAt.UTC().Format(time.RFC3339))
+		lib.Log(lib.LOG_INFO, "*** Transfer %f PRISM (%%%f.2 of the allocation) to accountId: %s (epoch: %s)", prismToSendUser, prismToSendUser/prismToBeAllocatedThisRun*100, accountID, cronRanAt.UTC().Format(time.RFC3339))
 
-		// TODO - actually send the PRISM tokens:
 		// sanity check the numbers (bounds) before sending, to avoid any bugs that could lead to huge unintended transfers
+		if prismToSendUser < 0 || prismToSendUser > prismToBeAllocatedThisRun {
+			lib.Log(lib.LOG_ERROR, "ERROR: Sanity check failed for account ID %s: prismToSendUser=%f, prismToBeAllocatedThisRun=%f", accountID, prismToSendUser, prismToBeAllocatedThisRun)
+			continue
+		}
 
-		// finally, log this PRISM token transfer action to database (prism_lom table):
-		// TODO
+		/////
+		// Send the PRISM tokens:
+		/////
+		// TODO - handle multiple environments!
+		// hederaTxHash := "<TBD>"
+		// cs.hederaService.SendHTStokens(networkSelected, tokenId, recipientAccountId, prismToSendUser, nDecimals)
 
+		/////
+		// Log to database
+		/////
+		// marketUUID, err := uuid.Parse(marketId)
+		// if err != nil {
+		// 	return lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
+		// }
+		// err := cs.prismLomRepository.CreateLOMentryForUserOnMarket(
+		// 	// market_id, account_id, prediction_intent_tx_id, total_lom_score, cron_ran_at, hedera_tx_hash
+		// 	marketUUID, // market_id is not relevant for this aggregated view, so we can use a placeholder value
+		// 	accountID,
+		// 	compoundedLOMForUser,
+		// 	cronRanAt,
+		// 	hederaTxHash,
+		// )
+		// if err != nil {
+		// 	lib.LogAndError(lib.LOG_ERROR, "Failed to create LOM entry in database for account ID %s: %v", accountID, err)
+		// }
 	}
 
 	return nil

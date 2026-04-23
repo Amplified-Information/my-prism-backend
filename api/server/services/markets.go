@@ -38,6 +38,21 @@ func (ms *MarketsService) GetMarketById(marketId string, isAdmin bool) (*pb_api.
 		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get market by id: %v", err)
 	}
 
+	// if lang != 'en' {
+	// 	// see if it's available on redis
+	// 	// perform redis lookup - 99%
+	// 	// redis 10.0.1.12: 6739
+	// 	if (avail on redis) {
+
+	// 	} else {
+	// 		// do an AI lookup
+	// 		responseFromAI
+
+	// 		// store the result on redis
+	// 		md5(responseFromAI) = responseFromAI
+	// 	}
+	// }
+
 	var createdAt string
 	var resolvedAt string
 	if !market.CreatedAt.Valid {

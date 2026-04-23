@@ -105,3 +105,86 @@ ts-node 2_getUserTokens.ts $SMART_CONTRACT_ID 0.0.3728074
 # send USDC to a smart contract:
 ts-node 3_buy.ts $SMART_CONTRACT_ID 112233 33442
 ```
+
+
+
+## test smart contract 
+
+```bash
+# install foundry globally:
+
+curl -L https://foundry.paradigm.xyz | bash
+
+source ~/.bashrc
+foundryup
+```
+
+```bash
+# use foundry in your application
+cd scs
+mkdir foundry
+cd foundry
+
+# now init with:
+forge init
+
+
+##
+# Now tidy up so can check in code:
+rm -rf .git
+rm -rf .github
+mkdir old
+mv .gitmodules ./old/.gitmodules.old
+
+# may also need to remove any submodule reference here:
+git rm --cached scs/foundry
+rm -rf .git/modules/scs/foundry
+git commit -am "Remove scs/foundry submodule reference"
+
+
+
+
+
+
+# add a smart contract pipeline to:
+.github/workflows/sc-test.yml
+
+# place *.t.sol test files in scs/foundry/test/
+# --> symlink the Solidity source .sol files to scs/foundry/src/
+cd src
+ln -s ../../X.sol .
+forge install OpenZeppelin/openzeppelin-contracts
+forge install dapphub/ds-test
+forge install foundry-rs/forge-std
+
+# Now do:
+forge test
+
+# Ensure you can also do (without having to change <name>.sol):
+./0_compile.sh <name>.sol 
+
+# Use AI to generate *.t.sol tests
+```
+
+Note: if you get stack too deep errors, do:
+
+`forge test --via-ir`
+
+Or, add "via_ir = true" to foundry.toml file
+
+Still having issues? Add optimizer:
+
+```toml
+optimizer = true
+optimizer_runs = 200
+via_ir = true
+
+# may also need the following remappings:
+
+remappings = [
+  '@openzeppelin/=lib/openzeppelin-contracts/',
+  '@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/',
+  'ds-test/=lib/ds-test/src/',
+  'forge-std/=lib/forge-std/src/'
+]
+```

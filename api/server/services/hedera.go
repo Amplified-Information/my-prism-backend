@@ -512,3 +512,33 @@ func (hs *HederaService) PublishHCSmessage(net string, message string) (string, 
 	lib.Log(lib.LOG_INFO, "HCS message published successfully. Hedera txId = %s", tx.TransactionID.String())
 	return tx.TransactionID.String(), nil
 }
+
+func (hs *HederaService) SendHTStokens(networkSelected hiero.LedgerID, tokenId hiero.TokenID, recipientAccountId hiero.AccountID, nTokens float64) (string, error) {
+	txHash := ""
+
+	nDecimalsStr := os.Getenv("TOKEN_DECIMALS")
+	nDecimals, err := strconv.Atoi(nDecimalsStr)
+	if err != nil {
+		return "", lib.LogAndError(lib.LOG_ERROR, "invalid TOKEN_DECIMALS value: %v", err)
+	}
+
+	nHTStokensToSend := int64(nTokens * math.Pow10(nDecimals)) // assuming the token has nDecimals, adjust as needed
+
+	tx, err := hiero.NewTransferTransaction().
+		AddTokenTransfer(tokenId, hs.hedera_clients[networkSelected.String()].GetOperatorAccountID(), -nHTStokensToSend).
+		AddTokenTransfer(tokenId, recipientAccountId, nHTStokensToSend).
+		Execute(hs.hedera_clients[networkSelected.String()])
+	if err != nil {
+		return "", lib.LogAndError(lib.LOG_ERROR, "failed to execute token transfer: %v", err)
+	}
+
+	receipt, err := tx.SetValidateStatus(true).GetReceipt(hs.hedera_clients[networkSelected.String()])
+	if err != nil {
+		return "", lib.LogAndError(lib.LOG_ERROR, "failed to get receipt for token transfer: %v", err)
+	}
+
+	txHash = tx.TransactionID.String()
+	lib.Log(lib.LOG_INFO, "Token transfer successful: %s (status: %s)", txHash, receipt.Status.String())
+
+	return txHash, nil
+}

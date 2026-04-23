@@ -6,7 +6,7 @@ services:
   web:
     image: ghcr.io/prismmarketlabs/web:0.6.31
   web.admin:
-    image: ghcr.io/prismmarketlabs/web.admin:0.1.9
+    image: ghcr.io/prismmarketlabs/web.admin:0.1.10
   web.lp:
-    image: ghcr.io/prismmarketlabs/web.lp:0.4.4
+    image: ghcr.io/prismmarketlabs/web.lp:0.4.5
  

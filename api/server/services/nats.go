@@ -2,25 +2,29 @@ package services
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"os"
+	"strings"
 
 	pb_clob "api/gen/clob"
 	"api/server/lib"
 	repositories "api/server/repositories"
 
+	hiero "github.com/hiero-ledger/hiero-sdk-go/v2/sdk"
 	"github.com/nats-io/nats.go"
 )
 
 type NatsService struct {
-	nats              *nats.Conn
-	hederaService     *HederaService
-	dbRepository      *repositories.DbRepository
-	matchesRepository *repositories.MatchesRepository
-	predictionIntents *repositories.PredictionIntentsRepository
+	nats                         *nats.Conn
+	hederaService                *HederaService
+	dbRepository                 *repositories.DbRepository
+	matchesRepository            *repositories.MatchesRepository
+	predictionIntents            *repositories.PredictionIntentsRepository
+	smartContractEventRepository *repositories.SmartContractEventRepository
 }
 
-func (ns *NatsService) InitNATS(h *HederaService, d *repositories.DbRepository, m *repositories.MatchesRepository, p *repositories.PredictionIntentsRepository) error {
+func (ns *NatsService) InitNATS(h *HederaService, d *repositories.DbRepository, m *repositories.MatchesRepository, p *repositories.PredictionIntentsRepository, scer *repositories.SmartContractEventRepository) error {
 
 	// connect to NATS
 	natsURL := os.Getenv("NATS_URL")
@@ -41,6 +45,8 @@ func (ns *NatsService) InitNATS(h *HederaService, d *repositories.DbRepository, 
 	ns.matchesRepository = m
 	// and inject the PredictionIntentsRepository:
 	ns.predictionIntents = p
+	// and inject the SmartContractEventRepository:
+	ns.smartContractEventRepository = scer
 
 	lib.Log(lib.LOG_INFO, "Service: NATS service initialized successfully")
 	return nil
@@ -63,7 +69,7 @@ func (ns *NatsService) Publish(subject string, data []byte) error {
 	return nil
 }
 
-func (ns *NatsService) Subscribe(subject string, handler nats.MsgHandler) (*nats.Subscription, error) {
+func (ns *NatsService) subscribe(subject string, handler nats.MsgHandler) (*nats.Subscription, error) {
 	if ns.nats == nil {
 		return nil, lib.LogAndError(lib.LOG_ERROR, "NATS connection not initialized")
 	}
@@ -78,7 +84,7 @@ func (ns *NatsService) Subscribe(subject string, handler nats.MsgHandler) (*nats
 
 func (ns *NatsService) HandleOrderMatches() error {
 	lib.Log(lib.LOG_INFO, "HandleOrderMatches subscription starting...")
-	_, err := ns.Subscribe(lib.NATS_CLOB_MATCHES_WILDCARD, func(msg *nats.Msg) {
+	_, err := ns.subscribe(lib.NATS_CLOB_MATCHES_WILDCARD, func(msg *nats.Msg) {
 
 		lib.Log(lib.LOG_INFO, "NATS %s: %s\n", msg.Subject, string(msg.Data))
 
@@ -254,6 +260,88 @@ func (ns *NatsService) HandleOrderMatches() error {
 	})
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+func (ns *NatsService) HandleSmartContractEvents() error {
+	lib.Log(lib.LOG_INFO, "HandleSmartContractEvents subscription starting...")
+
+	// listen to every event
+	// parse the subject
+	// subject format: "testnet:0.0.7907066"
+	// if testnet of type ValidNetworksType, proceed
+	// if 0.0.790066 of type hiero.SmartContractID, proceed
+	// extract the value for the "event" key
+	// switch on event value:
+	// case {PositionTokensPurchased, MarketResolved, WinningsRedeemed, TokenAssociated, AccountAuthorizationResponse,}
+	// just generate the case statement - I will implement the logic for each case later
+
+	_, err := ns.subscribe(">", func(msg *nats.Msg) {
+		// Parse the subject: "testnet:0.0.7907066"
+		subjectParts := strings.Split(msg.Subject, ":")
+		if len(subjectParts) != 2 {
+			// simply return silently if the subject doesn't match the expected format:
+			return
+		}
+
+		network := subjectParts[0]
+		contractId := subjectParts[1]
+
+		// Validate network
+		if !lib.IsValidNetwork(network) {
+			lib.Log(lib.LOG_WARN, "Unknown network: %s", network)
+			return
+		}
+		// Validate it's the contractId of interest
+		expectedContractId := os.Getenv(fmt.Sprintf("%s_SMART_CONTRACT_ID", strings.ToUpper(network)))
+		if contractId != expectedContractId {
+			lib.Log(lib.LOG_WARN, "Received event for unexpected contractId: %s (expected: %s)", contractId, expectedContractId)
+			return
+		}
+		// Validate contractId (optional, if you want to check format)
+		_, err := hiero.ContractIDFromString(contractId)
+		if err != nil {
+			lib.Log(lib.LOG_WARN, "Invalid contractId: %s", contractId)
+			return
+		}
+
+		/////
+		// OK - let's look at the body
+		/////
+		// Parse event JSON
+		var event map[string]interface{}
+		if err := json.Unmarshal(msg.Data, &event); err != nil {
+			lib.Log(lib.LOG_ERROR, "Failed to parse event JSON: %v", err)
+			return
+		}
+		eventType, _ := event["event"].(string)
+
+		// event PositionTokensPurchased(uint128 marketId, address indexed buyer, uint256 collateralUsd, uint256 qtyScaled);
+		// event MarketResolved(uint128 marketId, bool outcome);
+		// event WinningsRedeemed(uint128 marketId, address indexed winner, uint256 amount);
+		// event TokenAssociated(address indexed token);
+		switch eventType {
+		case "PositionTokensPurchased":
+			lib.Log(lib.LOG_INFO, "Received PositionTokensPurchased event (%s): %v", contractId, event)
+			ns.smartContractEventRepository.CreatePositionTokensPurchased(event)
+		case "MarketResolved":
+			lib.Log(lib.LOG_INFO, "Received MarketResolved event (%s): %v", contractId, event)
+			ns.smartContractEventRepository.CreateMarketResolved(event)
+		case "WinningsRedeemed":
+			lib.Log(lib.LOG_INFO, "Received WinningsRedeemed event (%s): %v", contractId, event)
+			ns.smartContractEventRepository.CreateWinningsRedeemed(event)
+		case "TokenAssociated":
+			lib.Log(lib.LOG_INFO, "Received TokenAssociated event (%s): %v", contractId, event)
+			ns.smartContractEventRepository.CreateTokenAssociated(event)
+		case "AccountAuthorizationResponse":
+			lib.Log(lib.LOG_WARN, "AccountAuthorizationResponse event received - not stored in database")
+		default:
+			lib.Log(lib.LOG_WARN, "Unknown event type: %s", eventType)
+		}
+	})
+	if err != nil {
+		return lib.LogAndError(lib.LOG_ERROR, "failed to handle smart contract events: %v", err)
 	}
 	return nil
 }

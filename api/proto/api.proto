@@ -162,6 +162,7 @@ message CommentIdRequest {
 
 message MarketIdRequest {
   string market_id = 1 [json_name = "marketId",     (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
+  optional string lang = 2;
 }
 
 message LimitOffsetRequest {

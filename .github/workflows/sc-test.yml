@@ -1,0 +1,41 @@
+name: smart contract test
+
+on:
+  push:
+    paths:
+      - 'scs/**'
+      
+permissions: {}
+
+env:
+  FOUNDRY_PROFILE: ci
+
+jobs:
+  sc-test:
+    name: Foundry
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          submodules: false
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Show Forge version
+        run: forge --version
+
+      # - name: Run Forge fmt
+      #   working-directory: scs/foundry
+      #   run: forge fmt --check
+
+      - name: Run Forge build
+        working-directory: scs/foundry
+        run: forge build --sizes
+
+      - name: Run Forge tests
+        working-directory: scs/foundry
+        run: forge test -vvv

@@ -9,7 +9,11 @@ fi
 
 CONTRACT_NAME=$1
 
-solc ../contracts/$CONTRACT_NAME.sol --bin --optimize --via-ir --allow-paths ../node_modules/ -o ../contracts/out --overwrite
+solc ../contracts/$CONTRACT_NAME.sol \
+  --abi --bin --metadata --optimize --via-ir \
+  --base-path ../contracts \
+  --include-path ../node_modules \
+  -o ../contracts/out --overwrite
 
 cd ../contracts/out
 
@@ -21,5 +25,11 @@ for f in *.bin; do
 done
 
 ls -altr .
+
+echo ""
+echo "ABI for $CONTRACT_NAME.sol:"
+cat ${CONTRACT_NAME}.abi
+echo ""
+echo ""
 
 echo "Compilation of $CONTRACT_NAME.sol completed."

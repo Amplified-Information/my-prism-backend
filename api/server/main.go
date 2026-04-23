@@ -24,16 +24,18 @@ type server struct {
 	pb_api.UnimplementedApiServicePublicServer
 	pb_api.UnimplementedApiAuthServer
 
-	categoriesRepository        repositories.CategoriesRepository
-	commentsRepository          repositories.CommentsRepository
-	dbRepository                repositories.DbRepository
-	marketsRepository           repositories.MarketsRepository
-	matchesRepository           repositories.MatchesRepository
-	positionsRepository         repositories.PositionsRepository
-	predictionIntentsRepository repositories.PredictionIntentsRepository
-	priceRepository             repositories.PriceRepository
-	prismPointsRepository       repositories.PrismPointsRepository
-	userRoleRepository          repositories.UserRoleRepository
+	categoriesRepository         repositories.CategoriesRepository
+	commentsRepository           repositories.CommentsRepository
+	dbRepository                 repositories.DbRepository
+	marketsRepository            repositories.MarketsRepository
+	matchesRepository            repositories.MatchesRepository
+	positionsRepository          repositories.PositionsRepository
+	predictionIntentsRepository  repositories.PredictionIntentsRepository
+	priceRepository              repositories.PriceRepository
+	prismLomRepository           repositories.PrismLomRepository
+	prismPointsRepository        repositories.PrismPointsRepository
+	smartContractEventRepository repositories.SmartContractEventRepository
+	userRoleRepository           repositories.UserRoleRepository
 
 	authService                services.AuthService
 	categoriesService          services.CategoriesService
@@ -472,6 +474,7 @@ func main() {
 		"IAM_USERNAME",
 		"SMTP_USERNAME",
 		"MARKET_CREATION_FEE_USDC",
+		"TOKEN_DECIMALS",
 		"PREVIEWNET_TOKEN",
 		"TESTNET_TOKEN",
 		"MAINNET_TOKEN",
@@ -559,6 +562,13 @@ func main() {
 	}
 	defer priceRepository.CloseDb()
 
+	prismLomRepository := repositories.PrismLomRepository{}
+	err = prismLomRepository.InitDb()
+	if err != nil {
+		fatal("Failed to initialize database: %v", err)
+	}
+	defer prismLomRepository.CloseDb()
+
 	prismPointsRepository := repositories.PrismPointsRepository{}
 	err = prismPointsRepository.InitDb()
 	if err != nil {
@@ -572,6 +582,13 @@ func main() {
 		fatal("Failed to initialize database: %v", err)
 	}
 	defer matchesRepository.CloseDb()
+
+	smartContractEventRepository := repositories.SmartContractEventRepository{}
+	err = smartContractEventRepository.InitDb()
+	if err != nil {
+		fatal("Failed to initialize database: %v", err)
+	}
+	defer smartContractEventRepository.CloseDb()
 
 	userRoleRepository := repositories.UserRoleRepository{}
 	err = userRoleRepository.InitDb()
@@ -657,13 +674,11 @@ func main() {
 
 	// initialize NATS
 	natsService := services.NatsService{}
-	err = natsService.InitNATS(&hederaService, &dbRepository, &matchesRepository, &predictionIntentsRepository)
+	err = natsService.InitNATS(&hederaService, &dbRepository, &matchesRepository, &predictionIntentsRepository, &smartContractEventRepository)
 	if err != nil {
 		fatal("Failed to initialize NATS: %v", err)
 	}
 	defer natsService.CloseNATS()
-	// NATS start listening for matches
-	natsService.HandleOrderMatches()
 
 	// initialize PredictionIntents service
 	predictionIntentsService := services.PredictionIntentsService{}
@@ -679,7 +694,7 @@ func main() {
 	}
 
 	cronLOMService := services.CronLOMService{}
-	err = cronLOMService.Init(&marketsRepository, &predictionIntentsRepository, &hederaService, &predictionIntentsService, &priceRepository)
+	err = cronLOMService.Init(&marketsRepository, &predictionIntentsRepository, &hederaService, &predictionIntentsService, &priceRepository, &prismLomRepository)
 	if err != nil {
 		fatal("Failed to initialize CronLOM service: %v", err)
 	}
@@ -707,16 +722,18 @@ func main() {
 		grpc.UnaryInterceptor(lib.ValidationInterceptor()),
 	)
 	sharedServer := &server{
-		commentsRepository:          commentsRepository,
-		categoriesRepository:        categoriesRepository,
-		dbRepository:                dbRepository,
-		marketsRepository:           marketsRepository,
-		matchesRepository:           matchesRepository,
-		positionsRepository:         positionsRepository,
-		predictionIntentsRepository: predictionIntentsRepository,
-		priceRepository:             priceRepository,
-		prismPointsRepository:       prismPointsRepository,
-		userRoleRepository:          userRoleRepository,
+		commentsRepository:           commentsRepository,
+		categoriesRepository:         categoriesRepository,
+		dbRepository:                 dbRepository,
+		marketsRepository:            marketsRepository,
+		matchesRepository:            matchesRepository,
+		positionsRepository:          positionsRepository,
+		predictionIntentsRepository:  predictionIntentsRepository,
+		priceRepository:              priceRepository,
+		prismLomRepository:           prismLomRepository,
+		prismPointsRepository:        prismPointsRepository,
+		smartContractEventRepository: smartContractEventRepository,
+		userRoleRepository:           userRoleRepository,
 
 		authService:                authService,
 		categoriesService:          categoriesService,
@@ -737,6 +754,10 @@ func main() {
 	pb_api.RegisterApiServiceInternalServer(grpcServer, sharedServer)
 	pb_api.RegisterApiServicePublicServer(grpcServer, sharedServer)
 	pb_api.RegisterApiAuthServer(grpcServer, sharedServer)
+
+	// NATS start listening
+	natsService.HandleOrderMatches()
+	natsService.HandleSmartContractEvents()
 
 	// start cron jobs:
 	c := cron.New(cron.WithSeconds())

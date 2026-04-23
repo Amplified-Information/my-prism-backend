@@ -1,10 +1,10 @@
 #!/bin/bash
 
 echo "stopping db..."
-docker ps --filter "ancestor=ghcr.io/prismmarketlabs/db:latest" -q | xargs -r docker stop
+docker stop prism-db 2>/dev/null; docker rm prism-db 2>/dev/null
 echo "stopping eventbus..."
-docker ps --filter "ancestor=ghcr.io/prismmarketlabs/eventbus:latest" -q | xargs -r docker stop
+docker stop prism-eventbus 2>/dev/null; docker rm prism-eventbus 2>/dev/null
 echo "stopping proxy..."
-docker ps --filter "ancestor=ghcr.io/prismmarketlabs/proxy:latest" -q | xargs -r docker stop
+docker stop prism-proxy 2>/dev/null; docker rm prism-proxy 2>/dev/null
 
 echo "Selected services stopped."

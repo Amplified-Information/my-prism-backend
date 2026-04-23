@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
-import "../node_modules/@openzeppelin/contracts/utils/Base64.sol";
+// import "../node_modules/@openzeppelin/contracts/utils/Base64.sol";
+import "@openzeppelin/contracts/utils/Base64.sol";
 
 interface IERC20 {
   function transfer(address to, uint256 amount) external returns (bool);
@@ -58,11 +59,12 @@ contract Prism {
   uint256 public marketCreationFeeUsdc;
   uint256 public collateralTokenNdecimals;
   
+  // Note: must also update the database scheme (event_* tables)
   event PositionTokensPurchased(uint128 marketId, address indexed buyer, uint256 collateralUsd, uint256 qtyScaled);
   event MarketResolved(uint128 marketId, bool outcome);
-  event WinningsRedeemed(uint128 marketId, address indexed user, uint256 amount);
+  event WinningsRedeemed(uint128 marketId, address indexed winner, uint256 amount);
   event TokenAssociated(address indexed token);
-  event AccountAuthorizationResponse(int64 responseCode, address account, bool response);
+  // event AccountAuthorizationResponse(int64 responseCode, address account, bool response);
 
 
   /**
@@ -218,7 +220,7 @@ contract Prism {
     // collateralToken.transfer(msg.sender, nTokens * 49/50);
 
     // Transfer collateral 1:1
-    collateralToken.transfer(msg.sender, nTokens);
+    require(collateralToken.transfer(msg.sender, nTokens), "Transfer failed");
 
     // Clear balances
     if (yesTokens[marketId][msg.sender] > 0 ) yesTokens[marketId][msg.sender] = 0;
@@ -231,6 +233,10 @@ contract Prism {
 
     return nTokens; // nTokens === amountUSDC (1:1 mapping)
   }
+
+  /**
+  Secondary market
+  */
 
   /**
   This function allows the oracle to resolve the market by specifying the outcome (YES or NO).
@@ -307,7 +313,7 @@ contract Prism {
   function isAuthorized(address account, bytes memory message, bytes memory signatureMap) internal returns (bool) {
     (int64 responseCode, bool authorized) = HAS.isAuthorized(account, message, signatureMap);
     require(responseCode == 22, "isAuthorized failed");
-    emit AccountAuthorizationResponse(responseCode, account, authorized);
+    // emit AccountAuthorizationResponse(responseCode, account, authorized);
     return authorized;
   }
 
