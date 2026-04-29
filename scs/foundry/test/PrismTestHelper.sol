@@ -6,8 +6,8 @@ import { Prism } from "../src/Prism.sol";
 contract PrismTestHelper is Prism {
     constructor(address _collateralToken) Prism(_collateralToken) {}
 
-    function exposedAssemblePayload(uint8 buySell, uint256 collateralUsd, address evmAddr, uint128 marketId, uint128 txId) external pure returns (bytes memory) {
-        return assemblePayload(buySell, collateralUsd, evmAddr, marketId, txId);
+    function exposedAssemblePayload(uint8 buySell, uint256 collateralUsd, address evmAddr, uint128 marketId, uint128 txId, bool primarySecondary) external pure returns (bytes memory) {
+        return assemblePayload(buySell, collateralUsd, evmAddr, marketId, txId, primarySecondary ? 0xf1 : 0xf0);
     }
 
     function exposedPrefixMessageFixed(string memory messageHashBase64) external pure returns (bytes memory) {

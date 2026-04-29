@@ -126,6 +126,8 @@ contract Prism {
   @param txIdNo txId of the No side
   @param sigObjYes The signatureObject (includes the key type) of the YES transaction
   @param sigObjNo The signatureObject (includes the key type) of the NO transaction
+  @param primarySecondaryYes A boolean indicating whether this is a primary or secondary market transaction for the YES side
+  @param primarySecondaryNo A boolean indicating whether this is a primary or secondary market transaction for the NO side
   @return yes The updated number of YES position tokens held by the signerYes account
   @return no The updated number of NO position tokens held by the signerNo account
   */
@@ -142,7 +144,9 @@ contract Prism {
     uint128 txIdYes,
     uint128 txIdNo,
     bytes calldata sigObjYes,
-    bytes calldata sigObjNo
+    bytes calldata sigObjNo,
+    bool primarySecondaryYes,
+    bool primarySecondaryNo
   ) external onlyOwner returns (uint256 yes, uint256 no, uint256 yes2, uint256 no2) {
     require(resolutionTimes[marketId] == 0, "Market resolved");
     require(bytes(statements[marketId]).length > 0, "No market statement has been set");
@@ -182,8 +186,8 @@ contract Prism {
     }
 
     // on-chain signature verifiaction using an on-chain assembled payload (check the original values at order entry):
-    require(isAuthorized(signerYes, assemblePayload(0xf0 /* YES MUST have this prefix */, collateralUsdAbsScaledYes, signerYes, marketId, txIdYes), sigObjYes), "isAuthorized YES failed");
-    require(isAuthorized(signerNo,  assemblePayload(0xf1 /* NO MUST have this prefix */,  collateralUsdAbsScaledNo,  signerNo,  marketId, txIdNo),  sigObjNo),  "isAuthorized NO failed");
+    require(isAuthorized(signerYes, assemblePayload(0xf0 /* YES MUST have this prefix */, collateralUsdAbsScaledYes, signerYes, marketId, txIdYes, primarySecondaryYes ? 0xf1 : 0xf0 /* true => secondary (0xf1), false => primary (0xf0) */), sigObjYes), "isAuthorized YES failed");
+    require(isAuthorized(signerNo,  assemblePayload(0xf1 /* NO MUST have this prefix */,  collateralUsdAbsScaledNo,  signerNo,  marketId, txIdNo, primarySecondaryNo ? 0xf1 : 0xf0 /* true => secondary (0xf1), false => primary (0xf0) */),  sigObjNo),  "isAuthorized NO failed");
 
     // Transfer 2 collaterals (lower amount) from the buyer to the Prism smart contract using the buyer's allowance
     require(collateralToken.transferFrom(signerYes, address(this), collateralUsdAbsScaled_lower), "Transfer failed");
@@ -351,9 +355,9 @@ contract Prism {
   Then it converts the keccak hash to a base64-encoded string (which will have a fixed length of 44 characters)
   Finally, it prefixes the base64-encoded string with the Hedera Signed Message header (using a hard-coded input string length of 44 characters)
   */
-  function assemblePayload(uint8 buySell, uint256 collateralUsd, address evmAddr, uint128 marketId, uint128 txId) internal pure returns (bytes memory) {
+  function assemblePayload(uint8 buySell, uint256 collateralUsd, address evmAddr, uint128 marketId, uint128 txId, uint8 primarySecondary) internal pure returns (bytes memory) {
     // note: when using encodePacked, a bool gets encoded to 0x00 or 0x01 - this zero prefix prevents an odd register length
-    bytes memory assembled = abi.encodePacked(buySell, collateralUsd, evmAddr, marketId, txId);
+    bytes memory assembled = abi.encodePacked(buySell, collateralUsd, evmAddr, marketId, txId, primarySecondary);
     bytes32 keccak = keccak256(assembled);
 
     string memory base64 = Base64.encode(abi.encodePacked(keccak));
@@ -381,5 +385,42 @@ contract Prism {
   modifier onlyOracle() {
     require(msg.sender == owner /* TODO - change to Oracle address */, "Only oracle can call this function");
     _;
+  }
+
+
+
+
+
+  /**
+  Admin-only function to safely transfer YES or NO position tokens between users for a given market.
+  Used for off-chain settlement. Only callable by the contract owner.
+  @param marketId The market in which the transfer occurs.
+  @param from The address to transfer tokens from.
+  @param to The address to transfer tokens to.
+  @param yesAmount The amount of YES tokens to transfer.
+  @param noAmount The amount of NO tokens to transfer.
+  */
+  function adminTransferPositionTokens(
+    uint128 marketId,
+    address from,
+    address to,
+    uint256 yesAmount,
+    uint256 noAmount
+  ) external onlyOwner {
+    // TODO - digital signature verification for this function as well, similar to buyPositionTokensOnBehalfAtomic, to ensure the authenticity of the transfer request and prevent unauthorized transfers. 
+    // This would involve creating a payload that includes the transfer details (marketId, from, to, yesAmount, noAmount) and verifying the signature against the admin's public key.
+    
+    // YES tokens
+    if (yesAmount > 0) {
+      require(yesTokens[marketId][from] >= yesAmount, "Insufficient YES tokens");
+      yesTokens[marketId][from] -= yesAmount;
+      yesTokens[marketId][to] += yesAmount;
+    }
+    // NO tokens
+    if (noAmount > 0) {
+      require(noTokens[marketId][from] >= noAmount, "Insufficient NO tokens");
+      noTokens[marketId][from] -= noAmount;
+      noTokens[marketId][to] += noAmount;
+    }
   }
 }

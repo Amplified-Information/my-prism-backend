@@ -101,15 +101,15 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 	}
 	// loop through each predictionIntents and add to OrderbookPositions
 	for _, pi := range predictionIntents {
-		orderbookPosition := &pb_api.PredictionIntent{
-			TxId:        pi.TxID.String(),
-			Net:         pi.Net,
-			MarketId:    pi.MarketID.String(),
-			GeneratedAt: pi.GeneratedAt.String(),
-			AccountId:   pi.AccountID,
-			MarketLimit: pi.MarketLimit,
-			PriceUsd:    pi.PriceUsd,
-			Qty:         pi.Qty,
+		orderbookPosition := &pb_api.PredictionIntentResponse{
+			TxId:             pi.TxID.String(),
+			Net:              pi.Net,
+			MarketId:         pi.MarketID.String(),
+			GeneratedAt:      pi.GeneratedAt.String(),
+			AccountId:        pi.AccountID,
+			PriceUsd:         pi.PriceUsd,
+			Qty:              pi.Qty,
+			PrimarySecondary: pi.PrimarySecondary,
 		}
 		if _, ok := response.OpenPredictionIntents[pi.MarketID.String()]; !ok {
 			response.OpenPredictionIntents[pi.MarketID.String()] = &pb_api.PredictionIntents{}
@@ -133,7 +133,7 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 	if prismTokenIdStr == "" {
 		lib.Log(lib.LOG_ERROR, "%s_TOKEN environment variable is not set", strings.ToUpper(req.Net))
 	} else {
-		lib.Log(lib.LOG_INFO, "%s_TOKEN: %s", strings.ToUpper(req.Net), prismTokenIdStr)
+		// lib.Log(lib.LOG_INFO, "%s_TOKEN: %s", strings.ToUpper(req.Net), prismTokenIdStr)
 	}
 	prismTokenId, err := hiero.TokenIDFromString(prismTokenIdStr)
 	if err != nil {
@@ -144,7 +144,7 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 	if err != nil {
 		lib.Log(lib.LOG_ERROR, "failed to convert evm address to hedera account ID: %v", err)
 	} else {
-		lib.Log(lib.LOG_INFO, "userAccountId: %s", userAccountId.String())
+		// lib.Log(lib.LOG_INFO, "userAccountId: %s", userAccountId.String())
 	}
 	userBalanceInt64, err := lib.GetTokenBalance(*_networkSelected, prismTokenId, *userAccountId)
 	if err != nil {

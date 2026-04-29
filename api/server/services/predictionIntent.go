@@ -207,6 +207,42 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PrismPre
 		}
 	}
 
+	// secondary orders
+	// additional checks for secondary orders
+	// if it's a secondary order, ensure (on-chain read-only check) that the user has enough position tokens to cover their predictionIntent
+	// this transfer will be attempted on-chain and will fail if there aren't enough position tokens to transfer, even if this API-side check fails
+	if req.PrimarySecondary == "s" {
+		// TODO
+
+		// get user position tokens balance for this market
+		// call: getUserTokens(uint128 marketId, address user)
+		nYesPositionTokens, nNoPositionTokens, err := pis.natsService.hederaService.GetUserPositionTokenBalance(*_networkSelected, req.MarketId, req.EvmAddress)
+		if err != nil {
+			return "", lib.LogAndError(lib.LOG_ERROR, "failed to get user's position token balance: %v", err)
+		}
+		lib.Log(lib.LOG_INFO, "[secondary] User has %.8f 'yes' position tokens and %.8f 'no' position tokens on market %s", nYesPositionTokens, nNoPositionTokens, req.MarketId)
+
+		if req.PriceUsd > 0 {
+			// this is a secondary buy/long order
+			// so check the user has enough "no" position tokens to cover it
+			if nYesPositionTokens >= req.Qty {
+				// OK - user has enough "yes" position tokens to cover this secondary buy/long order
+				lib.Log(lib.LOG_INFO, "[secondary] User has %.8f 'yes' position tokens for market %s, which is enough to cover this secondary **buy/long** order of %.8f tokens", nYesPositionTokens, req.MarketId, req.Qty)
+			} else {
+				return "", lib.LogAndError(lib.LOG_ERROR, "user has %.8f 'yes' position tokens but needs %.8f to place this secondary **buy/long** order", nYesPositionTokens, req.Qty)
+			}
+		} else {
+			// this is a secondary sell/short order
+			// so check the user has enough "yes" position tokens to cover it
+			if nNoPositionTokens >= req.Qty {
+				// OK - user has enough "no" position tokens to cover this secondary sell/short order
+				lib.Log(lib.LOG_INFO, "[secondary] User has %.8f 'no' position tokens for market %s, which is enough to cover this secondary **sell/short** order of %.8f tokens", nNoPositionTokens, req.MarketId, req.Qty)
+			} else {
+				return "", lib.LogAndError(lib.LOG_ERROR, "user has %.8f 'no' position tokens but needs %.8f to place this secondary **sell/short** order", nNoPositionTokens, req.Qty)
+			}
+		}
+	}
+
 	/// OK - All validations passed
 	/// Now you can (attempt to) put the order on the CLOB (subject to on-chain sig verification)
 
@@ -214,20 +250,33 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PrismPre
 	// notify the CLOB via NATS:
 	/////
 
+	if math.Abs(req.PriceUsd) == 1.0 {
+		// it's a market order!
+		// - get the orderbook depth
+		// - if size is greater than the available liquidity, reject the order to avoid user frustration of having a partially filled market order and then having to cancel the remaining qty
+		qty, err := pis.getAvailableLiquidityUsdForMarket(req.PriceUsd, req.MarketId)
+		if err != nil {
+			return "", lib.LogAndError(lib.LOG_ERROR, "failed to get available liquidity for market %s: %v", req.MarketId, err)
+		}
+		if req.Qty > qty {
+			return "", lib.LogAndError(lib.LOG_ERROR, "order quantity %f exceeds available liquidity %f for market %s", req.Qty, qty, req.MarketId)
+		}
+	}
+
 	// Marshal the CLOB req: *pb_api.PredictionIntentRequest to JSON
 	clobRequestObj := &pb_clob.CreateOrderRequestClob{
-		TxId:        req.TxId,
-		Net:         req.Net,
-		MarketId:    req.MarketId,
-		AccountId:   req.AccountId,
-		MarketLimit: req.MarketLimit,
-		PriceUsd:    req.PriceUsd,
-		Qty:         req.Qty, // the clob will decrement this value over time as matches occur
-		QtyOrig:     req.Qty, // need to keep track of the original qty for on/off-chain signature validation
-		Sig:         req.Sig,
-		PublicKey:   req.PublicKey, // passing extra key info - i) avoid lookups ii) handle situation where user has changed their key
-		EvmAddress:  req.EvmAddress,
-		KeyType:     int32(req.KeyType),
+		TxId:             req.TxId,
+		Net:              req.Net,
+		MarketId:         req.MarketId,
+		AccountId:        req.AccountId,
+		PriceUsd:         req.PriceUsd,
+		Qty:              req.Qty, // the clob will decrement this value over time as matches occur
+		QtyOrig:          req.Qty, // need to keep track of the original qty for on/off-chain signature validation
+		Sig:              req.Sig,
+		PublicKey:        req.PublicKey, // passing extra key info - i) avoid lookups ii) handle situation where user has changed their key
+		EvmAddress:       req.EvmAddress,
+		KeyType:          int32(req.KeyType),
+		PrimarySecondary: req.PrimarySecondary,
 	}
 	clobRequestJSON, err := json.Marshal(clobRequestObj)
 	if err != nil {
@@ -338,21 +387,60 @@ func (pis *PredictionIntentsService) GetAllPredictionIntents(limit int32, offset
 	// Map []sqlc.PredictionIntent to []*pb_api.PrismPredictionIntentRequest
 	var pbPredictionIntents []*pb_api.PrismPredictionIntentRequest
 	for _, pi := range predictionIntents {
+
 		pbPredictionIntents = append(pbPredictionIntents, &pb_api.PrismPredictionIntentRequest{
-			TxId:        pi.TxID.String(),
-			Net:         pi.Net,
-			MarketId:    pi.MarketID.String(),
-			AccountId:   pi.AccountID,
-			MarketLimit: pi.MarketLimit,
-			PriceUsd:    pi.PriceUsd,
-			Qty:         pi.Qty,
-			Sig:         pi.Sig,
-			PublicKey:   pi.PublicKeyHex,
-			EvmAddress:  pi.Evmaddress,
-			KeyType:     uint32(pi.Keytype),
-			GeneratedAt: pi.GeneratedAt.Format(time.RFC3339),
+			TxId:             pi.TxID.String(),
+			Net:              pi.Net,
+			MarketId:         pi.MarketID.String(),
+			AccountId:        pi.AccountID,
+			PriceUsd:         pi.PriceUsd,
+			Qty:              pi.Qty,
+			Sig:              pi.Sig,
+			PublicKey:        pi.PublicKeyHex,
+			EvmAddress:       pi.Evmaddress,
+			KeyType:          uint32(pi.Keytype),
+			GeneratedAt:      pi.GeneratedAt.Format(time.RFC3339),
+			PrimarySecondary: pi.PrimarySecondary,
 		})
 	}
 
 	return pbPredictionIntents, nil
+}
+
+/*
+*
+this function returs the available Usd liquidity in the orderbook (for a market order)
+*/
+func (pis *PredictionIntentsService) getAvailableLiquidityUsdForMarket(priceUsd float64, marketId string) (float64, error) {
+	if math.Abs(priceUsd) != 1.0 {
+		return 0.0, lib.LogAndError(lib.LOG_ERROR, "priceUsd must be either 1.0 (for buy/long orders) or -1.0 (for sell/short orders)")
+	}
+
+	clobAddr := os.Getenv("CLOB_HOST") + ":" + os.Getenv("CLOB_PORT")
+
+	conn, err := grpc.NewClient(clobAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return 0, lib.LogAndError(lib.LOG_ERROR, "Failed to open grpc connection to CLOB %v", err)
+	}
+	defer conn.Close()
+
+	clobClient := pb_clob.NewClobInternalClient(conn)
+	result, err := clobClient.GetMarketDepthQty(
+		context.Background(),
+		&pb_clob.MarketIdRequest{
+			MarketId: marketId,
+		},
+	)
+	if err != nil {
+		return 0, lib.LogAndError(lib.LOG_ERROR, "failed to get market depth qty from CLOB (%s): %v", clobAddr, err)
+	}
+
+	qty := 0.0
+	if priceUsd > 0 {
+		qty = result.QtyBid
+	} else {
+		qty = result.QtyAsk
+	}
+
+	return qty, nil
 }

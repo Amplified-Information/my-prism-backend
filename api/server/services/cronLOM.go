@@ -226,7 +226,7 @@ func (cs *CronLOMService) CalcLOM() error {
 	// TODO - apply the execution bonus (in proportion to dollar amount):
 	// if no execution bonus to be allocated, roll it forward
 
-	// Final pass: print totals and send PRISM
+	// Final pass: print totals and send (schedule for send) PRISM
 	lib.Log(lib.LOG_INFO, "Total DollarValue across all accountIds and markets: %.2f", totalDollarValue)
 	lib.Log(lib.LOG_INFO, "Total LOMScore across all accountIds and markets: %.2f", totalLOMScore)
 	lib.Log(lib.LOG_INFO, "-> PRISM tokens to be allocated to %d accountIds in this epoch", len(lom_scores))
@@ -251,14 +251,14 @@ func (cs *CronLOMService) CalcLOM() error {
 		}
 
 		/////
-		// Send the PRISM tokens:
+		// Schedule the sending of the PRISM tokens:
 		/////
 		// TODO - handle multiple environments!
 		// hederaTxHash := "<TBD>"
 		// cs.hederaService.SendHTStokens(networkSelected, tokenId, recipientAccountId, prismToSendUser, nDecimals)
 
 		/////
-		// Log to database
+		// Log the send to database
 		/////
 		// marketUUID, err := uuid.Parse(marketId)
 		// if err != nil {

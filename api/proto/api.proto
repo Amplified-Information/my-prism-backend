@@ -57,15 +57,14 @@ message PrismPredictionIntentRequest {
   string market_id = 3          [json_name = "marketId",    (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
   string generated_at = 4       [json_name = "generatedAt", (validate.rules).string = {pattern: "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d\\.\\d{3}Z$"} /* UTC ISO 8601 (Zulu time only) */];
   string account_id = 5         [json_name = "accountId",   (validate.rules).string = {pattern: "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$"} /* Hedera account ID (no leading zeros) */];
-  string market_limit = 6       [json_name = "marketLimit", (validate.rules).string = {in: ["market", "limit"]} /* still have 15 digits of decimal precision between 0.0 and 1.0 */];
-  double price_usd = 7          [json_name = "priceUsd",    (validate.rules).double = {gt: -1.0, lt: 1.0} /* price_usd <0 => sell, price_usd >=0 => buy */];
-  double qty = 8                [json_name = "qty",         (validate.rules).double = {gt: 0.0}];
-  string sig = 9                [json_name = "sig",         (validate.rules).string = {pattern: "^[A-Za-z0-9+/]{20,100}={0,2}$"} /* base64-encoded signature (URL-safe base64 without padding, min 20 chars, max 100 chars) */];
-  // passing extra key info - i) avoid lookups ii) handle situation where user has changed their key
-  string public_key = 10        [json_name = "publicKey",   (validate.rules).string = {pattern: "^(04[0-9a-fA-F]{128}|0[23][0-9a-fA-F]{64}|[0-9a-fA-F]{64})$"} /* ECDSA (compressed/uncompressed) or Ed25519 public key in hex format, no 0x prefix */];
-  string evm_address = 11       [json_name = "evmAddress",  (validate.rules).string = {pattern: "^[0-9a-fA-F]{40}$"} /* 20-byte (40 hex chars) EVM address (no 0x prefix) */];
-  uint32 key_type = 12          [json_name = "keyType",     (validate.rules).uint32 = {in: [1, 2]} /* 1 = ed25519, 2 = ecdsa_secp256k1 */];
-  // string smart_contract_id = 9  [json_name = "smartContractId"]; // not needed - smart_contract_id is a column in the markets table
+  double price_usd = 6          [json_name = "priceUsd",    (validate.rules).double = {gt: -1.0, lt: 1.0} /* price_usd <0 => sell, price_usd >=0 => buy */];
+  double qty = 7                [json_name = "qty",         (validate.rules).double = {gt: 0.0}];
+  string sig = 8                [json_name = "sig",         (validate.rules).string = {pattern: "^[A-Za-z0-9+/]{20,100}={0,2}$"} /* base64-encoded signature (URL-safe base64 without padding, min 20 chars, max 100 chars) */];
+  // pass extra key info - i) avoid lookups ii) handle situation where user has changed their key
+  string public_key = 9         [json_name = "publicKey",   (validate.rules).string = {pattern: "^(04[0-9a-fA-F]{128}|0[23][0-9a-fA-F]{64}|[0-9a-fA-F]{64})$"} /* ECDSA (compressed/uncompressed) or Ed25519 public key in hex format, no 0x prefix */];
+  string evm_address = 10       [json_name = "evmAddress",  (validate.rules).string = {pattern: "^[0-9a-fA-F]{40}$"} /* 20-byte (40 hex chars) EVM address (no 0x prefix) */];
+  uint32 key_type = 11          [json_name = "keyType",     (validate.rules).uint32 = {in: [1, 2]} /* 1 = ed25519, 2 = ecdsa_secp256k1 */];
+  string primary_secondary = 12 [json_name = "primarySecondary", (validate.rules).string = {in: ["p", "s"]}];
 }
 
 message StdResponse {
@@ -122,19 +121,19 @@ message Position {
   string created_at = 6      [json_name = "createdAt"];
 }
 
-message PredictionIntent {
+message PredictionIntentResponse {
   string tx_id = 1              [json_name = "txId",        (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
   string net = 2                [json_name = "net",         (validate.rules).string = {in: ["mainnet", "testnet", "previewnet"]} /* Hedera network */];
   string market_id = 3          [json_name = "marketId",    (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
   string generated_at = 4       [json_name = "generatedAt", (validate.rules).string = {pattern: "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d\\.\\d{3}Z$"} /* UTC ISO 8601 (Zulu time only) */];
   string account_id = 5         [json_name = "accountId",   (validate.rules).string = {pattern: "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$"} /* Hedera account ID (no leading zeros) */];
-  string market_limit = 6       [json_name = "marketLimit", (validate.rules).string = {in: ["market", "limit"]} /* still have 15 digits of decimal precision between 0.0 and 1.0 */];
-  double price_usd = 7          [json_name = "priceUsd",    (validate.rules).double = {gt: -1.0, lt: 1.0} /* price_usd <0 => sell, price_usd >=0 => buy */];
-  double qty = 8                [json_name = "qty",         (validate.rules).double = {gt: 0.0}];
+  double price_usd = 6          [json_name = "priceUsd",    (validate.rules).double = {gt: -1.0, lt: 1.0} /* price_usd <0 => sell, price_usd >=0 => buy */];
+  double qty = 7                [json_name = "qty",         (validate.rules).double = {gt: 0.0}];
+  string primary_secondary = 8  [json_name = "primarySecondary", (validate.rules).string = {in: ["p", "s"]}];
 }
 
 message PredictionIntents {
-  repeated PredictionIntent prediction_intents = 1   [json_name = "openPredictionIntents"];
+  repeated PredictionIntentResponse prediction_intents = 1   [json_name = "openPredictionIntents"];
 }
 
 message PositionInfo {

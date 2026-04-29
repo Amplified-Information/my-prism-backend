@@ -283,10 +283,12 @@ func (hs *HederaService) BuyPositionTokens(sideYes *pb_clob.CreateOrderRequestCl
 	params.AddUint256BigInt(qtyScaledNoBig)
 	// params.AddUint256BigInt(priceUsdAbsScaledYesBig)
 	// params.AddUint256BigInt(priceUsdAbsScaledNoBig)
-	params.AddUint128BigInt(txIdYesBig) // txIdYes
-	params.AddUint128BigInt(txIdNoBig)  // txIdNo
-	params.AddBytes(sigObjYes)          // sigObjYes
-	params.AddBytes(sigObjNo)           // sigObjNo
+	params.AddUint128BigInt(txIdYesBig)             // txIdYes
+	params.AddUint128BigInt(txIdNoBig)              // txIdNo
+	params.AddBytes(sigObjYes)                      // sigObjYes
+	params.AddBytes(sigObjNo)                       // sigObjNo
+	params.AddBool(sideYes.PrimarySecondary == "s") // true => secondary (hedged), false => primary
+	params.AddBool(sideNo.PrimarySecondary == "s")  // true => secondary (hedged), false => primary
 
 	lib.Log(lib.LOG_INFO, "Prepared smart contract parameters for BuyPositionTokens")
 	lib.Log(lib.LOG_INFO, "marketIdBytes (hex): %s", hex.EncodeToString(marketIdBig.Bytes()))
@@ -298,6 +300,8 @@ func (hs *HederaService) BuyPositionTokens(sideYes *pb_clob.CreateOrderRequestCl
 	lib.Log(lib.LOG_INFO, "txIdNoBig (hex): %s", hex.EncodeToString(txIdNoBig.Bytes()))
 	lib.Log(lib.LOG_INFO, "sigObjYes (len=%d): %x", len(sigObjYes), sigObjYes)
 	lib.Log(lib.LOG_INFO, "sigObjNo (len=%d): %x", len(sigObjNo), sigObjNo)
+	lib.Log(lib.LOG_INFO, "primarySecondaryYes: %t", sideYes.PrimarySecondary == "s")
+	lib.Log(lib.LOG_INFO, "primarySecondaryNo: %t", sideNo.PrimarySecondary == "s")
 	// NO - do not use the current X_SMART_CONTRACT_ID - use the one that is stored in the markets table
 	// contractID, err := hiero.ContractIDFromString(
 	// 	os.Getenv(fmt.Sprintf("%s_SMART_CONTRACT_ID", strings.ToUpper(sideYes.Net))),
@@ -541,4 +545,57 @@ func (hs *HederaService) SendHTStokens(networkSelected hiero.LedgerID, tokenId h
 	lib.Log(lib.LOG_INFO, "Token transfer successful: %s (status: %s)", txHash, receipt.Status.String())
 
 	return txHash, nil
+}
+
+/*
+on-chain : retrieve a user's number of position tokens
+*/
+func (hs *HederaService) GetUserPositionTokenBalance(networkSelected hiero.LedgerID, marketId string, userEvmAddress string) (float64, float64, error) {
+	// Solidity:
+	// getUserTokens(uint128 marketId, address user) returns (uint256)
+
+	params := hiero.NewContractFunctionParameters()
+	marketIdBig, err := lib.Uuid7_to_bigint(marketId)
+	if err != nil {
+		return 0, 0, lib.LogAndError(lib.LOG_ERROR, "invalid market ID: %v", err)
+	}
+
+	params.AddUint128BigInt(marketIdBig)
+	params.AddAddress(userEvmAddress)
+
+	market, err := hs.marketsRepository.GetMarketById(marketId, false)
+	if err != nil {
+		return 0, 0, lib.LogAndError(lib.LOG_ERROR, "could not retrieve market: %v. Is the market suspended or paused?", err)
+	}
+	contractId, err := hiero.ContractIDFromString(market.SmartContractID)
+	if err != nil {
+		return 0, 0, lib.LogAndError(lib.LOG_ERROR, "invalid contract ID in market record (GetPositionTokenBalance): %v", err)
+	}
+
+	query := hiero.NewContractCallQuery().
+		SetContractID(contractId).
+		SetGas(1_000_000).
+		SetFunction("getUserTokens", params)
+
+	result, err := query.
+		Execute(hs.hedera_clients[networkSelected.String()])
+	if err != nil {
+		return 0, 0, lib.LogAndError(lib.LOG_ERROR, "failed to execute contract call (GetPositionTokenBalance): %v", err)
+	}
+
+	yesBytes := result.GetUint256(0)
+	noBytes := result.GetUint256(1)
+
+	yesBig := new(big.Int).SetBytes(yesBytes)
+	noBig := new(big.Int).SetBytes(noBytes)
+
+	nDecimals, err := strconv.ParseFloat(os.Getenv("USDC_DECIMALS"), 64)
+	if err != nil {
+		return 0, 0, lib.LogAndError(lib.LOG_ERROR, "failed to parse USDC_DECIMALS: %v", err)
+	}
+
+	yesTokens := float64(yesBig.Uint64()) / math.Pow(10, nDecimals)
+	noTokens := float64(noBig.Uint64()) / math.Pow(10, nDecimals)
+
+	return yesTokens, noTokens, nil
 }

@@ -23,6 +23,7 @@ service ClobInternal {
   // rpc PauseMarketToggle (MarketIdRequest) returns (StdResponse);
   // rpc DeleteMarket(MarketIdRequest) returns (StdResponse); // nuke the market on the CLOB
   rpc GetTvPendingUsd(Empty) returns (StdResponse);
+  rpc GetMarketDepthQty(MarketIdRequest) returns (MarketDepthQtyResponse);
 }
 
 message Empty {}
@@ -33,15 +34,14 @@ message CreateOrderRequestClob {
   string net = 2 [json_name = "net"];
   string market_id = 3 [json_name = "marketId"];
   string account_id = 4 [json_name = "accountId"];
-  string market_limit = 5 [json_name = "marketLimit"];
-  double price_usd = 6 [json_name = "priceUsd"];
-  double qty = 7 [json_name = "qty"];
-  double qty_orig = 8 [json_name = "qtyOrig"]; // need to keep track of the original qty for signature validation
-  string sig = 9 [json_name = "sig"];
-  // passing extra key info - i) avoid lookups ii) handle situation where user has changed their key
-  string public_key = 10 [json_name = "publicKey"];
-  string evm_address = 11 [json_name = "evmAddress"];
-  int32 key_type = 12 [json_name = "keyType"];
+  double price_usd = 5 [json_name = "priceUsd"];
+  double qty = 6 [json_name = "qty"];
+  double qty_orig = 7 [json_name = "qtyOrig"]; // keep track of the original qty for signature validation
+  string sig = 8 [json_name = "sig"];
+  string public_key = 9 [json_name = "publicKey"]; // pass key info - i) avoid lookups ii) handle situation where user has changed their key
+  string evm_address = 10 [json_name = "evmAddress"];
+  int32 key_type = 11 [json_name = "keyType"];
+  string primary_secondary = 12 [json_name = "primarySecondary", (validate.rules).string = {in: ["p", "s"]}];
 }
 
 message StdResponse {
@@ -92,4 +92,9 @@ message UserRequest {
 
 message OrdersForUserResponse {
   repeated CreateOrderRequestClob open_orders = 1;
+}
+
+message MarketDepthQtyResponse {
+  double qty_bid = 1 [json_name = "qtyBid"];
+  double qty_ask = 2 [json_name = "qtyAsk"];
 }

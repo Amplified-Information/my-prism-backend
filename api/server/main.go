@@ -214,7 +214,7 @@ func (s *server) VerifyChallenge(ctx context.Context, req *pb_api.VerifyChalleng
 
 		// Inject the JWT token into response header
 		grpc.SendHeader(ctx, metadata.Pairs("Authorization", "Bearer "+jwtToken))
-
+		// grpc.SendHeader(ctx, metadata.Pairs("Set-Cookie", "jwt="+jwtToken+"; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=3600"))
 		return &pb_api.StdResponse{
 			ErrorCode: 0,
 			Message:   "Challenge verified successfully",
@@ -774,6 +774,16 @@ func main() {
 
 	c.Start()
 	defer c.Stop()
+
+	// net, err := hiero.LedgerIDFromString("testnet")
+	// if err != nil {
+	// 	fatal("Failed to get ledger ID: %v", err)
+	// }
+	// yes, no, err := hederaService.GetUserPositionTokenBalance(*net, "019c7644-76f5-77f0-bfe4-f72f22131675", "0x440a1d7af93b92920bce50b4c0d2a8e6dcfebfd6")
+	// if err != nil {
+	// 	fatal("Failed to get user position token balance: %v", err)
+	// }
+	// lib.Log(lib.LOG_INFO, "User position token balance - yes: %d, no: %d", yes, no)
 
 	// Start a HTTP health check server on port 8889
 	go func() {

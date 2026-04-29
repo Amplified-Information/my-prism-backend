@@ -137,7 +137,29 @@ impl ClobInternal for ClobService {
             }
         }
     }
+
+    async fn get_market_depth_qty(
+        &self,
+        _request: Request<crate::orderbook::proto::MarketIdRequest>,
+    ) -> Result<Response<crate::orderbook::proto::MarketDepthQtyResponse>, Status> {
+        let inner = _request.into_inner();
+        let market_depth_qty = self.order_book_service.get_market_depth_qty(&inner.market_id).await;
+        match market_depth_qty {
+            Ok((qty_bid, qty_ask)) => {
+                let response = crate::orderbook::proto::MarketDepthQtyResponse {
+                    qty_bid,
+                    qty_ask,
+                };
+                Ok(Response::new(response))
+            },
+            Err(e) => {
+                log::error!("Failed to get market depth qty: {}", e);
+                Err(Status::internal(e.to_string()))
+            }
+        }
+    }
 }
+
 
 #[tonic::async_trait]
 impl ClobPublic for ClobService {

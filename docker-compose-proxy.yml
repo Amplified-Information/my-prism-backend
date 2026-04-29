@@ -1,6 +1,6 @@
 services:
   proxy:
-    image: ghcr.io/prismmarketlabs/proxy:0.1.36
+    image: ghcr.io/prismmarketlabs/proxy:0.1.37
     restart: always
     ports:
       - "9901:9901"

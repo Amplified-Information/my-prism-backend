@@ -37,8 +37,8 @@ func (pps *PrismPointsService) AwardPrismPoints(marketId string) (bool, error) {
 
 	// loop through each item in the 'evm_address' column
 	for _, position := range positions {
-		// award points to the user based on their position
-		err := pps.awardPointsToUser(resolvedMarket.Outcome.Bool, marketId, position.EvmAddress, position.NYes, position.NNo, position.CostBasisPriceYesUsd, position.CostBasisPriceNoUsd)
+		// mark the database with the points awarded to the user for this market resolution:
+		_, err := pps.markInDbPointsForUser(resolvedMarket.Outcome.Bool, marketId, position.EvmAddress, position.NYes, position.NNo, position.CostBasisPriceYesUsd, position.CostBasisPriceNoUsd)
 		if err != nil {
 			lib.Log(lib.LOG_ERROR, "failed to award points to user %s for market ID %s: %v", position.EvmAddress, marketId, err)
 			continue // continue awarding points to other users even if one fails
@@ -49,7 +49,7 @@ func (pps *PrismPointsService) AwardPrismPoints(marketId string) (bool, error) {
 	return true, nil
 }
 
-func (pps *PrismPointsService) awardPointsToUser(noYes_outcome bool, marketId string, evmAddress string, nYes int64, nNo int64, CostBasisPriceYesUsd float64, CostBasisPriceNoUsd float64) error {
+func (pps *PrismPointsService) markInDbPointsForUser(noYes_outcome bool, marketId string, evmAddress string, nYes int64, nNo int64, CostBasisPriceYesUsd float64, CostBasisPriceNoUsd float64) (float64, error) {
 	// calculate points based on the user's position
 	// See: https://docs.prism.market/protocol/prism-points-campaign
 	points := 0.0
@@ -62,9 +62,9 @@ func (pps *PrismPointsService) awardPointsToUser(noYes_outcome bool, marketId st
 	// update the user's points in the database
 	err := pps.prismPointsRespository.UpsertPrismPointsAddPoints(marketId, evmAddress, points)
 	if err != nil {
-		return lib.LogAndError(lib.LOG_ERROR, "failed to update points for user %s: %v", evmAddress, err)
+		return 0, lib.LogAndError(lib.LOG_ERROR, "failed to UpsertPrismPointsAddPoints for user %s: %v", evmAddress, err)
 	}
 
-	lib.Log(lib.LOG_INFO, "awarded %d points to user %s", points, evmAddress)
-	return nil
+	lib.Log(lib.LOG_INFO, "awarded %f points to user %s", points, evmAddress)
+	return points, nil
 }

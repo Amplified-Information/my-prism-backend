@@ -51,21 +51,21 @@ To release a new version of a service, follow the release procedure here: https:
 
 `dev`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1776955615) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1776955615) | [data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1776955615) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1777473015) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1777473015) | [data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1777473015) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1776955615) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1776955615) | ![data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1776955615) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1777473015) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1777473015) | ![data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1777473015) |
 
 `uat`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1776955615) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1776955615) | [data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1776955615) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1777473015) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1777473015) | [data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1777473015) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1776955615) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1776955615) | ![data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1776955615) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1777473015) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1777473015) | ![data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1777473015) |
 
 `prod`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1776955615) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1776955615) | [data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1776955615) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1777473015) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1777473015) | [data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1777473015) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1776955615) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1776955615) | ![data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1776955615) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1777473015) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1777473015) | ![data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1777473015) |
 
 *Note: see .git/hooks/pre-commit to see how to update the cache-busting nonce*
 
@@ -574,6 +574,7 @@ type ObjForSigning struct {
   EvmAdd                 address/uint160 // a 20-byte EVM address is 160-bits. Note: the evmAddress is fixed. It is derived *once* at account creation.
   MarketIdUUID           uint128
   TxIdUUID               uint128
+  PrimarySecondary       uint8 // primary ('p') is 0xf0, secondary ('s') is 0xf1. Note the technical reasons for BuySell above.
 }
 ```
 
@@ -582,6 +583,8 @@ The marketId, the amount under consideration and the initiator account (immutabl
 See: `assemblePayloadHexForSigning(...)` in ./web.eng/lib/utils.ts
 
 See: `AssemblePayloadHexForSigning(...)` in ./api/server/lib/sign.go
+
+See: `assemblePayload(...)` in ./scs/contracts/Prism.sol
 
 ## Add a submodule to your monorepo (web)
 

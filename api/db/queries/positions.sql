@@ -98,8 +98,10 @@ SELECT positions.*
 FROM positions
 JOIN markets ON positions.market_id = markets.market_id
 WHERE positions.market_id = $1
-  AND positions.points_awarded IS NULL
-  AND markets.resolved_at IS NULL AND markets.is_suspended = FALSE AND markets.is_paused = FALSE;
+  AND positions.points_awarded_at IS NULL
+  AND markets.resolved_at IS NULL 
+  AND markets.is_suspended = FALSE 
+  AND markets.is_paused = FALSE;
 
 
 

@@ -14,8 +14,8 @@ ORDER BY created_at DESC;
 
 -- UPDATE
 -- name: UpsertPrismPointsAddPoints :exec
-INSERT INTO prism_points (points_awarded, created_at, market_id, evm_address)
-VALUES ($1, NOW(), $2, $3)
+INSERT INTO prism_points (points_awarded, market_id, evm_address, points_awarded)
+VALUES (NOW(), $1, $2, $3)
 ON CONFLICT (market_id, evm_address)
 DO UPDATE SET points_awarded = prism_points.points_awarded + EXCLUDED.points_awarded;
 

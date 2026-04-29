@@ -224,6 +224,22 @@ impl OrderBookService {
         log::info!("tv_pending (USDC) across all markets: {}", total_value);
         Ok(total_value)
     }
+
+    pub async fn get_market_depth_qty(&self, market_id: &str) -> Result<(f64, f64), Box<dyn std::error::Error>> {
+        // No guards for performance - assume validated upstream
+
+        let order_books = self.order_books.read().await;
+        if let Some(order_book) = order_books.get(&market_id.to_lowercase()) {
+            let book = order_book.read().await;
+
+            let buy_depth_qty: f64 = book.buy_orders.iter().map(|o| o.qty).sum();
+            let sell_depth_qty: f64 = book.sell_orders.iter().map(|o| o.qty).sum();
+
+            Ok((buy_depth_qty, sell_depth_qty))
+        } else {
+            Err(format!("Market not found {}", market_id).into())
+        }
+    }
 }
 
 #[derive(Debug)]

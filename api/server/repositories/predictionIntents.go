@@ -68,18 +68,18 @@ func (pir *PredictionIntentsRepository) CreateOrderIntentRequest(req *pb_api.Pri
 	generatedAt = generatedAt.UTC()
 
 	params := sqlc.CreatePredictionIntentParams{
-		TxID:         txUUID,
-		Net:          req.Net,
-		MarketID:     marketUUID,
-		AccountID:    req.AccountId,
-		MarketLimit:  req.MarketLimit,
-		PriceUsd:     req.PriceUsd,
-		Qty:          req.Qty,
-		Sig:          req.Sig,
-		GeneratedAt:  generatedAt,
-		PublicKeyHex: req.PublicKey,
-		Evmaddress:   req.EvmAddress,
-		Keytype:      int32(req.KeyType),
+		TxID:             txUUID,
+		Net:              req.Net,
+		MarketID:         marketUUID,
+		AccountID:        req.AccountId,
+		PriceUsd:         req.PriceUsd,
+		Qty:              req.Qty,
+		Sig:              req.Sig,
+		GeneratedAt:      generatedAt,
+		PublicKeyHex:     req.PublicKey,
+		Evmaddress:       req.EvmAddress,
+		Keytype:          int32(req.KeyType),
+		PrimarySecondary: req.PrimarySecondary,
 	}
 
 	q := sqlc.New(pir.db)

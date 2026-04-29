@@ -176,6 +176,7 @@ func (p *Prism) TriggerRecreateClob() (bool, error) {
 	if err != nil {
 		return false, lib.LogAndError(lib.LOG_ERROR, "failed to get unresolved markets: %v", err)
 	}
+	lib.Log(lib.LOG_INFO, "Found %d unresolved markets in the database for recreation on the CLOB", len(markets))
 
 	// loop through each unresolved market:
 	for _, market := range markets {
@@ -200,14 +201,14 @@ func (p *Prism) TriggerRecreateClob() (bool, error) {
 		lib.Log(lib.LOG_INFO, "--> Found %d open PredictionIntents on marketId %s", len(*allPredictionIntents), market.MarketID.String())
 
 		n := 0
-		for _, predictionIntent := range *allPredictionIntents {
-			lib.Log(lib.LOG_INFO, "\t - txId: %s", predictionIntent.TxID.String())
+		for _, pi := range *allPredictionIntents {
+			lib.Log(lib.LOG_INFO, "\t - txId: %s", pi.TxID.String())
 
 			// calculate "qtyRemaining" to be placed on CLOB (may not exist)
-			var qtyRemaining float64 = predictionIntent.Qty // set to Qty by default
+			var qtyRemaining float64 = pi.Qty // set to Qty by default
 
-			allMatches, err := p.matchesRepository.GetAllMatchesForMarketIdTxId(predictionIntent.MarketID, predictionIntent.TxID)
-			lib.Log(lib.LOG_INFO, "\t - allMatches for txId %s on marketId %s: %v", predictionIntent.TxID.String(), predictionIntent.MarketID.String(), allMatches)
+			allMatches, err := p.matchesRepository.GetAllMatchesForMarketIdTxId(pi.MarketID, pi.TxID)
+			lib.Log(lib.LOG_INFO, "\t - allMatches for txId %s on marketId %s: %v", pi.TxID.String(), pi.MarketID.String(), allMatches)
 			if err != nil || len(allMatches) == 0 {
 				// no matches for this predictionIntent qty found: qtyRemaining = req.Qty (default)
 				// qtyRemaining is predictionIntent.Qty - OK
@@ -222,10 +223,10 @@ func (p *Prism) TriggerRecreateClob() (bool, error) {
 				for _, match := range allMatches {
 					lib.Log(lib.LOG_INFO, "\t row on 'match': %v", match)
 					// Each match has a Qty field that represents the amount matched for this TxID
-					if match.TxId1 == predictionIntent.TxID {
+					if match.TxId1 == pi.TxID {
 						// log.Print("%s", match.Qty1)
 						qtyRemaining -= match.Qty2
-					} else if match.TxId2 == predictionIntent.TxID {
+					} else if match.TxId2 == pi.TxID {
 						qtyRemaining -= match.Qty1
 					}
 				}
@@ -241,18 +242,18 @@ func (p *Prism) TriggerRecreateClob() (bool, error) {
 			/////
 
 			clobRequestObj := &pb_clob.CreateOrderRequestClob{
-				TxId:        predictionIntent.TxID.String(),
-				Net:         predictionIntent.Net,
-				MarketId:    predictionIntent.MarketID.String(),
-				AccountId:   predictionIntent.AccountID,
-				MarketLimit: predictionIntent.MarketLimit,
-				PriceUsd:    predictionIntent.PriceUsd,
-				Qty:         qtyRemaining,
-				QtyOrig:     predictionIntent.Qty, // need to keep track of the original qty for on/off-chain signature validation
-				Sig:         predictionIntent.Sig,
-				PublicKey:   predictionIntent.PublicKeyHex, // passing extra key info - i) avoid lookups ii) handle situation where user has changed their key
-				EvmAddress:  predictionIntent.Evmaddress,
-				KeyType:     int32(predictionIntent.Keytype),
+				TxId:             pi.TxID.String(),
+				Net:              pi.Net,
+				MarketId:         pi.MarketID.String(),
+				AccountId:        pi.AccountID,
+				PriceUsd:         pi.PriceUsd,
+				Qty:              qtyRemaining,
+				QtyOrig:          pi.Qty, // need to keep track of the original qty for on/off-chain signature validation
+				Sig:              pi.Sig,
+				PublicKey:        pi.PublicKeyHex, // passing extra key info - i) avoid lookups ii) handle situation where user has changed their key
+				EvmAddress:       pi.Evmaddress,
+				KeyType:          int32(pi.Keytype),
+				PrimarySecondary: pi.PrimarySecondary,
 			}
 			clobRequestJSON, err := json.Marshal(clobRequestObj)
 			if err != nil {
@@ -274,9 +275,9 @@ func (p *Prism) TriggerRecreateClob() (bool, error) {
 			/////
 			// finally, mark the PredictionIntent as 'regenerated' in the database
 			/////
-			err = p.dbRepository.MarkPredictionIntentAsRegenerated(predictionIntent.TxID.String())
+			err = p.dbRepository.MarkPredictionIntentAsRegenerated(pi.TxID.String())
 			if err != nil {
-				return false, lib.LogAndError(lib.LOG_ERROR, "failed to MarkPredictionIntentAsRegenerated(txId=%s): %v", predictionIntent.TxID.String(), err)
+				return false, lib.LogAndError(lib.LOG_ERROR, "failed to MarkPredictionIntentAsRegenerated(txId=%s): %v", pi.TxID.String(), err)
 			}
 
 			n = n + 1

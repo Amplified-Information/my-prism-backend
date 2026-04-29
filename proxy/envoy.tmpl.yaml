@@ -59,8 +59,8 @@ static_resources:
                     stat_prefix: global_ratelimit
                     # use_per_filter_config: true # must be true for specifying different rate limits for different routes/domains
                     token_bucket:
-                      max_tokens: 180        # burst size
-                      tokens_per_fill: 180   # refill amount
+                      max_tokens: 360        # burst size
+                      tokens_per_fill: 360   # refill amount
                       fill_interval: 60s     # refill interval
                     filter_enabled:
                       default_value: { numerator: 100, denominator: HUNDRED } # 100% of requests are filtered by default

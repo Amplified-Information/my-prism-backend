@@ -87,7 +87,7 @@ contract PrismTest is Test {
         // This will revert due to signature and precompile checks, but onlyOwner is enforced
         vm.prank(user1);
         vm.expectRevert();
-        prism.buyPositionTokensOnBehalfAtomic(marketId, user1, user2, 100e6, 100e6, 100e6, 100e6, 1, 2, hex"", hex"");
+        prism.buyPositionTokensOnBehalfAtomic(marketId, user1, user2, 100e6, 100e6, 100e6, 100e6, 1, 2, hex"", hex"", false, false);
     }
 
     // --- resolveMarket (onlyOracle) ---
@@ -113,7 +113,8 @@ contract PrismTest is Test {
 
     // --- Utility: assemblePayload, prefixMessageFixed ---
     function testAssemblePayloadAndPrefix() public view {
-        bytes memory payload = prism.exposedAssemblePayload(0xf0, 100e6, address(0x123), 1, 2);
+        bool primarySecondary = false; // primary market
+        bytes memory payload = prism.exposedAssemblePayload(0xf0, 100e6, address(0x123), 1, 2, primarySecondary);
         assertGt(payload.length, 0);
         bytes memory prefixed = prism.exposedPrefixMessageFixed("abcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeab");
         assertGt(prefixed.length, 0);
