@@ -158,6 +158,29 @@ impl ClobInternal for ClobService {
             }
         }
     }
+
+    async fn close_market(
+        &self,
+        request: Request<crate::orderbook::proto::MarketIdRequest>,
+    ) -> Result<Response<crate::orderbook::proto::StdResponse>, Status> {
+        let inner = request.into_inner();
+
+        let result = self.order_book_service.close_market(&inner.market_id).await;
+
+        match result {
+            Ok(success) if success => (),
+            _ => {
+                log::error!("Failed to close market");
+                return Err(Status::internal(format!("WARN: could not close market {}", inner.market_id)));
+            }
+        }
+        let response = crate::orderbook::proto::StdResponse {
+            message: "success".to_string(),
+            error_code: 0,
+        };
+
+        Ok(Response::new(response))
+    }
 }
 
 

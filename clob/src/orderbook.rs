@@ -240,6 +240,19 @@ impl OrderBookService {
             Err(format!("Market not found {}", market_id).into())
         }
     }
+
+    pub async fn close_market(&self, market_id: &str) -> Result<bool, Box<dyn std::error::Error>> {
+        // No guards for performance - assume validated upstream
+
+        let mut order_books = self.order_books.write().await;
+        if order_books.remove(&market_id.to_lowercase()).is_some() {
+            log::info!("Market {} closed and removed from OrderBookService", market_id);
+            Ok(true)
+        } else {
+            log::warn!("Attempt to close non-existent market {}", market_id);
+            Ok(false)
+        }
+    }
 }
 
 #[derive(Debug)]

@@ -324,9 +324,36 @@ func CreateMarketOnClob(marketId string) error {
 		},
 	)
 	if err != nil {
-		return ErrorLog("failed to create market on CLOB", "error", err, "marketId", marketId, "clobAddr", clobAddr)
+		return LogAndError(LOG_ERROR, "failed to create market on CLOB(marketId=%s): %v", marketId, err)
 	}
 
+	return nil
+}
+
+/*
+*
+Close a market on the clob (ensure smart contract is resolved first)
+*/
+func CloseMarketOnClob(marketId string) error {
+	// TODO - use NATS
+	clobAddr := os.Getenv("CLOB_HOST") + ":" + os.Getenv("CLOB_PORT")
+
+	conn, err := grpc.NewClient(clobAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return LogAndError(LOG_ERROR, "failed to close market on CLOB(marketId=%s) - connect to CLOB gRPC server failed: %v", marketId, err)
+	}
+	defer conn.Close()
+
+	clobClient := pb_clob.NewClobInternalClient(conn)
+	_, err = clobClient.CloseMarket(
+		context.Background(),
+		&pb_clob.MarketIdRequest{
+			MarketId: marketId,
+		},
+	)
+	if err != nil {
+		return LogAndError(LOG_ERROR, "failed to close market on CLOB(marketId=%s): %v", marketId, err)
+	}
 	return nil
 }
 

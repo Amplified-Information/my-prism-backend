@@ -569,7 +569,13 @@ func (ms *MarketsService) ResolveMarket(marketId string, noYes bool) (bool, erro
 		return false, lib.LogAndError(lib.LOG_ERROR, "failed to resolve market on db for unknown reasons")
 	}
 
-	// step 3 - award Prism points - https://docs.prism.market/protocol/prism-points-campaign
+	// step 3 - resolve on the CLOB (+ don't rebuild closed markets on API reboot)
+	err = lib.CloseMarketOnClob(marketId)
+	if err != nil {
+		return false, lib.LogAndError(lib.LOG_ERROR, "failed to resolve market on CLOB: %v", err)
+	}
+
+	// step 4 - award Prism points - https://docs.prism.market/protocol/prism-points-campaign
 	isOK, err = ms.prismPointsService.AwardPrismPoints(marketId)
 	if err != nil {
 		return false, lib.LogAndError(lib.LOG_ERROR, "failed to award Prism points: %v", err)

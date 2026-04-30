@@ -17,6 +17,7 @@ service ClobPublic {
 service ClobInternal {
   rpc CreateOrder (CreateOrderRequestClob) returns (StdResponse);
   rpc CreateMarket (CreateMarketRequest) returns (StdResponse);
+  rpc CloseMarket (MarketIdRequest) returns (StdResponse);
 
   rpc CancelOrder(CancelOrderRequest) returns (StdResponse);
   rpc GetOrdersForUser(UserRequest) returns (OrdersForUserResponse);
