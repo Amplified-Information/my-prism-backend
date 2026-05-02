@@ -16,7 +16,7 @@ func ValidationInterceptor() grpc.UnaryServerInterceptor {
 	) (interface{}, error) {
 		if v, ok := req.(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return nil, LogAndError(LOG_ERROR, "Validation error in %s: %v", info.FullMethod, err)
+				return nil, LogAndError(LOG_ERROR, "Validation error in %s: %v | request: %+v", info.FullMethod, err, req)
 			}
 		}
 		return handler(ctx, req)

@@ -9,6 +9,7 @@ interface IERC20 {
   function transferFrom(address from, address to, uint256 amount) external returns (bool);
   function balanceOf(address account) external view returns (uint256);
   function allowance(address owner, address spender) external view returns (uint256);
+  // function approve(address spender, uint256 amount) external returns (bool);
 }
 
 // Hedera Token Service (HTS) precompile interface (testnet/mainnet share the same precompile)
@@ -334,6 +335,16 @@ contract Prism {
     emit TokenAssociated(tokenAddress);
   }
 
+  // NO!
+  // calling usdcToken.approve(msg.sender, amount) inside your contract, but this does not set an allowance for your contract to spend the user's tokens. Instead, it sets an allowance for the contract (as the token holder) to allow msg.sender to spend tokens held by the contract.
+  // /**
+  // Set the USDC token allowance for the caller.
+  // @param amount The amount of USDC tokens to approve for the caller.
+  // */
+  // function setUsdcAllowance(uint256 amount) external {
+  //   require(associatedTokens[address(usdcToken)], "Token not associated");
+  //   require(usdcToken.approve(msg.sender, amount), "Approval failed");
+  // }
 
   /////
   // utility functions
