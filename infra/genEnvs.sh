@@ -15,7 +15,7 @@ export SSL_CERT_ARN_WILDCARD="arn:aws:acm:us-east-1:063088900305:certificate/0c0
 # export EC2_TYPE_BASTION=t3.nano
 export EC2_TYPE_PROXY=t3.nano
 export EC2_TYPE_MONOLITH=t3.micro
-export EC2_TYPE_DATA=t3.nano
+export EC2_TYPE_DATA=t3.micro
 
 mkdir -p gen/dev
 envsubst '$ENV $DOMAIN_NAME $EBS_VOLUME_ID $SSL_CERT_ARN $SSL_CERT_ARN_WILDCARD $EC2_TYPE_PROXY $EC2_TYPE_MONOLITH $EC2_TYPE_DATA' < main.tftpl > gen/dev/main.tf

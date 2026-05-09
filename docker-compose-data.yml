@@ -16,7 +16,7 @@ services:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_PASSWORD: ${DB_PWORD}
   eventbus:
-    image: ghcr.io/prismmarketlabs/eventbus:0.1.4
+    image: ghcr.io/prismmarketlabs/eventbus:0.1.5
     restart: always
     ports:
       - "4222:4222"
@@ -32,7 +32,7 @@ services:
     ports:
       - "6379:6379"
   blocknode:
-    image: ghcr.io/prismmarketlabs/blocknode:0.0.3
+    image: ghcr.io/prismmarketlabs/blocknode:0.0.5
     restart: always
     environment:
       BN_QUERY_FREQ_SECS: ${BN_QUERY_FREQ_SECS}
@@ -43,4 +43,4 @@ services:
       BN_SMART_CONTRACT_IDS_PREVIEWNET: "${BN_SMART_CONTRACT_IDS_PREVIEWNET}"
       BN_SMART_CONTRACT_IDS_TESTNET: "${BN_SMART_CONTRACT_IDS_TESTNET}"
       BN_SMART_CONTRACT_IDS_MAINNET: "${BN_SMART_CONTRACT_IDS_MAINNET}"
-      ABI_TESTNET_0_0_7907066: "${ABI_TESTNET_0_0_7907066}"
+      ABI_TESTNET_0_0_8839112: "${ABI_TESTNET_0_0_8839112}"

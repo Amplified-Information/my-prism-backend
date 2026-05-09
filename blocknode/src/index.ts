@@ -66,6 +66,7 @@ for (const n of supportedNetworks) {
 		// the value MUST be set
 		// the value must be valid JSON
 		const abiValue = process.env[abiKey]
+		// console.log(abiValue)
 		if (!abiValue) {
 			log.error('Missing ABI for smart contract', { envVar: abiKey, network: n, contractId })
 			process.exit(1)
