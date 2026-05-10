@@ -75,6 +75,8 @@ func AssemblePayloadHexForSigning(req *pb_api.PrismPredictionIntentRequest, usdc
 	// even if the value of `buySell` is less than 16 (0x10 in hexadecimal). This
 	// avoids odd-length hex strings, which could cause issues in contexts where
 	// fixed-length formatting is required.
+
+	// default payload assembly scheme:
 	payloadHex := fmt.Sprintf( // beautiful :)   example: 0100000000000000000000000000004e20000000000000000000000000440a1d7af93b92920bce50b4c0d2a8e6dcfebfd60189c0a87e807e808000000000000003019b45b837017342a16c7fb8a8023f17
 		"%02x%064x%040x%032x%032x%02x",
 
@@ -85,6 +87,41 @@ func AssemblePayloadHexForSigning(req *pb_api.PrismPredictionIntentRequest, usdc
 		txIdBigInt,             // uint128
 		primarySecondary,       // note: 8 bits. The hex len is 2 chars (padded left with '0') to avoid odd length hex strings. 0xf0 = primary, 0xf1 = secondary
 	)
+
+	/////
+	// Versioning - handle variations in the payload schema
+	/////
+	// Note: see lib/constants.go/ - SigSchemeDateRanges
+	// if the current timestamp falls within one of the ranges, apply the versioned payload assembly scheme
+	// - retrieve the index of the date range that the current timestamp falls into
+	// - this index is the version
+	currentTimestamp := time.Now().Unix()
+	version := 0
+	for i, dateRange := range SigSchemeDateRanges {
+		if currentTimestamp >= dateRange[0] && currentTimestamp < dateRange[1] {
+			version = i
+			break
+		}
+	}
+
+	switch version {
+	case 0:
+		payloadHex = fmt.Sprintf(
+			"%02x%064x%040x%032x%032x",
+
+			buySell,
+			collateralUsdAbsScaled,
+			evmAddressBigInt,
+			marketIdBigInt,
+			txIdBigInt,
+			// note: no primarySecondary field in version 0, as the concept didn't then.
+		)
+	case 1:
+		// default payload assembly scheme (as above)
+	default:
+		return "", ErrorLog("unsupported signature scheme version", "version", version)
+	}
+
 	return payloadHex, nil
 }
 

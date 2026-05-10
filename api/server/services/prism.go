@@ -71,6 +71,12 @@ func (p *Prism) MacroMetadata() (*pb_api.MacroMetadataResponse, error) {
 		}
 	}
 
+	usdcDecimalsEnv := os.Getenv("USDC_DECIMALS")
+	usdcDecimals, err := strconv.ParseUint(usdcDecimalsEnv, 10, 64)
+	if err != nil {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "USDC_DECIMALS environment variable is not a valid uint: %v", err)
+	}
+
 	marketCreationFeeUsdc := os.Getenv("MARKET_CREATION_FEE_USDC")
 	// Validate MARKET_CREATION_FEE_USDC is not empty and is a valid number
 	if marketCreationFeeUsdc == "" {
@@ -141,12 +147,20 @@ func (p *Prism) MacroMetadata() (*pb_api.MacroMetadataResponse, error) {
 		}
 	}
 
+	sigSchemeDateRanges := make([]*pb_api.UnixDateRange, len(lib.SigSchemeDateRanges))
+	for i, dateRange := range lib.SigSchemeDateRanges {
+		sigSchemeDateRanges[i] = &pb_api.UnixDateRange{
+			Start: int32(dateRange[0]),
+			End:   int32(dateRange[1]),
+		}
+	}
+
 	response := &pb_api.MacroMetadataResponse{
 		AvailableNetworks:           networks,
 		AvailableNetworksAdmin:      networksAdmin,
 		SmartContractIds:            smartContractIdsMap,
 		UsdcTokenIds:                usdcTokenIdsMap,
-		UsdcDecimals:                6,
+		UsdcDecimals:                uint32(usdcDecimals),
 		MarketCreationFeeScaledUsdc: marketCreationFeeScaledUsdc,
 		NMarkets:                    p.marketsService.GetNumMarkets(),
 		TokenIds:                    tokenIdsMap,
@@ -157,6 +171,7 @@ func (p *Prism) MacroMetadata() (*pb_api.MacroMetadataResponse, error) {
 		TotalVolumeUsd:              totalVolumeUsd,
 		ActiveTraders:               nActiveTraders,
 		Categories:                  categoriesMapped,
+		SigSchemeDateRanges:         sigSchemeDateRanges,
 	}
 
 	return response, nil

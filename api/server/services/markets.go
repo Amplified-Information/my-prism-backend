@@ -546,12 +546,12 @@ func (ms *MarketsService) GetNumMarkets() uint32 {
 }
 
 func (ms *MarketsService) ResolveMarket(marketId string, noYes bool) (bool, error) {
-	// step 1 - resolve on the smart contract
 	market, err := ms.marketsRepository.GetMarketById(marketId, true)
 	if err != nil {
 		return false, lib.LogAndError(lib.LOG_ERROR, "failed to get market by id: %v", err)
 	}
 
+	// step 1 - resolve on the smart contract
 	isOK, err := ms.hederaService.ResolveMarketOnChain(market.Net, marketId, market.SmartContractID, noYes)
 	if err != nil {
 		return false, lib.LogAndError(lib.LOG_ERROR, "failed to resolve market on chain: %v", err)

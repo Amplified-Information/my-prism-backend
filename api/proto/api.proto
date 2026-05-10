@@ -86,21 +86,28 @@ message VerifyChallengeRequest {
 }
 
 message MacroMetadataResponse {
-  repeated string available_networks = 1      [json_name = "availableNetworks"];
-  repeated string available_networks_admin = 2[json_name = "availableNetworksAdmin"];
-  map<string, string> smart_contract_ids = 3  [json_name = "smartContractIds"];
-  map<string, string> usdc_token_ids = 4      [json_name = "usdcTokenIds"];
-  uint32 usdc_decimals = 5                    [json_name = "usdcDecimals"];
-  uint64 market_creation_fee_scaled_usdc = 6  [json_name = "marketCreationFeeScaledUsdc"];
-  uint32 n_markets = 7                        [json_name = "nMarkets"];
-  map<string, string> token_ids = 8           [json_name = "tokenIds"];
-  double min_order_size_usd = 9               [json_name = "minOrderSizeUsd"];
-  double tv_pending_usd = 10                  [json_name = "tvPendingUsd"];
-  double tv_matched_usd = 11                  [json_name = "tvMatchedUsd"];
-  double tvl_usd = 12                         [json_name = "tvlUsd"];
-  map<string, double> total_volume_usd = 13   [json_name = "totalVolumeUsd"];
-  uint32 active_traders = 14                  [json_name = "activeTraders"];
-  repeated Category categories = 15           [json_name = "categories"];
+  repeated string available_networks = 1              [json_name = "availableNetworks"];
+  repeated string available_networks_admin = 2        [json_name = "availableNetworksAdmin"];
+  map<string, string> smart_contract_ids = 3          [json_name = "smartContractIds"];
+  map<string, string> usdc_token_ids = 4              [json_name = "usdcTokenIds"];
+  uint32 usdc_decimals = 5                            [json_name = "usdcDecimals"];
+  uint64 market_creation_fee_scaled_usdc = 6          [json_name = "marketCreationFeeScaledUsdc"];
+  uint32 n_markets = 7                                [json_name = "nMarkets"];
+  map<string, string> token_ids = 8                   [json_name = "tokenIds"];
+  double min_order_size_usd = 9                       [json_name = "minOrderSizeUsd"];
+  double tv_pending_usd = 10                          [json_name = "tvPendingUsd"];
+  double tv_matched_usd = 11                          [json_name = "tvMatchedUsd"];
+  double tvl_usd = 12                                 [json_name = "tvlUsd"];
+  map<string, double> total_volume_usd = 13           [json_name = "totalVolumeUsd"];
+  uint32 active_traders = 14                          [json_name = "activeTraders"];
+  repeated Category categories = 15                   [json_name = "categories"];
+  // constants.go/SigSchemeDateRanges
+  repeated UnixDateRange sig_scheme_date_ranges = 16  [json_name = "sigSchemeDateRanges"];
+}
+
+message UnixDateRange {
+  int32 start = 1;
+  int32 end = 2;
 }
 
 message NewsLetterRequest {

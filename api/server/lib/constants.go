@@ -32,3 +32,11 @@ var Seasons = [][2]int64{
 	{1788326400, 1796207999}, // season 3: 1st Jan 2027 00:00:00 to 31st Mar 2027 23:59:59
 	{1796208000, 1804089599}, // season 4: 1st Apr 2027 00:00:00 to 30th Jun 2027 23:59:59
 }
+
+// the sig scheme date ranges are used to determine which signature scheme to use for a given timestamp
+// see: lib/sign.go/AssemblePayloadHexForSigning
+// N.B: the index in the array is the version number
+var SigSchemeDateRanges = [][2]int64{
+	{0, 1763904000},          // v0: 1st Jan 1970 00:00:00 to 22nd Mar 2026 00:00:00
+	{1763904000, 2147483647}, // v1: 22nd Mar 2026 00:00:00 to 19th Jan 2038 03:14:07 (max 32-bit int)
+}
