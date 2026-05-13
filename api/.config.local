@@ -6,3 +6,6 @@ NATS_URL=nats://172.17.0.1:4222
 
 SEND_EMAIL=true
 EMAIL_ADDRESS=development@prism.market
+
+# note: this is an exception for local dev only (e.g. S3 upload)
+AWS_PROFILE=prism

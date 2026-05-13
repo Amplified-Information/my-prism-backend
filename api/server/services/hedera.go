@@ -102,7 +102,7 @@ This function takes a number of input parameters from the YES and NO side
 - determines which side (YES or NO) gets the YES or NO position tokens (the negative USD side gets the NO, the positive side gets the YES)
 - in the event of a partial match, the lower collatoralUsd amount (priceUsd * qty) is used for the collateral
 - constructs sigObjYes/sigObjNo off-chain. sigObjYes and sigObjNo have key type information embedded in them
-- submits to the buyPositionTokensOnBehalfAtomic(...) function on the Prism smart contract
+- submits to the posColToksOnBehalfAtomic(...) function on the Prism smart contract
 
 * @param marketId - nique market ID for the transaction (UUIDv7 string)
 * @param origQtyYes - quantity of YES position tokens requested by the user when they originally placed the order
@@ -318,7 +318,7 @@ func (hs *HederaService) BuyPositionTokens(sideYes *pb_clob.CreateOrderRequestCl
 	tx, err := hiero.NewContractExecuteTransaction().
 		SetContractID(contractId).
 		SetGas(5_000_000). // TODO - can this be lowered? 2M in 4_buy.ts
-		SetFunction("buyPositionTokensOnBehalfAtomic", params).
+		SetFunction("posColToksOnBehalfAtomic", params).
 		Execute(hs.hedera_clients[sideYes.Net]) // both sides are guaranteed to be on the same network
 	if err != nil {
 		return false, lib.LogAndError(lib.LOG_ERROR, "failed to execute contract: %v", err)
@@ -341,7 +341,7 @@ func (hs *HederaService) BuyPositionTokens(sideYes *pb_clob.CreateOrderRequestCl
 
 	lib.Log(lib.LOG_INFO, "Token balances (marketId=%s): %s (yes=%s, no=%s) |  %s (yes=%s, no=%s)", sideYes.MarketId /* yes===no*/, sideYes.EvmAddress, nYesTokens.String(), nNoTokens.String(), sideNo.EvmAddress, nYesTokens2.String(), nNoTokens2.String())
 
-	lib.Log(lib.LOG_INFO, "buyPositionTokensOnBehalfAtomic(marketId=%s, ...) status: %s", sideYes.MarketId, receipt.Status.String())
+	lib.Log(lib.LOG_INFO, "posColToksOnBehalfAtomic(marketId=%s, ...) status: %s", sideYes.MarketId, receipt.Status.String())
 
 	/////
 	// db

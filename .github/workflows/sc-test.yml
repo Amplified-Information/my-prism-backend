@@ -1,4 +1,4 @@
-name: smart contract test
+name: smart contract test (scs)
 
 on:
   push:

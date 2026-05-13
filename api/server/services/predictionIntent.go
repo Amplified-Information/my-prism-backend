@@ -207,12 +207,11 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PrismPre
 		}
 	}
 
-	// secondary orders
-	// additional checks for secondary orders
-	// if it's a secondary order, ensure (on-chain read-only check) that the user has enough position tokens to cover their predictionIntent
+	// secondary orders - additional checks for secondary orders
+	// ensure (on-chain read-only check) that the user has enough position tokens to cover their (secondary) predictionIntent
 	// this transfer will be attempted on-chain and will fail if there aren't enough position tokens to transfer, even if this API-side check fails
 	if req.PrimarySecondary == "s" {
-		// TODO
+		// return "", lib.LogAndError(lib.LOG_ERROR, "secondary orders not implemented yet - currently disabled.")
 
 		// get user position tokens balance for this market
 		// call: getUserTokens(uint128 marketId, address user)
@@ -224,27 +223,29 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PrismPre
 
 		if req.PriceUsd > 0 {
 			// this is a secondary buy/long order
-			// so check the user has enough "no" position tokens to cover it
-			if nYesPositionTokens >= req.Qty {
-				// OK - user has enough "yes" position tokens to cover this secondary buy/long order
-				lib.Log(lib.LOG_INFO, "[secondary] User has %.8f 'yes' position tokens for market %s, which is enough to cover this secondary **buy/long** order of %.8f tokens", nYesPositionTokens, req.MarketId, req.Qty)
+			// the user is exiting a NO position (selling NO tokens back for collateral)
+			if nNoPositionTokens >= req.Qty {
+				// OK - user has enough "no" position tokens to cover this secondary **buy/long** order
+				lib.Log(lib.LOG_INFO, "[secondary] User has %.8f 'no' position tokens for market %s, which is enough to cover this secondary **buy/long** order of %.8f tokens", nNoPositionTokens, req.MarketId, req.Qty)
 			} else {
-				return "", lib.LogAndError(lib.LOG_ERROR, "user has %.8f 'yes' position tokens but needs %.8f to place this secondary **buy/long** order", nYesPositionTokens, req.Qty)
+				return "", lib.LogAndError(lib.LOG_ERROR, "user has %.8f 'no' position tokens but needs %.8f to place this secondary **buy/long** order", nNoPositionTokens, req.Qty)
 			}
 		} else {
 			// this is a secondary sell/short order
-			// so check the user has enough "yes" position tokens to cover it
-			if nNoPositionTokens >= req.Qty {
-				// OK - user has enough "no" position tokens to cover this secondary sell/short order
-				lib.Log(lib.LOG_INFO, "[secondary] User has %.8f 'no' position tokens for market %s, which is enough to cover this secondary **sell/short** order of %.8f tokens", nNoPositionTokens, req.MarketId, req.Qty)
+			// the user is exiting a YES position (selling YES tokens back for collateral)
+			if nYesPositionTokens >= req.Qty {
+				// OK - user has enough "yes" position tokens to cover this secondary **sell/short** order
+				lib.Log(lib.LOG_INFO, "[secondary] User has %.8f 'yes' position tokens for market %s, which is enough to cover this secondary **sell/short** order of %.8f tokens", nYesPositionTokens, req.MarketId, req.Qty)
 			} else {
-				return "", lib.LogAndError(lib.LOG_ERROR, "user has %.8f 'no' position tokens but needs %.8f to place this secondary **sell/short** order", nNoPositionTokens, req.Qty)
+				return "", lib.LogAndError(lib.LOG_ERROR, "user has %.8f 'yes' position tokens but needs %.8f to place this secondary **sell/short** order", nYesPositionTokens, req.Qty)
 			}
 		}
 	}
 
-	/// OK - All validations passed
-	/// Now you can (attempt to) put the order on the CLOB (subject to on-chain sig verification)
+	/////
+	///// OK - All validations passed
+	/////
+	// Now you can (attempt to) put the order on the CLOB (subject to on-chain sig verification)
 
 	/////
 	// notify the CLOB via NATS:

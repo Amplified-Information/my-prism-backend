@@ -37,45 +37,46 @@ func (scer *SmartContractEventRepository) InitDb() error {
 	return nil
 }
 
-func (scer *SmartContractEventRepository) CreatePositionTokensPurchased(event map[string]interface{}) error {
+func (scer *SmartContractEventRepository) CreatePositionTokensPurchasedEvent(event map[string]interface{}) error {
 	if scer.db == nil {
 		return lib.ErrorLog("database not initialized")
 	}
 
-	// string event = "";
-	// string smartContractId = "";
+	// TODO
+	// note: the event map contains string values - parse them safely - the event interface could change
 
-	// // id SERIAL PRIMARY KEY,
-	// //   net VARCHAR(20) NOT NULL CHECK (net IN ('previewnet', 'testnet', 'mainnet')),
-	// //   smart_contract_id VARCHAR(256) NOT NULL,
-	// //   timestamp_nano TIMESTAMP(9) NOT NULL,
-	// //   tx_hash VARCHAR(256) NOT NULL,
-	// //   hostname VARCHAR(256) NOT NULL,
-	// //   created_at TIMESTAMPTZ DEFAULT NOW(),
-
-	// //    -- prevent duplicates!
-	// //   md5_uniq VARCHAR(32) NOT NULL UNIQUE,
-
-	// //   -- PositionTOkensPurchased(uint128 marketId, address indexed buyer, uint256 collateralUsd, uint256 qtyScaled)
-	// //   market_id INTEGER NOT NULL,
-	// //   buyer TEXT NOT NULL,
-	// //   collateral_usd DOUBLE PRECISION NOT NULL,
-	// //   qty_scaled DOUBLE PRECISION NOT NULL
 	// params := sqlc.CreatePositionTokensPurchasedParams{
-	// 	Net: event.Net,
-	// 	SmartContractID: smartContractId,
-	// 	Timestamp
+	// 	Net:              "testnet",
+	// 	SmartContractID:  "",
+	// 	TimestampNano:    time.Now(),
+	// 	TxHash:           "",
+	// 	Hostname:         "",
+	// 	Md5Uniq:          "",
+	// 	MarketID:         0,
+	// 	Buyer:            "",
+	// 	CollateralUsd:    0,
+	// 	QtyScaled:        0,
+	// 	PrimarySecondary: false,
 	// }
 	return nil
 }
 
-func (scer *SmartContractEventRepository) CreateMarketResolved(event map[string]interface{}) error {
+func (scer *SmartContractEventRepository) CreateMarketResolvedEvent(event map[string]interface{}) error {
+	// TODO
+	// note: the event map contains string values - parse them safely - the event interface could change
+
 	return nil
 }
 
-func (scer *SmartContractEventRepository) CreateWinningsRedeemed(event map[string]interface{}) error {
+func (scer *SmartContractEventRepository) CreateWinningsRedeemedEvent(event map[string]interface{}) error {
+	// TODO
+	// note: the event map contains string values - parse them safely - the event interface could change
+
 	return nil
 }
-func (scer *SmartContractEventRepository) CreateTokenAssociated(event map[string]interface{}) error {
+func (scer *SmartContractEventRepository) CreateTokenAssociatedEvent(event map[string]interface{}) error {
+	// TODO
+	// note: the event map contains string values - parse them safely - the event interface could change
+
 	return nil
 }

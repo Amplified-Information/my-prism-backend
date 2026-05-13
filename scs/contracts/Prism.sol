@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
-// import "../node_modules/@openzeppelin/contracts/utils/Base64.sol";
 import "@openzeppelin/contracts/utils/Base64.sol";
 
 interface IERC20 {
@@ -23,15 +22,11 @@ interface IHederaAccountService {
   function isAuthorized(address account, bytes memory message, bytes memory signature) external returns (int64 responseCode, bool authorized);
 }
 
-// digi sig verification
 // oraclePubkeys = [
 //   "302a300506032b6570032100b4c8cfcaaea7e1d9e8fbbacfa1cbbacfa1cbbacfa1cbbacfa1cbbac",
 //   "302a300506032b6570032100a3dcbdbfbdcd9e8f8fbbacfa1cbbacfa1cbbacfa1cbbacfa1cbbac",
 //   "asdfasdfasd"
 // ]
-
-// 2/3 with prob > 0.99 => resolution
-// otherwise, 50/50 resolution
 
 /**
 prism.market prediction market smart contract
@@ -61,12 +56,11 @@ contract Prism {
   uint256 public collateralTokenNdecimals;
   
   // Note: must also update the database scheme (event_* tables)
-  event PositionTokensPurchased(uint128 marketId, address indexed buyer, uint256 collateralUsd, uint256 qtyScaled);
+  event PositionTokensPurchased(uint128 marketId, address indexed buyer, uint256 collateralUsd, uint256 qtyScaled, bool primarySecondary);
   event MarketResolved(uint128 marketId, bool outcome);
   event WinningsRedeemed(uint128 marketId, address indexed winner, uint256 amount);
   event TokenAssociated(address indexed token);
   // event AccountAuthorizationResponse(int64 responseCode, address account, bool response);
-
 
   /**
   Smart contract contructor to initialize the contract with the specified collateral token.
@@ -105,14 +99,8 @@ contract Prism {
     marketCreationFeeUsdc = _marketCreationFeeUsdc; // including nDecimals
   }
 
-  // function setCollateralTokenNdecimals(uint256 _collateralTokenNdecimals) external onlyOwner {
-  //   collateralTokenNdecimals = _collateralTokenNdecimals;
-  // }
-
-// @param collateralUsdAbsScaledYes Yes side amount of collateral (in USDC) to be used for purchasing position tokens (scaled to the number of collatoral token decimal places).
-// @param collateralUsdAbsScaledNo  No side amount of collateral (in USDC) to be used for purchasing position tokens (scaled to the number of collatoral token decimal places).
-  
   /**
+  -> posColToksOnBehalfAtomic <- (atomically) allocate position/collateral tokens on behalf of two users
   This function allows the CLOB to initiate the buying of YES and NO position tokens atomically on behalf of two accounts "yes" and "no".
   Requires --optimize flag due to size of the call stack
   See: api/server/services/hedera.go `params := hiero.NewContractFunctionParameters()....`
@@ -132,7 +120,7 @@ contract Prism {
   @return yes The updated number of YES position tokens held by the signerYes account
   @return no The updated number of NO position tokens held by the signerNo account
   */
-  function buyPositionTokensOnBehalfAtomic(
+  function posColToksOnBehalfAtomic(
     uint128 marketId,
     address signerYes,
     address signerNo,
@@ -151,25 +139,6 @@ contract Prism {
   ) external onlyOwner returns (uint256 yes, uint256 no, uint256 yes2, uint256 no2) {
     require(resolutionTimes[marketId] == 0, "Market resolved");
     require(bytes(statements[marketId]).length > 0, "No market statement has been set");
-
-    // uint256 collateralUsdAbsScaledYes = (qtyScaledYes * priceUsdAbsScaledYes) / (10 ** collateralTokenNdecimals);
-    // uint256 collateralUsdAbsScaledNo  = (qtyScaledNo  * priceUsdAbsScaledNo)  / (10 ** collateralTokenNdecimals);
-
-    // // prevent replay attacks by ensuring unique txIds // TODO - issue < is not enough. Must consider the case where partial match on both sides which wouldn't wipe on the order - get this working with unsigned math
-    // require(!usedTxIds[txIdYes], "Duplicate txIdYes");
-    // require(!usedTxIds[txIdNo], "Duplicate txIdNo");
-
-    // // A txId is only marked as used when it is completely wiped out (qty fully consumed).
-    // // The matched quantity is min(qtyScaledYes, qtyScaledNo).
-    // // If qtyScaledYes <= qtyScaledNo, the YES side is fully consumed.
-    // // If qtyScaledNo <= qtyScaledYes, the NO side is fully consumed.
-    // // If they are equal, both are fully consumed.
-    // if (qtyScaledYes <= qtyScaledNo) {
-    //   usedTxIds[txIdYes] = true;
-    // }
-    // if (qtyScaledNo <= qtyScaledYes) {
-    //   usedTxIds[txIdNo] = true;
-    // }
 
     // calculate the lower collateral amount:
     uint256 collateralUsdAbsScaled_lower = 0; // the lower of the two collateral amounts
@@ -190,19 +159,48 @@ contract Prism {
     require(isAuthorized(signerYes, assemblePayload(0xf0 /* YES MUST have this prefix */, collateralUsdAbsScaledYes, signerYes, marketId, txIdYes, primarySecondaryYes ? 0xf1 : 0xf0 /* true => secondary (0xf1), false => primary (0xf0) */), sigObjYes), "isAuthorized YES failed");
     require(isAuthorized(signerNo,  assemblePayload(0xf1 /* NO MUST have this prefix */,  collateralUsdAbsScaledNo,  signerNo,  marketId, txIdNo, primarySecondaryNo ? 0xf1 : 0xf0 /* true => secondary (0xf1), false => primary (0xf0) */),  sigObjNo),  "isAuthorized NO failed");
 
-    // Transfer 2 collaterals (lower amount) from the buyer to the Prism smart contract using the buyer's allowance
-    require(collateralToken.transferFrom(signerYes, address(this), collateralUsdAbsScaled_lower), "Transfer failed");
-    require(collateralToken.transferFrom(signerNo, address(this), collateralUsdAbsScaled_lower), "Transfer failed");
-    // update totalCollateralUsd for this marketId:
-    totalCollateralUsd[marketId] += (2 * collateralUsdAbsScaled_lower);
 
-    // Now set the position token quantities for the two buyers:
-    // uint256 nPositionTokens = (collateralUsdAbsScaled_lower * (10 ** collateralTokenNdecimals)) / qty_lower;   // number of position tokens to mint for each side (YES and NO)
-    yesTokens[marketId][signerYes] += qty_lower;                    // 1:1 mapping of collateral qty to position tokens
-    noTokens[marketId][signerNo]   += qty_lower;                    // 1:1 mapping of collateral qty to position tokens
+    /*
+    primarySecondaryYes	| primarySecondaryNo	| Collateral flow
+    --------------------|---------------------|-----------------
+    false	              | false	              | both deposit → contract
+    true	              | false	              | NO buyer deposits → contract pays YES seller
+    false	              | true	              | YES buyer deposits → contract pays NO seller
+    true	              | true	              | contract pays both sellers
+    */
 
-    emit PositionTokensPurchased(marketId, signerYes, collateralUsdAbsScaled_lower, qtyScaledYes);
-    emit PositionTokensPurchased(marketId, signerNo, collateralUsdAbsScaled_lower, qtyScaledNo);
+    // YES side: primary = buyer deposits collateral and receives YES tokens
+    //           secondary = seller surrenders YES tokens and receives collateral
+    if (primarySecondaryYes) {
+      // Secondary: signerYes is selling YES tokens back for collateral
+      require(yesTokens[marketId][signerYes] >= qty_lower, "Insufficient YES tokens");
+      yesTokens[marketId][signerYes] -= qty_lower;
+      require(collateralToken.transfer(signerYes, collateralUsdAbsScaled_lower), "Transfer to YES seller failed");
+      totalCollateralUsd[marketId] -= collateralUsdAbsScaled_lower;
+    } else {
+      // Primary: signerYes is buying YES tokens with collateral
+      require(collateralToken.transferFrom(signerYes, address(this), collateralUsdAbsScaled_lower), "Transfer from YES buyer failed");
+      yesTokens[marketId][signerYes] += qty_lower;                  // 1:1 mapping of collateral qty to position tokens
+      totalCollateralUsd[marketId] += collateralUsdAbsScaled_lower;
+    }
+
+    // NO side: primary = buyer deposits collateral and receives NO tokens
+    //          secondary = seller surrenders NO tokens and receives collateral
+    if (primarySecondaryNo) {
+      // Secondary: signerNo is selling NO tokens back for collateral
+      require(noTokens[marketId][signerNo] >= qty_lower, "Insufficient NO tokens");
+      noTokens[marketId][signerNo] -= qty_lower;
+      require(collateralToken.transfer(signerNo, collateralUsdAbsScaled_lower), "Transfer to NO seller failed");
+      totalCollateralUsd[marketId] -= collateralUsdAbsScaled_lower;
+    } else {
+      // Primary: signerNo is buying NO tokens with collateral
+      require(collateralToken.transferFrom(signerNo, address(this), collateralUsdAbsScaled_lower), "Transfer from NO buyer failed");
+      noTokens[marketId][signerNo] += qty_lower;                    // 1:1 mapping of collateral qty to position tokens
+      totalCollateralUsd[marketId] += collateralUsdAbsScaled_lower;
+    }
+
+    emit PositionTokensPurchased(marketId, signerYes, collateralUsdAbsScaled_lower, qtyScaledYes, primarySecondaryYes);
+    emit PositionTokensPurchased(marketId, signerNo, collateralUsdAbsScaled_lower, qtyScaledNo, primarySecondaryNo);
 
     return (yesTokens[marketId][signerYes] , noTokens[marketId][signerYes], yesTokens[marketId][signerNo] , noTokens[marketId][signerNo]); // return current balances
   }
@@ -240,12 +238,7 @@ contract Prism {
   }
 
   /**
-  Secondary market
-  */
-
-  /**
-  This function allows the oracle to resolve the market by specifying the outcome (YES or NO).
-  TODO - restrict to Oracle address
+  This function allows the oracle to resolve the market by specifying the outcome (YES or NO)
   @param marketId The ID of the market to be resolved.
   @param noYes A boolean indicating the outcome of the market: true for YES wins, false for NO wins.
   */
@@ -335,17 +328,6 @@ contract Prism {
     emit TokenAssociated(tokenAddress);
   }
 
-  // NO!
-  // calling usdcToken.approve(msg.sender, amount) inside your contract, but this does not set an allowance for your contract to spend the user's tokens. Instead, it sets an allowance for the contract (as the token holder) to allow msg.sender to spend tokens held by the contract.
-  // /**
-  // Set the USDC token allowance for the caller.
-  // @param amount The amount of USDC tokens to approve for the caller.
-  // */
-  // function setUsdcAllowance(uint256 amount) external {
-  //   require(associatedTokens[address(usdcToken)], "Token not associated");
-  //   require(usdcToken.approve(msg.sender, amount), "Approval failed");
-  // }
-
   /////
   // utility functions
   /////
@@ -396,42 +378,5 @@ contract Prism {
   modifier onlyOracle() {
     require(msg.sender == owner /* TODO - change to Oracle address */, "Only oracle can call this function");
     _;
-  }
-
-
-
-
-
-  /**
-  Admin-only function to safely transfer YES or NO position tokens between users for a given market.
-  Used for off-chain settlement. Only callable by the contract owner.
-  @param marketId The market in which the transfer occurs.
-  @param from The address to transfer tokens from.
-  @param to The address to transfer tokens to.
-  @param yesAmount The amount of YES tokens to transfer.
-  @param noAmount The amount of NO tokens to transfer.
-  */
-  function adminTransferPositionTokens(
-    uint128 marketId,
-    address from,
-    address to,
-    uint256 yesAmount,
-    uint256 noAmount
-  ) external onlyOwner {
-    // TODO - digital signature verification for this function as well, similar to buyPositionTokensOnBehalfAtomic, to ensure the authenticity of the transfer request and prevent unauthorized transfers. 
-    // This would involve creating a payload that includes the transfer details (marketId, from, to, yesAmount, noAmount) and verifying the signature against the admin's public key.
-    
-    // YES tokens
-    if (yesAmount > 0) {
-      require(yesTokens[marketId][from] >= yesAmount, "Insufficient YES tokens");
-      yesTokens[marketId][from] -= yesAmount;
-      yesTokens[marketId][to] += yesAmount;
-    }
-    // NO tokens
-    if (noAmount > 0) {
-      require(noTokens[marketId][from] >= noAmount, "Insufficient NO tokens");
-      noTokens[marketId][from] -= noAmount;
-      noTokens[marketId][to] += noAmount;
-    }
   }
 }

@@ -51,21 +51,21 @@ To release a new version of a service, follow the release procedure here: https:
 
 `dev`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1778420279) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1778420279) | [data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1778420279) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1778685338) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1778685338) | [data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1778685338) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1778420279) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1778420279) | ![data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1778420279) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1778685338) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1778685338) | ![data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1778685338) |
 
 `uat`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1778420279) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1778420279) | [data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1778420279) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1778685338) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1778685338) | [data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1778685338) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1778420279) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1778420279) | ![data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1778420279) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1778685338) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1778685338) | ![data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1778685338) |
 
 `prod`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1778420279) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1778420279) | [data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1778420279) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1778685338) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1778685338) | [data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1778685338) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1778420279) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1778420279) | ![data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1778420279) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1778685338) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1778685338) | ![data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1778685338) |
 
 *Note: see .git/hooks/pre-commit to see how to update the cache-busting nonce*
 
@@ -92,6 +92,17 @@ You can now open the application at:
 `localhost:5173`
 
 ## Quickstart (docker-compose)
+
+Add the following to your /etc/hosts file:
+
+```bash
+# see: envoy.tmpl.yaml
+127.0.0.1 prism.local
+127.0.0.1 admin.prism.local
+127.0.0.1 previewnet.prism.local
+127.0.0.1 testnet.prism.local
+127.0.0.1 mainnet.prism.local
+```
 
 ```bash
 # convenience script:

@@ -97,6 +97,7 @@ async function deployContract(client: Client) {
     console.log(`--> Don't forget to the smart contract ID for:
 - scs (.config) + reload env vars
 - api (.config.*) + reload env vars + restart
+- blocknode (.config) + reload env vars + restart
 `)
     console.log('--> Don\'t forget to associate USDC!')
     console.log('--> Don\'t forget to create at least one new market!')

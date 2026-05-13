@@ -90,7 +90,7 @@ const main = async () => {
       .setContractId(contractId)
       .setGas(2_000_000) // approx 1 million per USDC transfer (two USDC transfers in the atomic function)
       .setFunction(
-        'buyPositionTokensOnBehalfAtomic',
+        'posColToksOnBehalfAtomic',
         params
       )
       .execute(client)

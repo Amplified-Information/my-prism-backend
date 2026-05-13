@@ -263,6 +263,7 @@ CREATE TABLE public.event_position_tokens_purchased (
     buyer text NOT NULL,
     collateral_usd double precision NOT NULL,
     qty_scaled double precision NOT NULL,
+    primary_secondary boolean NOT NULL,
     CONSTRAINT event_position_tokens_purchased_net_check CHECK (((net)::text = ANY ((ARRAY['previewnet'::character varying, 'testnet'::character varying, 'mainnet'::character varying])::text[])))
 );
 

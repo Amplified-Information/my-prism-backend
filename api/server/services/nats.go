@@ -324,16 +324,16 @@ func (ns *NatsService) HandleSmartContractEvents() error {
 		switch eventType {
 		case "PositionTokensPurchased":
 			lib.Log(lib.LOG_INFO, "Received PositionTokensPurchased event (%s): %v", contractId, event)
-			ns.smartContractEventRepository.CreatePositionTokensPurchased(event)
+			ns.smartContractEventRepository.CreatePositionTokensPurchasedEvent(event)
 		case "MarketResolved":
 			lib.Log(lib.LOG_INFO, "Received MarketResolved event (%s): %v", contractId, event)
-			ns.smartContractEventRepository.CreateMarketResolved(event)
+			ns.smartContractEventRepository.CreateMarketResolvedEvent(event)
 		case "WinningsRedeemed":
 			lib.Log(lib.LOG_INFO, "Received WinningsRedeemed event (%s): %v", contractId, event)
-			ns.smartContractEventRepository.CreateWinningsRedeemed(event)
+			ns.smartContractEventRepository.CreateWinningsRedeemedEvent(event)
 		case "TokenAssociated":
 			lib.Log(lib.LOG_INFO, "Received TokenAssociated event (%s): %v", contractId, event)
-			ns.smartContractEventRepository.CreateTokenAssociated(event)
+			ns.smartContractEventRepository.CreateTokenAssociatedEvent(event)
 		case "AccountAuthorizationResponse":
 			lib.Log(lib.LOG_WARN, "AccountAuthorizationResponse event received - not stored in database")
 		default:

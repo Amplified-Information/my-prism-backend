@@ -10,8 +10,8 @@
 INSERT INTO event_position_tokens_purchased (
   net, smart_contract_id, timestamp_nano, tx_hash, hostname,
   md5_uniq,
-  market_id, buyer, collateral_usd, qty_scaled)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+  market_id, buyer, collateral_usd, qty_scaled, primary_secondary)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING *;
 
 -- name: CreateMarketResolved :one

@@ -13,4 +13,15 @@ contract PrismTestHelper is Prism {
     function exposedPrefixMessageFixed(string memory messageHashBase64) external pure returns (bytes memory) {
         return prefixMessageFixed(messageHashBase64);
     }
+
+    /// @dev Test-only: directly set position token balances without going through posColToksOnBehalfAtomic.
+    function setTokensForTest(uint128 marketId, address user, uint256 yesAmt, uint256 noAmt) external {
+        yesTokens[marketId][user] = yesAmt;
+        noTokens[marketId][user]  = noAmt;
+    }
+
+    /// @dev Test-only: directly set totalCollateralUsd without going through posColToksOnBehalfAtomic.
+    function setTotalCollateralForTest(uint128 marketId, uint256 amount) external {
+        totalCollateralUsd[marketId] = amount;
+    }
 }
