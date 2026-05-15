@@ -287,8 +287,8 @@ func (hs *HederaService) BuyPositionTokens(sideYes *pb_clob.CreateOrderRequestCl
 	params.AddUint128BigInt(txIdNoBig)              // txIdNo
 	params.AddBytes(sigObjYes)                      // sigObjYes
 	params.AddBytes(sigObjNo)                       // sigObjNo
-	params.AddBool(sideYes.PrimarySecondary == "s") // true => secondary (hedged), false => primary
-	params.AddBool(sideNo.PrimarySecondary == "s")  // true => secondary (hedged), false => primary
+	params.AddBool(strings.ToLower(sideYes.PrimarySecondary) == "s") // true => secondary (hedged), false => primary
+	params.AddBool(strings.ToLower(sideNo.PrimarySecondary) == "s")  // true => secondary (hedged), false => primary
 
 	lib.Log(lib.LOG_INFO, "Prepared smart contract parameters for BuyPositionTokens")
 	lib.Log(lib.LOG_INFO, "marketIdBytes (hex): %s", hex.EncodeToString(marketIdBig.Bytes()))

@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"strings"
+	"time"
 
 	pb_clob "api/gen/clob"
 	"api/server/lib"
@@ -20,7 +21,7 @@ type NatsService struct {
 	hederaService                *HederaService
 	dbRepository                 *repositories.DbRepository
 	matchesRepository            *repositories.MatchesRepository
-	predictionIntents            *repositories.PredictionIntentsRepository
+	predictionIntentsRepository  *repositories.PredictionIntentsRepository
 	smartContractEventRepository *repositories.SmartContractEventRepository
 }
 
@@ -44,7 +45,7 @@ func (ns *NatsService) InitNATS(h *HederaService, d *repositories.DbRepository, 
 	// and inject the MatchesRepository:
 	ns.matchesRepository = m
 	// and inject the PredictionIntentsRepository:
-	ns.predictionIntents = p
+	ns.predictionIntentsRepository = p
 	// and inject the SmartContractEventRepository:
 	ns.smartContractEventRepository = scer
 
@@ -180,67 +181,18 @@ func (ns *NatsService) HandleOrderMatches() error {
 		marketId := orderRequestClobTuple[0].MarketId
 		if markAsMatched[0] == true { // mark tx0 for deletion
 			lib.Log(lib.LOG_INFO, "marking tx0 (%s) as fully matched with tx1 (%s)", orderRequestClobTuple[0].TxId, orderRequestClobTuple[1].TxId)
-			err = ns.predictionIntents.MarkPredictionIntentAsFullyMatched(marketId, orderRequestClobTuple[0].TxId)
+			err = ns.predictionIntentsRepository.MarkPredictionIntentAsFullyMatched(marketId, orderRequestClobTuple[0].TxId)
 			if err != nil {
 				lib.Log(lib.LOG_ERROR, "Error marking prediction intent as fully matched in database: %v", err)
 			}
 		}
 		if markAsMatched[1] == true { // mark tx1 for deletion
 			lib.Log(lib.LOG_INFO, "marking tx1 (%s) as fully matched with tx0 (%s)", orderRequestClobTuple[1].TxId, orderRequestClobTuple[0].TxId)
-			err = ns.predictionIntents.MarkPredictionIntentAsFullyMatched(marketId, orderRequestClobTuple[1].TxId)
+			err = ns.predictionIntentsRepository.MarkPredictionIntentAsFullyMatched(marketId, orderRequestClobTuple[1].TxId)
 			if err != nil {
 				lib.Log(lib.LOG_ERROR, "Error marking prediction intent as fully matched in database: %v", err)
 			}
 		}
-
-		// if amountUsdTx0-amountUsdTx1 <= 0 {
-		// 	// check if one side if wiped out:
-		// 	// Only mark as fully matched if the difference is <= 0
-		// 	lib.Log(lib.LOG_INFO, "Marking txId %s as fully matched in database (amountUsdTx0 - amountUsdTx1 <= 0)", orderRequestClobTuple[0].TxId)
-		// 	err = ns.predictionIntents.MarkPredictionIntentAsFullyMatched(orderRequestClobTuple[0].MarketId, orderRequestClobTuple[0].TxId)
-		// 	if err != nil {
-		// 		lib.Log(lib.LOG_ERROR, "Error marking prediction intent as fully matched in database: %v", err)
-		// 	}
-		// } else if amountUsdTx1-amountUsdTx0 <= 0 {
-		// 	// also must check if the other side is wiped out:
-		// 	// Only mark as fully matched if the difference is <= 0
-		// 	lib.Log(lib.LOG_INFO, "Marking txId %s as fully matched in database (amountUsdTx1 - amountUsdTx0 <= 0)", orderRequestClobTuple[1].TxId)
-		// 	err = ns.predictionIntents.MarkPredictionIntentAsFullyMatched(orderRequestClobTuple[0].MarketId, orderRequestClobTuple[1].TxId)
-		// 	if err != nil {
-		// 		lib.Log(lib.LOG_ERROR, "Error marking prediction intent as fully matched in database: %v", err)
-		// 	}
-		// } else if amountUsdTx1 == amountUsdTx0 { // full match
-		// 	// also much check if there's an exact match:
-		// 	// exact match - both are fully matched
-		// 	lib.Log(lib.LOG_INFO, "Marking BOTH txIds %s and %s as fully matched in database (amountUsdTx1 == amountUsdTx0)", orderRequestClobTuple[0].TxId, orderRequestClobTuple[1].TxId)
-		// 	err = ns.predictionIntents.MarkPredictionIntentAsFullyMatched(orderRequestClobTuple[0].MarketId, orderRequestClobTuple[0].TxId)
-		// 	if err != nil {
-		// 		lib.Log(lib.LOG_ERROR, "Error marking prediction intent as fully matched in database: %v", err)
-		// 	}
-		// 	err = ns.predictionIntents.MarkPredictionIntentAsFullyMatched(orderRequestClobTuple[0].MarketId, orderRequestClobTuple[1].TxId)
-		// 	if err != nil {
-		// 		lib.Log(lib.LOG_ERROR, "Error marking prediction intent as fully matched in database: %v", err)
-		// 	}
-		// }
-
-		// // if it's a full match, log the relevant txId as "fully_match_at" on prediction_intents table...
-		// // this fully_matched_at timestamp is useful for the cron job to avoid scanning over too large a set of order requests
-		// if !isPartial { // a full match
-		// 	// find out if it's tx1 or tx2 that is fully matched
-		// 	var fullyMatchedTxId string
-		// 	if orderRequestClobTuple[0].Qty-orderRequestClobTuple[1].Qty <= 0 {
-		// 		fullyMatchedTxId = orderRequestClobTuple[0].TxId
-		// 	} else if orderRequestClobTuple[1].Qty-orderRequestClobTuple[0].Qty <= 0 {
-		// 		fullyMatchedTxId = orderRequestClobTuple[1].TxId
-		// 	} else {
-		// 		lib.Log(lib.LOG_ERROR, "invalid fullyMatchTxId")
-		// 	}
-
-		// 	// err := ns.predictionIntents.MarkPredictionIntentAsFullyMatched(orderRequestClobTuple[0].MarketId, fullyMatchedTxId)
-		// 	// if err != nil {
-		// 	// 	lib.Log(lib.LOG_ERROR, "Error marking prediction intent as fully matched in database: %v", err)
-		// 	// }
-		// }
 
 		/////
 		// smart contract
@@ -274,8 +226,12 @@ func (ns *NatsService) HandleSmartContractEvents() error {
 	// if 0.0.790066 of type hiero.SmartContractID, proceed
 	// extract the value for the "event" key
 	// switch on event value:
-	// case {PositionTokensPurchased, MarketResolved, WinningsRedeemed, TokenAssociated, AccountAuthorizationResponse,}
+	// case {PositionTokensPurchased, MarketResolved, WinningsRedeemed, TokenAssociated, AccountAuthorizationResponse}
 	// just generate the case statement - I will implement the logic for each case later
+	// example: event {"type":"contract","net":"testnet","event":"PositionTokensPurchased","args":{"marketId":"2150312433911680295076121848404177111","buyer":"0xc3cE4543c2d1a797E46A9dbA3a95d62Cb09bF9e0","collateralUsd":"1000000","qtyScaled":"1960784","primarySecondary":"false"},"timestamp":"1778699820.273164963","txHash":"0xc65d3a722da207b20629eae581b50a13ae1facb6dc3302e387cb46daa2a44131","host":"ionneb"}
+	// example: event {"type":"contract","net":"testnet","event":"MarketResolved","args":{"marketId":"2150303002968926159019224772567976782","outcome":"true"},"timestamp":"1778689217.019002918","txHash":"0xbcddb781fe1d1ee3477ed65655b329a0a666d69ba6f24f20bdd5c526a65e4933","host":"ionneb"}
+	// example: event {"type":"contract","net":"testnet","event":"WinningsRedeemed","args":{"marketId":"2150303002968926159019224772567976782","winner":"0x440A1D7AF93b92920BCe50B4c0d2a8e6DCfeBfD6","amount":"200000"},"timestamp":"1778689299.499882673","txHash":"0xbc55313b0783cea8260bbc2485c55e11b5ea6b1c796d9ded46d82837d290ba86","host":"ionneb"}
+	// example: event {"type":"contract","net":"testnet","event":"TokenAssociated","args":{"token":"0x0000000000000000000000000000000000068cDa"},"timestamp":"1778684870.156664154","txHash":"0xdfc2357ac64a15c111b46ade2718fb923675e10bfba35c37628fd0e53d9074bb","host":"ionneb"}
 
 	_, err := ns.subscribe(">", func(msg *nats.Msg) {
 		// Parse the subject: "testnet:0.0.7907066"
@@ -315,25 +271,49 @@ func (ns *NatsService) HandleSmartContractEvents() error {
 			lib.Log(lib.LOG_ERROR, "Failed to parse event JSON: %v", err)
 			return
 		}
-		eventType, _ := event["event"].(string)
 
-		// event PositionTokensPurchased(uint128 marketId, address indexed buyer, uint256 collateralUsd, uint256 qtyScaled);
+		// common fields:
+		eventType, _ := event["event"].(string)
+		timestampStr, _ := event["timestamp"].(string)
+		timestampNano, _ := time.Parse(time.RFC3339Nano, timestampStr)
+		txHash, _ := event["txHash"].(string)
+		hostname, _ := event["host"].(string)
+		md5uniq := lib.Md5(msg.Subject + string(msg.Data)) // concatenation of the subject and the stringified body
+
+		// specific fields will be parsed in the relevant case statements below
+
+		// event PositionTokensPurchased(uint128 marketId, address indexed buyer, uint256 collateralUsd, uint256 qtyScaled, bool primarySecondary);
 		// event MarketResolved(uint128 marketId, bool outcome);
 		// event WinningsRedeemed(uint128 marketId, address indexed winner, uint256 amount);
 		// event TokenAssociated(address indexed token);
 		switch eventType {
 		case "PositionTokensPurchased":
-			lib.Log(lib.LOG_INFO, "Received PositionTokensPurchased event (%s): %v", contractId, event)
-			ns.smartContractEventRepository.CreatePositionTokensPurchasedEvent(event)
+			lib.Log(lib.LOG_INFO, "Received PositionTokensPurchased event (%s:%s): %v", network, contractId, event)
+			err = ns.smartContractEventRepository.CreatePositionTokensPurchasedEvent(network, contractId, timestampNano, txHash, hostname, md5uniq, event)
+			if err != nil {
+				lib.Log(lib.LOG_ERROR, "Failed to CreatePositionTokensPurchasedEvent: %v", err)
+			}
 		case "MarketResolved":
-			lib.Log(lib.LOG_INFO, "Received MarketResolved event (%s): %v", contractId, event)
-			ns.smartContractEventRepository.CreateMarketResolvedEvent(event)
+			lib.Log(lib.LOG_INFO, "Received MarketResolved event (%s:%s): %v", network, contractId, event)
+			err = ns.smartContractEventRepository.CreateMarketResolvedEvent(network, contractId, timestampNano, txHash, hostname, md5uniq, event)
+			if err != nil {
+				lib.Log(lib.LOG_ERROR, "Failed to CreateMarketResolvedEvent: %v", err)
+			}
 		case "WinningsRedeemed":
-			lib.Log(lib.LOG_INFO, "Received WinningsRedeemed event (%s): %v", contractId, event)
-			ns.smartContractEventRepository.CreateWinningsRedeemedEvent(event)
+			lib.Log(lib.LOG_INFO, "Received WinningsRedeemed event (%s:%s): %v", network, contractId, event)
+			marketId, winningEvm, err := ns.smartContractEventRepository.CreateWinningsRedeemedEvent(network, contractId, timestampNano, txHash, hostname, md5uniq, event)
+			if err != nil {
+				lib.Log(lib.LOG_ERROR, "Failed to CreateWinningsRedeemedEvent: %v", err)
+			}
+
+			// Finally, set redeemed_at timestamp in prediction_intents table
+			ns.predictionIntentsRepository.MarkPredictionIntentAsRedeemedForAccount(*marketId, *winningEvm)
 		case "TokenAssociated":
-			lib.Log(lib.LOG_INFO, "Received TokenAssociated event (%s): %v", contractId, event)
-			ns.smartContractEventRepository.CreateTokenAssociatedEvent(event)
+			lib.Log(lib.LOG_INFO, "Received TokenAssociated event (%s:%s): %v", network, contractId, event)
+			err = ns.smartContractEventRepository.CreateTokenAssociatedEvent(network, contractId, timestampNano, txHash, hostname, md5uniq, event)
+			if err != nil {
+				lib.Log(lib.LOG_ERROR, "Failed to CreateTokenAssociatedEvent: %v", err)
+			}
 		case "AccountAuthorizationResponse":
 			lib.Log(lib.LOG_WARN, "AccountAuthorizationResponse event received - not stored in database")
 		default:

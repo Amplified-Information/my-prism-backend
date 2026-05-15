@@ -125,23 +125,6 @@ func AssemblePayloadHexForSigning(req *pb_api.PrismPredictionIntentRequest, usdc
 	return payloadHex, nil
 }
 
-func Uuid7_to_bigint(uuid7 string) (*big.Int, error) {
-	// Remove all hyphens from the UUID7 string
-	uuid7Cleaned := strings.ReplaceAll(uuid7, "-", "")
-
-	// Prefix with 0x to indicate hexadecimal
-	hexString := "0x" + uuid7Cleaned
-
-	// Convert the hexadecimal string to a big.Int
-	bigIntValue := new(big.Int)
-	_, success := bigIntValue.SetString(hexString, 0) // Base 0 auto-detects the prefix
-	if !success {
-		return nil, ErrorLog("failed to convert UUID7 to big.Int", "uuid7", uuid7)
-	}
-
-	return bigIntValue, nil
-}
-
 // func Uuid7_to_bytes(uuid7 string) ([]byte, error) {
 // 	// Remove all hyphens from the UUID7 string
 // 	uuid7Cleaned := strings.ReplaceAll(uuid7, "-", "")

@@ -261,6 +261,8 @@ contract Prism {
   //     return 0;
   // }
 
+  // TODO - function for Prism to claim collateral tokens after 1 year + 1 day?
+
   // TODO - implement an admin function to freeze a particular market?
   // is suspending/freezing the orderbook sufficient, making this function unnecessary?
 

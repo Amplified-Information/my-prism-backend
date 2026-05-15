@@ -92,6 +92,11 @@ SET is_suspended = NOT is_suspended
 WHERE market_id = $1
 RETURNING *;
 
+-- name: ResolveMarket :exec
+UPDATE markets
+SET resolved_at = CURRENT_TIMESTAMP, outcome = $2
+WHERE market_id = $1;
+
 
 -- DELETE
 

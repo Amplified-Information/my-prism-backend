@@ -222,22 +222,20 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PrismPre
 		lib.Log(lib.LOG_INFO, "[secondary] User has %.8f 'yes' position tokens and %.8f 'no' position tokens on market %s", nYesPositionTokens, nNoPositionTokens, req.MarketId)
 
 		if req.PriceUsd > 0 {
-			// this is a secondary buy/long order
-			// the user is exiting a NO position (selling NO tokens back for collateral)
-			if nNoPositionTokens >= req.Qty {
-				// OK - user has enough "no" position tokens to cover this secondary **buy/long** order
-				lib.Log(lib.LOG_INFO, "[secondary] User has %.8f 'no' position tokens for market %s, which is enough to cover this secondary **buy/long** order of %.8f tokens", nNoPositionTokens, req.MarketId, req.Qty)
+			// this is a secondary YES order - the user transfers YES tokens to the contract
+			if nYesPositionTokens >= req.Qty {
+				// OK - user has enough "yes" position tokens to cover this secondary YES order
+				lib.Log(lib.LOG_INFO, "[secondary] User has %.8f 'yes' position tokens for market %s, which is enough to cover this secondary YES order of %.8f tokens", nYesPositionTokens, req.MarketId, req.Qty)
 			} else {
-				return "", lib.LogAndError(lib.LOG_ERROR, "user has %.8f 'no' position tokens but needs %.8f to place this secondary **buy/long** order", nNoPositionTokens, req.Qty)
+				return "", lib.LogAndError(lib.LOG_ERROR, "user has %.8f 'yes' position tokens but needs %.8f to place this secondary YES order", nYesPositionTokens, req.Qty)
 			}
 		} else {
-			// this is a secondary sell/short order
-			// the user is exiting a YES position (selling YES tokens back for collateral)
-			if nYesPositionTokens >= req.Qty {
-				// OK - user has enough "yes" position tokens to cover this secondary **sell/short** order
-				lib.Log(lib.LOG_INFO, "[secondary] User has %.8f 'yes' position tokens for market %s, which is enough to cover this secondary **sell/short** order of %.8f tokens", nYesPositionTokens, req.MarketId, req.Qty)
+			// this is a secondary NO order - the user transfers NO tokens to the contract
+			if nNoPositionTokens >= req.Qty {
+				// OK - user has enough "no" position tokens to cover this secondary NO order
+				lib.Log(lib.LOG_INFO, "[secondary] User has %.8f 'no' position tokens for market %s, which is enough to cover this secondary NO order of %.8f tokens", nNoPositionTokens, req.MarketId, req.Qty)
 			} else {
-				return "", lib.LogAndError(lib.LOG_ERROR, "user has %.8f 'yes' position tokens but needs %.8f to place this secondary **sell/short** order", nYesPositionTokens, req.Qty)
+				return "", lib.LogAndError(lib.LOG_ERROR, "user has %.8f 'no' position tokens but needs %.8f to place this secondary NO order", nNoPositionTokens, req.Qty)
 			}
 		}
 	}

@@ -142,6 +142,8 @@ func (dbRepository *DbRepository) MarkPredictionIntentAsRegenerated(txId string)
 	if err != nil {
 		return lib.ErrorLog("MarkPredictionIntentAsRegenerated failed", "error", err, "txId", txId)
 	}
+
+	lib.Info("called MarkPredictionIntentAsRegenerated", "txId", txId)
 	return nil
 }
 
@@ -169,7 +171,30 @@ func (pir *PredictionIntentsRepository) MarkPredictionIntentAsFullyMatched(marke
 		return lib.ErrorLog("MarkPredictionIntentAsFullyMatched failed", "error", err, "marketId", marketId, "txId", txId)
 	}
 
-	lib.Info("prediction intent fully matched", "marketId", marketId, "txId", txId)
+	lib.Info("called MarkPredictionIntentAsFullyMatched", "marketId", marketId, "txId", txId)
+	return nil
+}
+
+func (pir *PredictionIntentsRepository) MarkPredictionIntentAsRedeemedForAccount(marketId string, evmAddress string) error {
+	if pir.db == nil {
+		return lib.ErrorLog("database not initialized")
+	}
+
+	marketUUID, err := uuid.Parse(marketId)
+	if err != nil {
+		return lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
+	}
+
+	q := sqlc.New(pir.db)
+	err = q.MarkPredictionIntentAsRedeemedForAccount(context.Background(), sqlc.MarkPredictionIntentAsRedeemedForAccountParams{
+		MarketID:   marketUUID,
+		Evmaddress: evmAddress,
+	})
+	if err != nil {
+		return lib.ErrorLog("MarkPredictionIntentAsRedeemed failed", "error", err, "marketId", marketId, "evmAddress", evmAddress)
+	}
+
+	lib.Info("called MarkPredictionIntentAsRedeemedForAccount", "marketId", marketId, "evmAddress", evmAddress)
 	return nil
 }
 

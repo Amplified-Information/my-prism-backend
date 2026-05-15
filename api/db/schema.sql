@@ -216,7 +216,7 @@ CREATE TABLE public.event_market_resolved (
     hostname character varying(256) NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
     md5_uniq character varying(32) NOT NULL,
-    market_id integer NOT NULL,
+    market_id character varying(64) NOT NULL,
     outcome boolean NOT NULL,
     CONSTRAINT event_market_resolved_net_check CHECK (((net)::text = ANY ((ARRAY['previewnet'::character varying, 'testnet'::character varying, 'mainnet'::character varying])::text[])))
 );
@@ -259,7 +259,7 @@ CREATE TABLE public.event_position_tokens_purchased (
     hostname character varying(256) NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
     md5_uniq character varying(32) NOT NULL,
-    market_id integer NOT NULL,
+    market_id character varying(64) NOT NULL,
     buyer text NOT NULL,
     collateral_usd double precision NOT NULL,
     qty_scaled double precision NOT NULL,
@@ -347,7 +347,7 @@ CREATE TABLE public.event_winnings_redeemed (
     hostname character varying(256) NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
     md5_uniq character varying(32) NOT NULL,
-    market_id integer NOT NULL,
+    market_id character varying(64) NOT NULL,
     winner text NOT NULL,
     amount double precision NOT NULL,
     CONSTRAINT event_winnings_redeemed_net_check CHECK (((net)::text = ANY ((ARRAY['previewnet'::character varying, 'testnet'::character varying, 'mainnet'::character varying])::text[])))
@@ -598,6 +598,7 @@ CREATE TABLE public.prediction_intents (
     fully_matched_at timestamp with time zone,
     evicted_at timestamp with time zone,
     primary_secondary character varying(1) DEFAULT 'p'::character varying NOT NULL,
+    redeemed_at timestamp with time zone,
     CONSTRAINT order_requests_account_id_check CHECK ((length(account_id) >= 5)),
     CONSTRAINT order_requests_evmaddress_check CHECK ((length(evmaddress) = 40)),
     CONSTRAINT order_requests_keytype_check CHECK ((keytype = ANY (ARRAY[1, 2, 3]))),

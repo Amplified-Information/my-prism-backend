@@ -80,6 +80,11 @@ UPDATE prediction_intents
 SET evicted_at = CURRENT_TIMESTAMP
 WHERE tx_id = $1;
 
+-- name: MarkPredictionIntentAsRedeemedForAccount :exec
+UPDATE prediction_intents -- updates all rows where market_id=$1 and evmaddress=$2
+SET redeemed_at = CURRENT_TIMESTAMP
+WHERE market_id = $1 AND evmaddress = $2;
+
 
 
 -- DELETE

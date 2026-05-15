@@ -3,11 +3,13 @@ package lib
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 	"net"
 	"net/http"
 	"net/mail"
@@ -421,4 +423,48 @@ func ParseDuration(period string) time.Duration {
 	default:
 		return 0
 	}
+}
+
+func Uuid7_to_bigint(uuid7 string) (*big.Int, error) {
+	// Remove all hyphens from the UUID7 string
+	uuid7Cleaned := strings.ReplaceAll(uuid7, "-", "")
+
+	// Prefix with 0x to indicate hexadecimal
+	hexString := "0x" + uuid7Cleaned
+
+	// Convert the hexadecimal string to a big.Int
+	bigIntValue := new(big.Int)
+	_, success := bigIntValue.SetString(hexString, 0) // Base 0 auto-detects the prefix
+	if !success {
+		return nil, ErrorLog("failed to convert UUID7 to big.Int", "uuid7", uuid7)
+	}
+
+	return bigIntValue, nil
+}
+
+func Bigint_to_uuid7(bigIntValue *big.Int) (string, error) {
+	// e.g. bigIntValue = 2150303002968926159019224772567976782 -> 019e221f-9322-7383-a038-6964c1a94b4e
+
+	// Convert big.Int to hexadecimal string
+	hexString := fmt.Sprintf("%032x", bigIntValue)
+
+	// Insert hyphens to format as UUID7: 8-4-4-4-12
+	if len(hexString) != 32 {
+		return "", ErrorLog("bigIntValue does not represent a valid UUID7", "bigIntValue", bigIntValue.String())
+	}
+	uuid7 := fmt.Sprintf("%s-%s-%s-%s-%s",
+		hexString[0:8],
+		hexString[8:12],
+		hexString[12:16],
+		hexString[16:20],
+		hexString[20:32],
+	)
+
+	return uuid7, nil
+}
+
+// Md5 returns the hex-encoded MD5 hash of the input string.
+func Md5(s string) string {
+	h := md5.Sum([]byte(s))
+	return hex.EncodeToString(h[:])
 }
