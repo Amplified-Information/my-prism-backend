@@ -151,12 +151,7 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PrismPre
 		return "", lib.LogAndError(lib.LOG_ERROR, "failed to get network selected: %v", err)
 	}
 
-	// NO, don't use the current X_SMART_CONTRACT_ID loaded from env vars
-	// _smartContractId, err := hiero.ContractIDFromString(os.Getenv(fmt.Sprintf("%s_SMART_CONTRACT_ID", strings.ToUpper(netSelectedByUser))))
-	// if err != nil {
-	// 	return "", lib.LogAndError(lib.LOG_ERROR, "failed to validate %s_SMART_CONTRACT_ID: %v", strings.ToUpper(netSelectedByUser), err)
-	// }
-	// look up this market's smartContractID in the database
+	// db look up of this market's smartContractID in the markets table - don't use the current X_SMART_CONTRACT_ID as loaded from env vars
 	market, err := pis.marketsRepository.GetMarketById(req.MarketId, false /* don't include suspended or paused markets*/)
 	if err != nil {
 		return "", lib.LogAndError(lib.LOG_ERROR, "failed to get market by id %s: %v. Is the market suspended or paused?", req.MarketId, err)
@@ -166,52 +161,69 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PrismPre
 		return "", lib.LogAndError(lib.LOG_ERROR, "failed to validate smart contract ID from market %s: %v", req.MarketId, err)
 	}
 
-	// read USDC address from env var
-	usdcAddress, err := hiero.ContractIDFromString(os.Getenv(fmt.Sprintf("%s_USDC_ADDRESS", strings.ToUpper(netSelectedByUser))))
-	if err != nil {
-		return "", lib.LogAndError(lib.LOG_ERROR, "failed to validate %s_USDC_ADDRESS: %v", strings.ToUpper(netSelectedByUser), err)
-	}
-
-	// ensure user has provided enough of an allowance to the smart contract:
-	spenderAllowanceUsd, err := lib.GetSpenderAllowanceUsd(*_networkSelected, accountId, _smartContractId, usdcAddress, usdcDecimals)
-	if err != nil {
-		return "", lib.LogAndError(lib.LOG_ERROR, "failed to get spender allowance: %v", err)
-	}
-	lib.Log(lib.LOG_INFO, "Spender allowance for account %s on contract %s: $%.2f", accountId.String(), _smartContractId.String(), spenderAllowanceUsd)
-
-	// amountBeingSpentUsd := math.Abs(req.PriceUsd * req.Qty) // Don't do this. This is incorrect! (e.g. -0.99 price_usd with qty 10 is a big USDC number that needs large allowance)
-	amountBeingSpentUsd := req.PriceUsd * req.Qty
-	if req.PriceUsd < 0.0 {
-		amountBeingSpentUsd = (1 - math.Abs(req.PriceUsd)) * req.Qty
-	}
-	if spenderAllowanceUsd < amountBeingSpentUsd {
-		return "", lib.LogAndError(lib.LOG_ERROR, "Spender allowance is $USD%.2f (USDC token: %s) on smartContractId=%s, which is too low for this predictionIntent ($USD%.2f, price_usd=%.2f)", spenderAllowanceUsd, usdcAddress.String(), _smartContractId.String(), amountBeingSpentUsd, req.PriceUsd)
-	}
-
-	// ensure the spenderAllowanceUsd is <= usdc balance currently in the user's wallet
-	currentUserBalanceUsdcInt64, err := lib.GetUsdcBalanceUsd(*_networkSelected, accountId)
-	if err != nil {
-		return "", lib.LogAndError(lib.LOG_ERROR, "failed to get user's USDC balance: %v", err)
-	}
-	currentUserBalanceUsdc := float64(currentUserBalanceUsdcInt64) / math.Pow(10, float64(usdcDecimals))
-
-	lib.Log(lib.LOG_INFO, "Current USDC balance for account %s: $%.2f", accountId.String(), currentUserBalanceUsdc)
-	lib.Log(lib.LOG_INFO, "Spender allowance for account %s: $%.2f", accountId.String(), spenderAllowanceUsd)
-	if spenderAllowanceUsd <= currentUserBalanceUsdc {
-		// OK
-	} else {
-		if amountBeingSpentUsd <= currentUserBalanceUsdc {
-			// this is also OK - let's not warn the user that their allowance is higher than their balance
-		} else {
-			return "", lib.LogAndError(lib.LOG_ERROR, "Spender allowance ($USD%.2f) is greater than than the user's balance ($USD%.2f)", spenderAllowanceUsd, currentUserBalanceUsdc)
+	// if it's a market order, ensure there's enough liquidity in the orderbook to fill the order - if not, reject the order to avoid user frustration of having a partially filled market order and then having to cancel the remaining qty
+	if math.Abs(req.PriceUsd) == 1.0 {
+		// - get the orderbook depth
+		// - if size is greater than the available liquidity, reject the order to avoid user frustration of having a partially filled market order and then having to cancel the remaining qty
+		qty, err := pis.getAvailableLiquidityUsdForMarket(req.PriceUsd, req.MarketId)
+		if err != nil {
+			return "", lib.LogAndError(lib.LOG_ERROR, "failed to get available liquidity for market %s: %v", req.MarketId, err)
+		}
+		if req.Qty > qty {
+			return "", lib.LogAndError(lib.LOG_ERROR, "order quantity %f exceeds available liquidity %f for market %s", req.Qty, qty, req.MarketId)
 		}
 	}
 
-	// secondary orders - additional checks for secondary orders
-	// ensure (on-chain read-only check) that the user has enough position tokens to cover their (secondary) predictionIntent
-	// this transfer will be attempted on-chain and will fail if there aren't enough position tokens to transfer, even if this API-side check fails
-	if req.PrimarySecondary == "s" {
-		// return "", lib.LogAndError(lib.LOG_ERROR, "secondary orders not implemented yet - currently disabled.")
+	switch req.PrimarySecondary {
+	case "p":
+		// primary orders - only check collateral (USDC) allowance when it's a primary order
+		// secondary orders don't require collateral to be posted to the contract - instead, the user transfers their position tokens to the contract
+		// check that they have enough position tokens for secondary orders in a separate check below (if req.PrimarySecondary == "s")
+
+		// read USDC address from env var
+		usdcAddress, err := hiero.ContractIDFromString(os.Getenv(fmt.Sprintf("%s_USDC_ADDRESS", strings.ToUpper(netSelectedByUser))))
+		if err != nil {
+			return "", lib.LogAndError(lib.LOG_ERROR, "failed to validate %s_USDC_ADDRESS: %v", strings.ToUpper(netSelectedByUser), err)
+		}
+
+		// ensure user has provided enough of an allowance to the smart contract:
+		spenderAllowanceUsd, err := lib.GetSpenderAllowanceUsd(*_networkSelected, accountId, _smartContractId, usdcAddress, usdcDecimals)
+		if err != nil {
+			return "", lib.LogAndError(lib.LOG_ERROR, "failed to get spender allowance: %v", err)
+		}
+		lib.Log(lib.LOG_INFO, "Spender allowance for account %s on contract %s: $%.2f", accountId.String(), _smartContractId.String(), spenderAllowanceUsd)
+
+		// amountBeingSpentUsd := math.Abs(req.PriceUsd * req.Qty) // Don't do this. This is incorrect! (e.g. -0.99 price_usd with qty 10 is a big USDC number that needs large allowance)
+		amountBeingSpentUsd := req.PriceUsd * req.Qty
+		if req.PriceUsd < 0.0 {
+			amountBeingSpentUsd = (1 - math.Abs(req.PriceUsd)) * req.Qty
+		}
+		if spenderAllowanceUsd < amountBeingSpentUsd {
+			return "", lib.LogAndError(lib.LOG_ERROR, "Spender allowance is $USD%.2f (USDC token: %s) on smartContractId=%s, which is too low for this predictionIntent ($USD%.2f, price_usd=%.2f)", spenderAllowanceUsd, usdcAddress.String(), _smartContractId.String(), amountBeingSpentUsd, req.PriceUsd)
+		}
+
+		// ensure the spenderAllowanceUsd is <= usdc balance currently in the user's wallet
+		currentUserBalanceUsdcInt64, err := lib.GetUsdcBalanceUsd(*_networkSelected, accountId)
+		if err != nil {
+			return "", lib.LogAndError(lib.LOG_ERROR, "failed to get user's USDC balance: %v", err)
+		}
+		currentUserBalanceUsdc := float64(currentUserBalanceUsdcInt64) / math.Pow(10, float64(usdcDecimals))
+
+		lib.Log(lib.LOG_INFO, "Current USDC balance for account %s: $%.2f", accountId.String(), currentUserBalanceUsdc)
+		lib.Log(lib.LOG_INFO, "Spender allowance for account %s: $%.2f", accountId.String(), spenderAllowanceUsd)
+		if spenderAllowanceUsd <= currentUserBalanceUsdc {
+			// OK
+		} else {
+			if amountBeingSpentUsd <= currentUserBalanceUsdc {
+				// this is also OK - let's not warn the user that their allowance is higher than their balance
+			} else {
+				return "", lib.LogAndError(lib.LOG_ERROR, "Spender allowance ($USD%.2f) is greater than than the user's balance ($USD%.2f)", spenderAllowanceUsd, currentUserBalanceUsdc)
+			}
+		}
+	case "s":
+		// secondary orders - additional checks for secondary orders
+		// ensure (on-chain read-only check) that the user has enough position tokens to cover their (secondary) predictionIntent
+		// this transfer will be attempted on-chain and will fail if there aren't enough position tokens to transfer, even if this API-side check fails
 
 		// get user position tokens balance for this market
 		// call: getUserTokens(uint128 marketId, address user)
@@ -238,6 +250,8 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PrismPre
 				return "", lib.LogAndError(lib.LOG_ERROR, "user has %.8f 'no' position tokens but needs %.8f to place this secondary NO order", nNoPositionTokens, req.Qty)
 			}
 		}
+	default:
+		return "", lib.LogAndError(lib.LOG_ERROR, "invalid PrimarySecondary value: %s. Must be 'p' for primary or 's' for secondary.", req.PrimarySecondary)
 	}
 
 	/////
@@ -248,19 +262,6 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PrismPre
 	/////
 	// notify the CLOB via NATS:
 	/////
-
-	if math.Abs(req.PriceUsd) == 1.0 {
-		// it's a market order!
-		// - get the orderbook depth
-		// - if size is greater than the available liquidity, reject the order to avoid user frustration of having a partially filled market order and then having to cancel the remaining qty
-		qty, err := pis.getAvailableLiquidityUsdForMarket(req.PriceUsd, req.MarketId)
-		if err != nil {
-			return "", lib.LogAndError(lib.LOG_ERROR, "failed to get available liquidity for market %s: %v", req.MarketId, err)
-		}
-		if req.Qty > qty {
-			return "", lib.LogAndError(lib.LOG_ERROR, "order quantity %f exceeds available liquidity %f for market %s", req.Qty, qty, req.MarketId)
-		}
-	}
 
 	// Marshal the CLOB req: *pb_api.PredictionIntentRequest to JSON
 	clobRequestObj := &pb_clob.CreateOrderRequestClob{
@@ -290,7 +291,10 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PrismPre
 
 	lib.Log(lib.LOG_INFO, "Published order to NATS subject '%s': %s", lib.SUBJECT_CLOB_ORDERS, string(clobRequestJSON))
 
-	// now store the OrderRequest in the database - the txid must be unique or this fails
+	/////
+	// finally, store the predictionIntent object in the database (after successfully publishing notification to the CLOB)
+	/////
+	// store the OrderRequest in the database - the txid must be unique or this fails
 	_, err = pis.predictionIntentsRepository.CreateOrderIntentRequest(req)
 	if err != nil {
 		return "", lib.LogAndError(lib.LOG_ERROR, "database error: failed to save order request: %v", err)

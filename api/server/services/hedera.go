@@ -123,7 +123,7 @@ This function takes a number of input parameters from the YES and NO side
 * @return bool - Returns true if the transaction is successful, otherwise false.
 * @return error - Returns an error if the transaction fails or the receipt cannot be retrieved.
 */
-func (hs *HederaService) BuyPositionTokens(sideYes *pb_clob.CreateOrderRequestClob, sideNo *pb_clob.CreateOrderRequestClob) (bool, error) {
+func (hs *HederaService) BuyOrSellPositionTokens(sideYes *pb_clob.CreateOrderRequestClob, sideNo *pb_clob.CreateOrderRequestClob) (bool, error) {
 	// validate that sideYes.MarketId == sideNo.MarketId and sideYes.MarketId != ""
 	if sideYes.MarketId != sideNo.MarketId || sideYes.MarketId == "" {
 		return false, lib.LogAndError(lib.LOG_ERROR, "market IDs do not match or invalid: %s vs %s", sideYes.MarketId, sideNo.MarketId)
@@ -147,6 +147,7 @@ func (hs *HederaService) BuyPositionTokens(sideYes *pb_clob.CreateOrderRequestCl
 	// OK - proceed
 
 	// sideYes should have the positive priceUsd, sideNo should have the negative priceUsd
+	// enforce this ordering - buy comes first, sell comes second - to simplify the logic downstream (smart contract function parameters and signature verification logic that depends on the priceUsd sign)
 	if sideYes.PriceUsd <= 0 {
 		// flip yes and no sides
 		sideYes, sideNo = sideNo, sideYes
@@ -283,10 +284,10 @@ func (hs *HederaService) BuyPositionTokens(sideYes *pb_clob.CreateOrderRequestCl
 	params.AddUint256BigInt(qtyScaledNoBig)
 	// params.AddUint256BigInt(priceUsdAbsScaledYesBig)
 	// params.AddUint256BigInt(priceUsdAbsScaledNoBig)
-	params.AddUint128BigInt(txIdYesBig)             // txIdYes
-	params.AddUint128BigInt(txIdNoBig)              // txIdNo
-	params.AddBytes(sigObjYes)                      // sigObjYes
-	params.AddBytes(sigObjNo)                       // sigObjNo
+	params.AddUint128BigInt(txIdYesBig)                              // txIdYes
+	params.AddUint128BigInt(txIdNoBig)                               // txIdNo
+	params.AddBytes(sigObjYes)                                       // sigObjYes
+	params.AddBytes(sigObjNo)                                        // sigObjNo
 	params.AddBool(strings.ToLower(sideYes.PrimarySecondary) == "s") // true => secondary (hedged), false => primary
 	params.AddBool(strings.ToLower(sideNo.PrimarySecondary) == "s")  // true => secondary (hedged), false => primary
 

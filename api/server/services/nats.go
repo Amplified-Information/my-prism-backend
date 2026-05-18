@@ -200,12 +200,12 @@ func (ns *NatsService) HandleOrderMatches() error {
 		// BuyPositionTokens determines which account recieves the YES and which account receives the NO (price_usd < 0 => NO)
 		/////
 
-		isOK, err := ns.hederaService.BuyPositionTokens(orderRequestClobTuple[0], orderRequestClobTuple[1])
+		isOK, err := ns.hederaService.BuyOrSellPositionTokens(orderRequestClobTuple[0], orderRequestClobTuple[1])
 		if err != nil {
 			lib.Log(lib.LOG_ERROR, "Error submitting match to smart contract: %v ", err)
 		}
 		if !isOK {
-			lib.Log(lib.LOG_ERROR, "BuyPositionTokens returned !isOK for txId=%s, txId=%s", orderRequestClobTuple[0].TxId, orderRequestClobTuple[1].TxId)
+			lib.Log(lib.LOG_ERROR, "BuyOrSellPositionTokens returned !isOK for txId=%s, txId=%s", orderRequestClobTuple[0].TxId, orderRequestClobTuple[1].TxId)
 		}
 
 		// TODO - handle situation when smart contract fails
