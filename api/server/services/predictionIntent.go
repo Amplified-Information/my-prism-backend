@@ -220,6 +220,8 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PrismPre
 				return "", lib.LogAndError(lib.LOG_ERROR, "Spender allowance ($USD%.2f) is greater than than the user's balance ($USD%.2f)", spenderAllowanceUsd, currentUserBalanceUsdc)
 			}
 		}
+		// OK if we got here
+		lib.Log(lib.LOG_INFO, "[primary] User has enough allowance and balance to cover this order of $USD%.2f", amountBeingSpentUsd)
 	case "s":
 		// secondary orders - additional checks for secondary orders
 		// ensure (on-chain read-only check) that the user has enough position tokens to cover their (secondary) predictionIntent

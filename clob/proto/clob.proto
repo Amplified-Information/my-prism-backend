@@ -43,6 +43,7 @@ message CreateOrderRequestClob {
   string evm_address = 10 [json_name = "evmAddress"];
   int32 key_type = 11 [json_name = "keyType"];
   string primary_secondary = 12 [json_name = "primarySecondary", (validate.rules).string = {in: ["p", "s"]}];
+  // double leverage = 13 [json_name = "leverage", (validate.rules).double = {gte: 1.0, lte: 100.0}];
 }
 
 message StdResponse {

@@ -2,6 +2,8 @@
 
 A Rust-based CLOB
 
+## Example book
+
 ```text
 BIDS (Buy Orders - Highest Price First):
 Price: 0.52 → Queue: [Order1, Order2, Order3]  ← Best Bid
@@ -39,7 +41,7 @@ This format enables efficient matching, maintains market integrity with price-ti
 
 `cd clob`
 
-`cargo build`
+`cargo build` # this also generates interfaces based on the protobuf defs
 
 ```bash
 source loadEnv.sh local

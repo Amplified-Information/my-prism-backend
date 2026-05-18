@@ -26,6 +26,7 @@ service ApiServicePublic {
   rpc CreateMarket(CreateMarketRequest) returns (CreateMarketResponse);
   rpc CreateMarketv2(CreateMarketv2Request) returns (CreateMarketResponse);
   rpc UpdateMarket(UpdateMarketRequest) returns (StdResponse);
+  rpc DeleteMarket(MarketIdRequest) returns (StdResponse); // TODO
   rpc GetAllMatches(LimitOffsetRequest) returns (MatchesResponse);
   rpc GetAllPositions(LimitOffsetRequest) returns (PositionsResponse);
   rpc GetAllPredictionIntents(LimitOffsetRequest) returns (PredictionIntentsResponse);
@@ -49,7 +50,31 @@ service ApiAuth {
   rpc VerifyChallenge(VerifyChallengeRequest) returns (StdResponse); // pass the signature in the
 }
 
+
+/////
+// Common
+/////
+
 message Empty {}
+
+message StdResponse {
+  string message = 1     [json_name = "message"];
+  int32 error_code = 2   [json_name = "errorCode"];
+}
+
+message LimitOffsetRequest {
+  int32 limit = 1  [(validate.rules).int32 = {gt: 0}];
+  int32 offset = 2 [(validate.rules).int32 = {gte: 0}];
+}
+
+message MarketIdRequest {
+  string market_id = 1 [json_name = "marketId",     (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
+  optional string lang = 2;
+}
+
+/////
+// ApiServicePublic
+////
 
 message PrismPredictionIntentRequest {
   string tx_id = 1              [json_name = "txId",        (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
@@ -67,22 +92,14 @@ message PrismPredictionIntentRequest {
   string primary_secondary = 12 [json_name = "primarySecondary", (validate.rules).string = {in: ["p", "s"]}];
 }
 
-message StdResponse {
-  string message = 1     [json_name = "message"];
-  int32 error_code = 2   [json_name = "errorCode"];
+message Category {
+  int32 id = 1 [json_name = "id"];
+  string name = 2 [json_name = "name"];
 }
 
-message ChallengeRequest {
-  string account_id = 1   [json_name = "accountId",   (validate.rules).string = {pattern: "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$"} /* Hedera account ID (no leading zeros) */];
-  string network = 2      [json_name = "network",     (validate.rules).string = {in: ["mainnet", "testnet", "previewnet"]} /* Hedera network */];
-}
-
-message VerifyChallengeRequest {
-  string challenge_response_base64 = 1   [json_name = "challengeResponseBase64", (validate.rules).string = {pattern: "^[A-Za-z0-9+/=]{10,}$"}]; // base64 chars only, min 10 chars
-  // string public_key = 2                  [json_name = "publicKey",         (validate.rules).string = {pattern: "^(04|03|02)[0-9a-fA-F]{32,256}$"} /* uncompressed (04...) or compressed (02... or 03...) public key (ed25519, ecdsa, etc.) in hex format */];
-  // uint32 key_type = 3                    [json_name = "keyType",           (validate.rules).uint32 = {in: [1, 2]} /* 1 = ed25519, 2 = ecdsa_secp256k1 */];
-  string payload = 2                     [json_name = "payload",           (validate.rules).string = {min_len: 5, max_len: 256}]; // min 5 chars, max 256 chars
-  ChallengeRequest challenge_request = 3 [json_name = "challengeRequest"]; // echo back the original challenge request for correlation
+message UnixDateRange {
+  int32 start = 1;
+  int32 end = 2;
 }
 
 message MacroMetadataResponse {
@@ -105,11 +122,6 @@ message MacroMetadataResponse {
   repeated UnixDateRange sig_scheme_date_ranges = 16  [json_name = "sigSchemeDateRanges"];
 }
 
-message UnixDateRange {
-  int32 start = 1;
-  int32 end = 2;
-}
-
 message NewsLetterRequest {
   string email = 1 [json_name = "email", (validate.rules).string = {email: true}];
 }
@@ -118,14 +130,6 @@ message UserPortfolioRequest {
   string evm_address = 1           [json_name = "evmAddress",  (validate.rules).string = {pattern: "^[0-9a-fA-F]{40}$"} /* 20-byte (40 hex chars) EVM address (no 0x prefix) */];
   string net = 2                   [json_name = "net",         (validate.rules).string = {in: ["mainnet", "testnet", "previewnet"]} /* Hedera network */];
   optional string market_id = 3    [json_name = "marketId",    (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
-}
-message Position {
-  string market_id = 1        [json_name = "marketId"];
-  string evm_address = 2      [json_name = "evmAddress"];
-  uint64 yes = 3              [json_name = "yes"];
-  uint64 no = 4               [json_name = "no"];
-  string updated_at = 5      [json_name = "updatedAt"];
-  string created_at = 6      [json_name = "createdAt"];
 }
 
 message PredictionIntentResponse {
@@ -141,6 +145,15 @@ message PredictionIntentResponse {
 
 message PredictionIntents {
   repeated PredictionIntentResponse prediction_intents = 1   [json_name = "openPredictionIntents"];
+}
+
+message Position {
+  string market_id = 1        [json_name = "marketId"];
+  string evm_address = 2      [json_name = "evmAddress"];
+  uint64 yes = 3              [json_name = "yes"];
+  uint64 no = 4               [json_name = "no"];
+  string updated_at = 5      [json_name = "updatedAt"];
+  string created_at = 6      [json_name = "createdAt"];
 }
 
 message PositionInfo {
@@ -162,20 +175,6 @@ message UserPortfolioResponse {
   uint64 prism_token_balance = 4                               [json_name = "prismTokenBalance"];
 }
 
-message CommentIdRequest {
-  int32 comment_id = 1 [json_name = "commentId"];
-}
-
-message MarketIdRequest {
-  string market_id = 1 [json_name = "marketId",     (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
-  optional string lang = 2;
-}
-
-message LimitOffsetRequest {
-  int32 limit = 1  [(validate.rules).int32 = {gt: 0}];
-  int32 offset = 2 [(validate.rules).int32 = {gte: 0}];
-}
-
 message MarketResponse {
   string market_id = 1             [json_name = "marketId"];
   string net = 2                   [json_name = "net"];
@@ -194,50 +193,8 @@ message MarketResponse {
   repeated int32 category_ids = 14 [json_name = "categoryIds"];
 }
 
-message CreateMarketResponse {
-  MarketResponse market_response = 1  [json_name = "marketResponse"]; 
-  uint64 remaining_allowance = 2      [json_name = "remainingAllowance"];
-}
-
 message MarketsResponse {
   repeated MarketResponse markets = 1;
-}
-
-message Category {
-  int32 id = 1 [json_name = "id"];
-  string name = 2 [json_name = "name"];
-}
-
-// message CategoriesResponse {
-//   repeated Category categories = 1 [json_name = "categories"];
-// }
-
-message CreateMarketRequest {
-  string market_id = 1            [json_name = "marketId",    (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
-  string net = 2                  [json_name = "net",         (validate.rules).string = {in: ["mainnet", "testnet", "previewnet"]} /* Hedera network */];
-  string statement = 3            [json_name = "statement",   (validate.rules).string = {min_len: 5, max_len: 500}];
-  string image_url = 4            [json_name = "imageUrl",    (validate.rules).string = {uri: true, max_len: 2048}];
-  //string smart_contract_id = 5; // not needed - smart_contract_id is added to the markets table at run-time based on the net
-  optional string closes_at = 5   [json_name = "closesAt",    (validate.rules).string = {pattern: "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d\\.\\d{3}Z$"} /* UTC ISO 8601 (Zulu time only) */];
-  string description = 6          [json_name = "description", (validate.rules).string = {max_len: 2000}];
-}
-
-message CreateMarketv2Request {
-  string market_id = 1            [json_name = "marketId",    (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
-  string net = 2                  [json_name = "net",         (validate.rules).string = {in: ["mainnet", "testnet", "previewnet"]} /* Hedera network */];
-  string statement = 3            [json_name = "statement",   (validate.rules).string = {min_len: 5, max_len: 500}];
-  optional string closes_at = 4   [json_name = "closesAt",    (validate.rules).string = {pattern: "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d\\.\\d{3}Z$"} /* UTC ISO 8601 (Zulu time only) */];
-  string description = 5          [json_name = "description", (validate.rules).string = {max_len: 2000}];
-  repeated int32 category_ids = 6 [json_name = "categoryIds", (validate.rules).repeated = {min_items: 1, max_items: 5}]; // a market must have at least 1 category and at most 5 categories
-  
-  bytes img_chunk = 7             [json_name = "imgChunk",    (validate.rules).bytes = {max_len: 5242880}]; // max 5 MB per chunk
-  string img_file_name = 8        [json_name = "imgFileName", (validate.rules).string = {max_len: 255}]; // max 255 chars for file name
-  string img_mime_type = 9        [json_name = "imgMimeType", (validate.rules).string = {max_len: 255, in: ["image/jpeg", "image/png", "image/gif", "image/svg+xml"]}]; // restrict to common image MIME types
-}
-
-message UpdateMarketRequest {
-  string market_id = 1            [json_name = "marketId",    (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
-  repeated int32 category_ids = 6 [json_name = "categoryIds", (validate.rules).repeated = {min_items: 1, max_items: 5}]; // a market must have at least 1 category and at most 5 categories
 }
 
 message PriceHistoryRequest {
@@ -271,6 +228,10 @@ message Comment {
   string created_at = 6    [json_name = "createdAt"];
 }
 
+message CreateCommentResponse {
+  Comment comment = 1;
+}
+
 message GetCommentsResponse {
   repeated Comment comments = 1;
 }
@@ -284,27 +245,48 @@ message CreateCommentRequest {
   uint32 key_type = 6     [json_name = "keyType",     (validate.rules).uint32 = {in: [1, 2]} /* 1 = ed25519, 2 = ecdsa_secp256k1 */];
 }
 
-message CreateCommentResponse {
-  Comment comment = 1;
-}
-
-message ClobOrder {
-  string market_id = 1;
-  string tx_id = 2;
-}
-
-
-// message ClobOrders { // the API retrieves information from the db and returns it to the clob so it can recreate the orderbooks
-//   repeated clob.CreateOrderRequestClob orders = 1;
-// }
-
 message CancelOrderRequest {
   string market_id = 1      [json_name = "marketId",  (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
   string tx_id = 2          [json_name = "txId",      (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
 }
 
 
+/////
+// ApiServicePublic - authenticated endpoints
+/////
 
+message CreateMarketRequest {
+  string market_id = 1            [json_name = "marketId",    (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
+  string net = 2                  [json_name = "net",         (validate.rules).string = {in: ["mainnet", "testnet", "previewnet"]} /* Hedera network */];
+  string statement = 3            [json_name = "statement",   (validate.rules).string = {min_len: 5, max_len: 500}];
+  string image_url = 4            [json_name = "imageUrl",    (validate.rules).string = {uri: true, max_len: 2048}];
+  //string smart_contract_id = 5; // not needed - smart_contract_id is added to the markets table at run-time based on the net
+  optional string closes_at = 5   [json_name = "closesAt",    (validate.rules).string = {pattern: "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d\\.\\d{3}Z$"} /* UTC ISO 8601 (Zulu time only) */];
+  string description = 6          [json_name = "description", (validate.rules).string = {max_len: 2000}];
+}
+
+message CreateMarketv2Request {
+  string market_id = 1            [json_name = "marketId",    (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
+  string net = 2                  [json_name = "net",         (validate.rules).string = {in: ["mainnet", "testnet", "previewnet"]} /* Hedera network */];
+  string statement = 3            [json_name = "statement",   (validate.rules).string = {min_len: 5, max_len: 500}];
+  optional string closes_at = 4   [json_name = "closesAt",    (validate.rules).string = {pattern: "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d\\.\\d{3}Z$"} /* UTC ISO 8601 (Zulu time only) */];
+  string description = 5          [json_name = "description", (validate.rules).string = {max_len: 2000}];
+  repeated int32 category_ids = 6 [json_name = "categoryIds", (validate.rules).repeated = {min_items: 1, max_items: 5}]; // a market must have at least 1 category and at most 5 categories
+  
+  bytes img_chunk = 7             [json_name = "imgChunk",    (validate.rules).bytes = {max_len: 5242880}]; // max 5 MB per chunk
+  string img_file_name = 8        [json_name = "imgFileName", (validate.rules).string = {max_len: 255}]; // max 255 chars for file name
+  string img_mime_type = 9        [json_name = "imgMimeType", (validate.rules).string = {max_len: 255, in: ["image/jpeg", "image/png", "image/gif", "image/svg+xml"]}]; // restrict to common image MIME types
+}
+
+message CreateMarketResponse {
+  MarketResponse market_response = 1  [json_name = "marketResponse"]; 
+  uint64 remaining_allowance = 2      [json_name = "remainingAllowance"];
+}
+
+message UpdateMarketRequest {
+  string market_id = 1            [json_name = "marketId",    (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
+  repeated int32 category_ids = 6 [json_name = "categoryIds", (validate.rules).repeated = {min_items: 1, max_items: 5}]; // a market must have at least 1 category and at most 5 categories
+}
 
 message Match {
   string market_id = 1       [json_name = "marketId"];
@@ -329,6 +311,10 @@ message PredictionIntentsResponse {
   repeated PrismPredictionIntentRequest /* PIRequest for now*/ prediction_intents = 1;
 }
 
+message CommentIdRequest {
+  int32 comment_id = 1 [json_name = "commentId"];
+}
+
 message ResolveMarketRequest {
   string market_id = 1      [json_name = "marketId",    (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
   bool outcome = 2          [json_name = "outcome"];
@@ -341,13 +327,29 @@ message CategoryRequest {
   string description = 4          [json_name = "description", (validate.rules).string = {max_len: 500}];
 }
 
-message CategoryIdRequest {
-  int32 category_id = 1    [json_name = "categoryId"];
-}
-
 message CategoryResponse {
   int32 id = 1            [json_name = "id"];
   string name = 2         [json_name = "name"];
   bool is_active = 3      [json_name = "isActive"];
   string description = 4  [json_name = "description"];
+}
+
+message CategoryIdRequest {
+  int32 category_id = 1    [json_name = "categoryId"];
+}
+
+/////
+// ApiAuth
+/////
+message ChallengeRequest {
+  string account_id = 1   [json_name = "accountId",   (validate.rules).string = {pattern: "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$"} /* Hedera account ID (no leading zeros) */];
+  string network = 2      [json_name = "network",     (validate.rules).string = {in: ["mainnet", "testnet", "previewnet"]} /* Hedera network */];
+}
+
+message VerifyChallengeRequest {
+  string challenge_response_base64 = 1   [json_name = "challengeResponseBase64", (validate.rules).string = {pattern: "^[A-Za-z0-9+/=]{10,}$"}]; // base64 chars only, min 10 chars
+  // string public_key = 2                  [json_name = "publicKey",         (validate.rules).string = {pattern: "^(04|03|02)[0-9a-fA-F]{32,256}$"} /* uncompressed (04...) or compressed (02... or 03...) public key (ed25519, ecdsa, etc.) in hex format */];
+  // uint32 key_type = 3                    [json_name = "keyType",           (validate.rules).uint32 = {in: [1, 2]} /* 1 = ed25519, 2 = ecdsa_secp256k1 */];
+  string payload = 2                     [json_name = "payload",           (validate.rules).string = {min_len: 5, max_len: 256}]; // min 5 chars, max 256 chars
+  ChallengeRequest challenge_request = 3 [json_name = "challengeRequest"]; // echo back the original challenge request for correlation
 }
