@@ -43,8 +43,15 @@ RETURNING *;
 
 -- READ
 
+-- name: GetMarketResolvedEventByMarketId :one
+-- there's only ever one row - constraint on the table
+SELECT * FROM event_market_resolved
+WHERE market_id = $1;
 
-
+-- name: GetWinningsRedeemedEventByMarketIdAndWinner :one
+-- there's only ever one row - constraint on the table
+SELECT * FROM event_winnings_redeemed
+WHERE market_id = $1 AND winner = $2;
 
 
 

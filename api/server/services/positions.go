@@ -15,21 +15,23 @@ import (
 )
 
 type PositionsService struct {
-	positionsRepository         *repositories.PositionsRepository
-	marketsRepository           *repositories.MarketsRepository
-	predictionIntentsRepository *repositories.PredictionIntentsRepository
-	prismPointsRepository       *repositories.PrismPointsRepository
+	positionsRepository          *repositories.PositionsRepository
+	marketsRepository            *repositories.MarketsRepository
+	predictionIntentsRepository  *repositories.PredictionIntentsRepository
+	prismPointsRepository        *repositories.PrismPointsRepository
+	smartContractEventRepository *repositories.SmartContractEventRepository
 
 	hederaService *HederaService
 	priceService  *PriceService
 }
 
-func (ps *PositionsService) Init(positionsRepository *repositories.PositionsRepository, marketsRepository *repositories.MarketsRepository, predictionIntentsRepository *repositories.PredictionIntentsRepository, prismPointsRepository *repositories.PrismPointsRepository, hederaService *HederaService, priceService *PriceService) error {
+func (ps *PositionsService) Init(positionsRepository *repositories.PositionsRepository, marketsRepository *repositories.MarketsRepository, predictionIntentsRepository *repositories.PredictionIntentsRepository, prismPointsRepository *repositories.PrismPointsRepository, smartContractEventRepository *repositories.SmartContractEventRepository, hederaService *HederaService, priceService *PriceService) error {
 	// and inject the deps:
 	ps.positionsRepository = positionsRepository
 	ps.marketsRepository = marketsRepository
 	ps.predictionIntentsRepository = predictionIntentsRepository
 	ps.prismPointsRepository = prismPointsRepository
+	ps.smartContractEventRepository = smartContractEventRepository
 
 	ps.hederaService = hederaService
 	ps.priceService = priceService
@@ -74,6 +76,13 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 			continue // skip to next userPosition
 		}
 
+		// redeemed_at: look up table event_markret_resolved - sc_events
+		eventWinningsRedeemed, err := ps.smartContractEventRepository.GetWinningsRedeemedEventByMarketIdAndWinner(userPosition.MarketID.String(), userPosition.EvmAddress)
+		if err != nil {
+			lib.Log(lib.LOG_WARN, "market %s: did not find a Solidity:WinningsRedeemed event in the db: %v", userPosition.MarketID.String(), err)
+			continue
+		}
+
 		position := &pb_api.Position{
 			MarketId:   userPosition.MarketID.String(),
 			EvmAddress: userPosition.EvmAddress,
@@ -88,6 +97,7 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 			PriceUsd:   priceUsd,
 			IsPaused:   market.IsPaused,
 			ResolvedAt: market.ResolvedAt.Time.String(),
+			RedeemedAt: eventWinningsRedeemed.CreatedAt.Time.String(),
 		}
 
 		response.Positions[userPosition.MarketID.String()] = elem

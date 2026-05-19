@@ -31,7 +31,7 @@ message CreateOrderRequestClob {
   /////
   // --> add this field:
   /////
-  float leverage = 13 [json_name = "leverage", (validate.rules).float = {gt: 0.0, lt: 100.0}];
+  float leverage = 13 [json_name = "leverage", (validate.rules).float = {gt: 0.0, lte: 100.0}];
 }
 ```
 

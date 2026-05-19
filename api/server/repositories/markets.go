@@ -336,3 +336,22 @@ func (marketsRepository *MarketsRepository) ResolveMarket(marketId string, outco
 
 	return true, nil
 }
+
+func (marketsRepository *MarketsRepository) SoftDeleteMarket(marketId string) (bool, error) {
+	if marketsRepository.db == nil {
+		return false, lib.ErrorLog("database not initialized")
+	}
+
+	marketUUID, err := uuid.Parse(marketId)
+	if err != nil {
+		return false, lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
+	}
+
+	q := sqlc.New(marketsRepository.db)
+	err = q.SoftDeleteMarket(context.Background(), marketUUID)
+	if err != nil {
+		return false, lib.ErrorLog("SoftDeleteMarket failed", "error", err, "marketId", marketId)
+	}
+
+	return true, nil
+}

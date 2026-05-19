@@ -319,6 +319,22 @@ func (s *server) UpdateMarket(ctx context.Context, req *pb_api.UpdateMarketReque
 	}, nil
 }
 
+func (s *server) DeleteMarket(ctx context.Context, req *pb_api.MarketIdRequest) (*pb_api.StdResponse, error) {
+	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
+		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
+	}
+
+	_, err := s.marketsRepository.SoftDeleteMarket(req.MarketId)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb_api.StdResponse{
+		ErrorCode: 0,
+		Message:   "Market deleted successfully",
+	}, nil
+}
+
 func (s *server) DeleteComment(ctx context.Context, req *pb_api.CommentIdRequest) (*pb_api.StdResponse, error) {
 	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
 		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
@@ -653,7 +669,7 @@ func main() {
 
 	// initialize Positions service
 	positionsService := services.PositionsService{}
-	err = positionsService.Init(&positionsRepository, &marketsRepository, &predictionIntentsRepository, &prismPointsRepository, &hederaService, &priceService)
+	err = positionsService.Init(&positionsRepository, &marketsRepository, &predictionIntentsRepository, &prismPointsRepository, &smartContractEventRepository, &hederaService, &priceService)
 	if err != nil {
 		fatal("Failed to initialize Positions service: %v", err)
 	}

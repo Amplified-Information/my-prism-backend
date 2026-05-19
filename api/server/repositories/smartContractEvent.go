@@ -10,6 +10,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type SmartContractEventRepository struct {
@@ -208,4 +210,43 @@ func (scer *SmartContractEventRepository) CreateTokenAssociatedEvent(net string,
 	// note: the event map contains string values - parse them safely - the event interface could change
 
 	return nil
+}
+
+func (scer *SmartContractEventRepository) GetMarketResolvedEventByMarketId(marketId string) (*sqlc.EventMarketResolved, error) {
+	if scer.db == nil {
+		return nil, lib.ErrorLog("database not initialized")
+	}
+
+	// validate marketId is a valid UUID
+	if _, err := uuid.Parse(marketId); err != nil {
+		return nil, lib.ErrorLog("invalid marketId format", "error", err, "marketId", marketId)
+	}
+
+	q := sqlc.New(scer.db)
+	event, err := q.GetMarketResolvedEventByMarketId(context.Background(), marketId)
+	if err != nil {
+		return nil, lib.ErrorLog("failed to get MarketResolved event by marketId", "error", err, "marketId", marketId)
+	}
+	return &event, nil
+}
+
+func (scer *SmartContractEventRepository) GetWinningsRedeemedEventByMarketIdAndWinner(marketId string, winnerEvmAddr string) (*sqlc.EventWinningsRedeemed, error) {
+	if scer.db == nil {
+		return nil, lib.ErrorLog("database not initialized")
+	}
+
+	// validate marketId is a valid UUID
+	if _, err := uuid.Parse(marketId); err != nil {
+		return nil, lib.ErrorLog("invalid marketId format", "error", err, "marketId", marketId)
+	}
+
+	q := sqlc.New(scer.db)
+	event, err := q.GetWinningsRedeemedEventByMarketIdAndWinner(context.Background(), sqlc.GetWinningsRedeemedEventByMarketIdAndWinnerParams{
+		MarketID: marketId,
+		Winner:   winnerEvmAddr,
+	})
+	if err != nil {
+		return nil, lib.ErrorLog("failed to GetWinningsRedeemedEventByMarketIdAndWinner by marketId", "error", err, "marketId", marketId)
+	}
+	return &event, nil
 }

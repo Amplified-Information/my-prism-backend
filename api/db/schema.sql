@@ -4,7 +4,7 @@
 
 
 -- Dumped from database version 18.3 (Debian 18.3-1.pgdg13+1)
--- Dumped by pg_dump version 18.3 (Debian 18.3-1.pgdg12+1)
+-- Dumped by pg_dump version 18.4 (Debian 18.4-1.pgdg12+1)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -444,6 +444,7 @@ CREATE TABLE public.markets (
     description text NOT NULL,
     is_suspended boolean DEFAULT false NOT NULL,
     outcome boolean,
+    deleted_at timestamp with time zone,
     CONSTRAINT smart_contract_id_check CHECK (((length((smart_contract_id)::text) >= 5) AND ((smart_contract_id)::text ~~ '%.%.%'::text)))
 );
 
@@ -1257,6 +1258,14 @@ ALTER TABLE ONLY public.comments
 
 
 --
+-- Name: event_market_resolved event_market_resolved_market_id_unique; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.event_market_resolved
+    ADD CONSTRAINT event_market_resolved_market_id_unique UNIQUE (market_id);
+
+
+--
 -- Name: event_market_resolved event_market_resolved_md5_uniq_key; Type: CONSTRAINT; Schema: public; Owner: your_db_user
 --
 
@@ -1302,6 +1311,14 @@ ALTER TABLE ONLY public.event_token_associated
 
 ALTER TABLE ONLY public.event_token_associated
     ADD CONSTRAINT event_token_associated_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: event_winnings_redeemed event_winnings_redeemed_market_id_winner_unique; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.event_winnings_redeemed
+    ADD CONSTRAINT event_winnings_redeemed_market_id_winner_unique UNIQUE (market_id, winner);
 
 
 --

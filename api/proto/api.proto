@@ -161,6 +161,7 @@ message PositionInfo {
   float price_usd = 2           [json_name = "priceUsd"];
   bool is_paused = 3            [json_name = "isPaused"];
   string resolved_at = 4        [json_name = "resolvedAt"];
+  string redeemed_at = 5        [json_name = "redeemedAt"];
 }
 
 message PrismPoints {

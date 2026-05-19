@@ -19,6 +19,7 @@ ON CONFLICT DO NOTHING;
 -- name: GetMarketById :one
 SELECT * FROM markets
 WHERE market_id = $1
+AND deleted_at IS NULL
 AND ($2::bool OR (is_suspended = FALSE AND is_paused = FALSE));
 -- SELECT
 --   m.*,
@@ -32,7 +33,8 @@ AND ($2::bool OR (is_suspended = FALSE AND is_paused = FALSE));
 
 -- name: GetMarkets :many
 SELECT * FROM markets
-WHERE ($3::bool OR (is_suspended = FALSE AND is_paused = FALSE))
+WHERE deleted_at IS NULL
+AND ($3::bool OR (is_suspended = FALSE AND is_paused = FALSE))
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2;
 -- SELECT
@@ -40,7 +42,8 @@ LIMIT $1 OFFSET $2;
 --   COALESCE(array_agg(mc.category_id)::int[], '{}') AS categories
 -- FROM markets m
 -- LEFT JOIN market_categories mc ON m.market_id = mc.market_id
--- WHERE ($3::bool OR (m.is_suspended = FALSE AND m.is_paused = FALSE))
+-- WHERE m.deleted_at IS NULL
+--   AND ($3::bool OR (m.is_suspended = FALSE AND m.is_paused = FALSE))
 -- GROUP BY m.market_id
 -- ORDER BY m.created_at DESC
 -- LIMIT $1 OFFSET $2;
@@ -49,7 +52,8 @@ LIMIT $1 OFFSET $2;
 
 -- name: GetAllUnresolvedMarkets :many
 SELECT * FROM markets
-WHERE resolved_at IS NULL AND closes_at > CURRENT_TIMESTAMP AND is_suspended = FALSE AND is_paused = FALSE
+WHERE deleted_at IS NULL
+AND resolved_at IS NULL AND closes_at > CURRENT_TIMESTAMP AND is_suspended = FALSE AND is_paused = FALSE
 ORDER BY created_at ASC;
 -- SELECT
 --   m.*,
@@ -67,7 +71,8 @@ ORDER BY created_at ASC;
 
 -- name: CountUnresolvedMarkets :one
 SELECT COUNT(*) FROM markets
-WHERE resolved_at IS NULL AND closes_at > CURRENT_TIMESTAMP AND is_suspended = FALSE AND is_paused = FALSE;
+WHERE deleted_at IS NULL
+AND resolved_at IS NULL AND closes_at > CURRENT_TIMESTAMP AND is_suspended = FALSE AND is_paused = FALSE;
 
 
 
@@ -96,6 +101,19 @@ RETURNING *;
 UPDATE markets
 SET resolved_at = CURRENT_TIMESTAMP, outcome = $2
 WHERE market_id = $1;
+
+
+-- name: SoftDeleteMarket :exec
+UPDATE markets -- cannot be toggled back on
+SET deleted_at = CURRENT_TIMESTAMP
+WHERE market_id = $1;
+
+
+
+
+
+
+
 
 
 -- DELETE
