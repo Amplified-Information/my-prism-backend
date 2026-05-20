@@ -46,7 +46,7 @@ PERCENT_FEE_ON_LIQUIDATION=5.0
 
 For example, a user who opens a 3x leveraged position on Bitcoin at $100,000 would loose al their collateral (liquidated) at 98% of $66,666, or $67,333.33. The user would double the value of their collateral when the Bitcoin price is $133,333.
 
-A 3x leverage position on one side should match with a 3x leverage position on the other side. Similarly, a x10 position on one side (e.g. BUY) should match with a x10 position on the other side (SELL). Otherwise, there are asymmetric risk and settlement issues:
+A 3x leverage position on one side should match with a 3x leverage position on the other side. Similarly, a x10 position on one side (e.g. BUY) should match with a x10 position on the other side (SELL). Otherwise, there are asymmetric risk and settlement issues as detailed below.
 
 Were a 1x position to match with a 3x position, the following asymmetric risk and settlement issues arise:
 
@@ -64,7 +64,7 @@ Were a 1x position to match with a 3x position, the following asymmetric risk an
 
 For these reasons, matching only identical leverage levels keeps the system fair, predictable, and simple to settle.
 
-In effect, a pre-defined set of leverage levels would be pre-defined (e.g. `{x1, x3, x5, x10, x50}`) resulting in a separate bucket (on the same market, same orderbook) for each amount of leverage.
+In effect, a set of leverage levels would be pre-defined (e.g. `{x1, x3, x5, x10, x50}`) resulting in a separate bucket (on the same market, same orderbook) for each amount of leverage.
 
 On order entry, an order would get liquidated according to the following formula:
 
