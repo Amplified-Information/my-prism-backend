@@ -192,6 +192,10 @@ message MarketResponse {
   optional bool outcome = 12       [json_name = "outcome"];
   string smart_contract_id = 13    [json_name = "smartContractId"];
   repeated int32 category_ids = 14 [json_name = "categoryIds"];
+  string alias_yes = 15            [json_name = "aliasYes"];
+  string alias_no = 16             [json_name = "aliasNo"];
+  string hex_color_yes = 17        [json_name = "hexColorYes"];
+  string hex_color_no = 18         [json_name = "hexColorNo"];
 }
 
 message MarketsResponse {
@@ -277,11 +281,10 @@ message CreateMarketv2Request {
   bytes img_chunk = 7             [json_name = "imgChunk",    (validate.rules).bytes = {max_len: 5242880}]; // max 5 MB per chunk
   string img_file_name = 8        [json_name = "imgFileName", (validate.rules).string = {max_len: 255}]; // max 255 chars for file name
   string img_mime_type = 9        [json_name = "imgMimeType", (validate.rules).string = {max_len: 255, in: ["image/jpeg", "image/png", "image/gif", "image/svg+xml"]}]; // restrict to common image MIME types
-  // TODO
-  // optional string alias_yes = 10          [json_name = "aliasYes",    (validate.rules).string = {min_len: 1, max_len: 100}];
-  // optional string alias_no = 11           [json_name = "aliasNo",     (validate.rules).string = {min_len: 1, max_len: 100}];
-  // optional string hex_color_yes = 12    [json_name = "hexColorYes", (validate.rules).string = {pattern: "^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$"}]; // hex color code, e.g. #RRGGBB or #RGB
-  // optional string hex_color_no = 13     [json_name = "hexColorNo",  (validate.rules).string = {pattern: "^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$"}]; // hex color code, e.g. #RRGGBB or #RGB
+  optional string alias_yes = 10          [json_name = "aliasYes",    (validate.rules).string = {min_len: 1, max_len: 100}];
+  optional string alias_no = 11           [json_name = "aliasNo",     (validate.rules).string = {min_len: 1, max_len: 100}];
+  optional string hex_color_yes = 12    [json_name = "hexColorYes", (validate.rules).string = {pattern: "^#[A-Fa-f0-9]{6}$"}]; // hex color code, e.g. #RRGGBB
+  optional string hex_color_no = 13     [json_name = "hexColorNo",  (validate.rules).string = {pattern: "^#[A-Fa-f0-9]{6}$"}]; // hex color code, e.g. #RRGGBB
 }
 
 message CreateMarketResponse {

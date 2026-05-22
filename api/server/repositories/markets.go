@@ -133,7 +133,7 @@ func (marketsRepository *MarketsRepository) GetCategories() ([]sqlc.Category, er
 	return categories, nil
 }
 
-func (marketsRepository *MarketsRepository) CreateMarket(marketId string, _net string, _imageUrl string, _statement string, closesAt time.Time, _description string, smartContractId string, categoryIds []int32) (*MarketAug, error) {
+func (marketsRepository *MarketsRepository) CreateMarket(marketId string, _net string, _imageUrl string, _statement string, closesAt time.Time, _description string, smartContractId string, categoryIds []int32, aliasYes string, aliasNo string, hexColorYes string, hexColorNo string) (*MarketAug, error) {
 	if marketsRepository.db == nil {
 		return nil, lib.ErrorLog("database not initialized")
 	}
@@ -177,6 +177,10 @@ func (marketsRepository *MarketsRepository) CreateMarket(marketId string, _net s
 		SmartContractID: smartContractId,
 		ClosesAt:        closesAt,
 		Description:     description,
+		AliasYes:        sql.NullString{String: aliasYes, Valid: aliasYes != ""},
+		AliasNo:         sql.NullString{String: aliasNo, Valid: aliasNo != ""},
+		HexColorYes:     sql.NullString{String: hexColorYes, Valid: hexColorYes != ""},
+		HexColorNo:      sql.NullString{String: hexColorNo, Valid: hexColorNo != ""},
 	})
 	if err != nil {
 		tx.Rollback() // Rollback the transaction on error

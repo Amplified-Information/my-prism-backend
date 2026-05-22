@@ -1,10 +1,13 @@
 
+import http from 'http'
 import { ContractId, LedgerId } from '@hiero-ledger/sdk'
 import { pubAllEventsForContract } from './lib/hedera'
 import { log } from './lib/logger'
 import { getNatsConnection } from './lib/nats'
 import { sleep } from './lib/util'
 import Dedupe from './lib/dedupe'
+
+const PORT_ADMIN = 7777
 
 // DEBUG=1 to enable debug messages
 // USE_COLOR=1 to enable colors in logs
@@ -224,6 +227,43 @@ const main = async () => {
 		}
 		log.info(`Finished initial lookback pass. Now proceeding with normal operation with lookbackMins=${lookbackMins} and toMins=${toMins}`)
 	}
+
+
+
+	// Admin server 
+	// for manual backfill requests - can be used to trigger a backfill for a specific lookback period without restarting the whole program. Useful for recovering from downtime or just to manually trigger a backfill for any reason.
+	// HTTP server for manual backfill: POST /backfill { lookbackMins, toMins }
+	// Bound to 127.0.0.1 only — never exposed externally
+	const adminServer = http.createServer((req, res) => {
+		if (req.method !== 'POST' || req.url !== '/backfill') {
+			res.writeHead(404)
+			res.end()
+			return
+		}
+		let body = ''
+		req.on('data', (chunk) => { body += chunk })
+		req.on('end', () => {
+			try {
+				const { lookbackMins, toMins } = JSON.parse(body)
+				if (typeof lookbackMins !== 'number' || typeof toMins !== 'number') {
+					res.writeHead(400, { 'Content-Type': 'application/json' })
+					res.end(JSON.stringify({ error: 'lookbackMins and toMins must be numbers' }))
+					return
+				}
+				log.info('Manual backfill requested', { lookbackMins, toMins })
+				pubAllEventsForSmartContractsOnNetworks(lookbackMins, toMins)
+				res.writeHead(200, { 'Content-Type': 'application/json' })
+				res.end(JSON.stringify({ ok: true, lookbackMins, toMins }))
+			} catch {
+				res.writeHead(400, { 'Content-Type': 'application/json' })
+				res.end(JSON.stringify({ error: 'Invalid JSON body' }))
+			}
+		})
+	})
+	adminServer.listen(PORT_ADMIN, '0.0.0.0', () => {
+		log.info(`Admin backfill server listening on 0.0.0.0:${PORT_ADMIN}`)
+	})
+
 
 	// canonical: proceed with the infinite loop as normal:
 	while (true) {

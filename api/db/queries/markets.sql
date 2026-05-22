@@ -1,8 +1,8 @@
 -- CREATE
 
 -- name: CreateMarket :one
-INSERT INTO markets (market_id, net, statement, image_url, smart_contract_id, closes_at, description, is_paused, created_at, resolved_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE, CURRENT_TIMESTAMP, NULL)
+INSERT INTO markets (market_id, net, statement, image_url, smart_contract_id, closes_at, description, is_paused, alias_yes, alias_no, hex_color_yes, hex_color_no)
+VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE, $8, $9, $10, $11)
 RETURNING *;
 
 -- name: AssociateMarketCategoriesBatch :exec

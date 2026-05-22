@@ -32,8 +32,10 @@ services:
     ports:
       - "6379:6379"
   blocknode:
-    image: ghcr.io/prismmarketlabs/blocknode:0.0.8
+    image: ghcr.io/prismmarketlabs/blocknode:0.1.2
     restart: always
+    ports:
+      - "7777:7777"
     environment:
       BN_QUERY_FREQ_SECS: ${BN_QUERY_FREQ_SECS}
       BN_QUERY_LOOKBACK_SECS: ${BN_QUERY_LOOKBACK_SECS}

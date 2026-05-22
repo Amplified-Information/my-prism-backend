@@ -445,6 +445,12 @@ CREATE TABLE public.markets (
     is_suspended boolean DEFAULT false NOT NULL,
     outcome boolean,
     deleted_at timestamp with time zone,
+    alias_yes character varying(255) DEFAULT NULL::character varying,
+    alias_no character varying(255) DEFAULT NULL::character varying,
+    hex_color_yes character varying(7) DEFAULT NULL::character varying,
+    hex_color_no character varying(7) DEFAULT NULL::character varying,
+    CONSTRAINT markets_hex_color_no_check CHECK ((((hex_color_no)::text ~ '^#[A-Fa-f0-9]{6}$'::text) OR (hex_color_no IS NULL))),
+    CONSTRAINT markets_hex_color_yes_check CHECK ((((hex_color_yes)::text ~ '^#[A-Fa-f0-9]{6}$'::text) OR (hex_color_yes IS NULL))),
     CONSTRAINT smart_contract_id_check CHECK (((length((smart_contract_id)::text) >= 5) AND ((smart_contract_id)::text ~~ '%.%.%'::text)))
 );
 
