@@ -238,7 +238,15 @@ ENV_FILE="docker-compose-\$MACHINE.\$ENVIRONMENT.yml"
 echo "Starting docker compose..."
 # -d - daemon mode
 #  --force-recreate - always recreate containers (e.g. apply new env vars - configChange.sh script)
-docker compose -f "\$BASE_FILE" -f "\$ENV_FILE" up -d --remove-orphans
+# If SERVICE is passed as first argument, only update that service (--no-deps avoids restarting dependencies)
+# Usage: ./2_dockerComposeUp.sh [SERVICE]
+# e.g.:  ./2_dockerComposeUp.sh blocknode
+if [ -n "\$1" ]; then
+  echo "Targeted deployment: updating only service '\$1'"
+  docker compose -f "\$BASE_FILE" -f "\$ENV_FILE" up -d --no-deps "\$1"
+else
+  docker compose -f "\$BASE_FILE" -f "\$ENV_FILE" up -d --remove-orphans
+fi
 
 # List running containers:
 docker ps

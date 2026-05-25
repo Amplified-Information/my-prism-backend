@@ -9,7 +9,11 @@ class Dedupe {
   }
 
   public isDuplicate(txHash: string): boolean {
-    return this.publishedTxs.has(txHash)
+    if (this.publishedTxs.has(txHash)) {
+      log.info('Duplicate event detected. txHash: ', { txHash })
+      return true
+    }
+    return false
   }
 
   public markPublished(txHash: string): void {

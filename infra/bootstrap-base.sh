@@ -60,6 +60,10 @@ sudo systemctl enable fail2ban
 sudo systemctl start fail2ban
 sudo systemctl status fail2ban
 
+# NATS cli
+curl -sf https://binaries.nats.dev/nats-io/natscli/nats@latest | sh
+mv nats /usr/bin/
+
 
 ###
 # SSM Agent (for AWS Session Manager - console access without SSH)

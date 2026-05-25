@@ -12,7 +12,15 @@ Tail NATS with:
 
 ```bash
 nats sub '>' --server nats://localhost:4222
+# or, on an EC2:
+nats sub '>' --server nats://0.0.0.0:4222 # `nats` available on data EC2 box
 ```
+
+Install nats-cli on EC2 box:
+
+`curl -sf https://binaries.nats.dev/nats-io/natscli/nats@latest | sh`
+
+`sudo cp nats /usr/bin` // put it on the path
 
 ## Backfill requests
 
