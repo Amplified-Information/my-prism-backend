@@ -82,10 +82,14 @@ impl ClobInternal for ClobService {
         let result = self.order_book_service.cancel_order(&inner.market_id, &inner.tx_id).await;
 
         match result {
-            Ok(success) if success => (),
-            _ => {
-                log::error!("Failed to cancel order");
-                return Err(Status::internal(format!("WARN: could not cancel order for market {}", inner.market_id)));
+            Ok(true) => (),
+            Ok(false) => {
+                log::warn!("Cancel requested for tx_id {} in market {} but order was not found (already matched or invalid id)", inner.tx_id, inner.market_id);
+                return Err(Status::not_found(format!("Order {} not found in market {} (already matched?)", inner.tx_id, inner.market_id)));
+            }
+            Err(e) => {
+                log::error!("Failed to cancel order: {}", e);
+                return Err(Status::internal(format!("WARN: could not cancel order for market {}: {}", inner.market_id, e)));
             }
         }
         let response = crate::orderbook::proto::StdResponse {

@@ -349,4 +349,151 @@ contract PrismTest is Test {
             false, true
         );
     }
+
+    // --- setRakeScaled100 ---
+
+    function testSetRakeScaled100() public {
+        prism.setRakeScaled100(500);
+        assertEq(prism.getRakePercentScaled100(), 500);
+    }
+
+    function testSetRakeScaled100DefaultIs200() public view {
+        assertEq(prism.getRakePercentScaled100(), 200);
+    }
+
+    function testSetRakeScaled100AtMax() public {
+        prism.setRakeScaled100(10000); // 100%
+        assertEq(prism.getRakePercentScaled100(), 10000);
+    }
+
+    function testSetRakeScaled100ToZero() public {
+        prism.setRakeScaled100(0);
+        assertEq(prism.getRakePercentScaled100(), 0);
+    }
+
+    function testSetRakeScaled100ExceedsMaxReverts() public {
+        vm.expectRevert("Rake cannot exceed 100%");
+        prism.setRakeScaled100(10001);
+    }
+
+    function testSetRakeScaled100NonOwnerReverts() public {
+        vm.prank(user1);
+        vm.expectRevert();
+        prism.setRakeScaled100(500);
+    }
+
+    // --- redeem with rake ---
+
+    function _setupResolvedMarket(uint128 marketId, bool yesWins, address winner, uint256 qty) internal {
+        vm.prank(user1);
+        prism.createNewMarket(marketId, "Rake test market");
+        prism.setTokensForTest(marketId, winner, yesWins ? qty : 0, yesWins ? 0 : qty);
+        usdc.transfer(address(prism), qty);
+        prism.setTotalCollateralForTest(marketId, qty);
+        prism.resolveMarket(marketId, yesWins);
+    }
+
+    function testRedeemYesWinnerDefaultRake() public {
+        uint128 marketId = 20;
+        uint256 qty = 100e6;
+        _setupResolvedMarket(marketId, true, user1, qty);
+
+        uint256 rakeAmount = (qty * 200) / 10000; // 2e6
+        uint256 expectedPayout = qty - rakeAmount; // 98e6
+
+        uint256 user1BalBefore = usdc.balanceOf(user1);
+        uint256 ownerBalBefore = usdc.balanceOf(owner);
+
+        vm.prank(user1);
+        uint256 returned = prism.redeem(marketId);
+
+        assertEq(returned,                   expectedPayout,             "returned amount");
+        assertEq(usdc.balanceOf(user1),      user1BalBefore + expectedPayout, "user1 USDC after redeem");
+        assertEq(usdc.balanceOf(owner),      ownerBalBefore + rakeAmount,     "owner USDC after rake");
+        assertEq(prism.getTotalCollateral(marketId), 0,                   "total collateral cleared");
+        (uint256 yes, uint256 no) = prism.getUserTokens(marketId, user1);
+        assertEq(yes, 0, "YES tokens cleared");
+        assertEq(no,  0, "NO tokens cleared");
+    }
+
+    function testRedeemNoWinnerDefaultRake() public {
+        uint128 marketId = 21;
+        uint256 qty = 50e6;
+        _setupResolvedMarket(marketId, false, user2, qty);
+
+        uint256 rakeAmount    = (qty * 200) / 10000;
+        uint256 expectedPayout = qty - rakeAmount;
+
+        uint256 user2BalBefore = usdc.balanceOf(user2);
+        uint256 ownerBalBefore = usdc.balanceOf(owner);
+
+        vm.prank(user2);
+        uint256 returned = prism.redeem(marketId);
+
+        assertEq(returned,              expectedPayout,                  "returned amount");
+        assertEq(usdc.balanceOf(user2), user2BalBefore + expectedPayout, "user2 USDC after redeem");
+        assertEq(usdc.balanceOf(owner), ownerBalBefore + rakeAmount,     "owner USDC after rake");
+        assertEq(prism.getTotalCollateral(marketId), 0, "total collateral cleared");
+    }
+
+    function testRedeemWithZeroRake() public {
+        uint128 marketId = 22;
+        uint256 qty = 75e6;
+        prism.setRakeScaled100(0);
+        _setupResolvedMarket(marketId, true, user1, qty);
+
+        uint256 user1BalBefore = usdc.balanceOf(user1);
+        uint256 ownerBalBefore = usdc.balanceOf(owner);
+
+        vm.prank(user1);
+        uint256 returned = prism.redeem(marketId);
+
+        assertEq(returned,              qty,              "all tokens returned with 0% rake");
+        assertEq(usdc.balanceOf(user1), user1BalBefore + qty, "user1 receives full amount");
+        assertEq(usdc.balanceOf(owner), ownerBalBefore,       "owner receives no rake");
+    }
+
+    function testRedeemWithCustomRake() public {
+        uint128 marketId = 23;
+        uint256 qty = 200e6;
+        prism.setRakeScaled100(500); // 5%
+        _setupResolvedMarket(marketId, true, user1, qty);
+
+        uint256 rakeAmount    = (qty * 500) / 10000; // 10e6
+        uint256 expectedPayout = qty - rakeAmount;   // 190e6
+
+        uint256 user1BalBefore = usdc.balanceOf(user1);
+        uint256 ownerBalBefore = usdc.balanceOf(owner);
+
+        vm.prank(user1);
+        uint256 returned = prism.redeem(marketId);
+
+        assertEq(returned,              expectedPayout,                  "returned amount with 5% rake");
+        assertEq(usdc.balanceOf(user1), user1BalBefore + expectedPayout, "user1 balance after 5% rake");
+        assertEq(usdc.balanceOf(owner), ownerBalBefore + rakeAmount,     "owner balance after 5% rake");
+    }
+
+    function testRedeemNotResolvedReverts() public {
+        uint128 marketId = 24;
+        vm.prank(user1);
+        prism.createNewMarket(marketId, "Unresolved market");
+        prism.setTokensForTest(marketId, user1, 100e6, 0);
+
+        vm.prank(user1);
+        vm.expectRevert("Not resolved yet");
+        prism.redeem(marketId);
+    }
+
+    function testRedeemNoWinningTokensReverts() public {
+        uint128 marketId = 25;
+        vm.prank(user1);
+        prism.createNewMarket(marketId, "Empty balance market");
+        usdc.transfer(address(prism), 10e6);
+        prism.setTotalCollateralForTest(marketId, 10e6);
+        prism.resolveMarket(marketId, true); // YES wins, but user1 has 0 YES tokens
+
+        vm.prank(user1);
+        vm.expectRevert("No winning tokens");
+        prism.redeem(marketId);
+    }
 }

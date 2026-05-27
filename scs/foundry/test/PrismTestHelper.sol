@@ -24,4 +24,9 @@ contract PrismTestHelper is Prism {
     function setTotalCollateralForTest(uint128 marketId, uint256 amount) external {
         totalCollateralUsd[marketId] = amount;
     }
+
+    /// @dev Test-only: expose private rakePercentScaled100 for assertions.
+    function getRakePercentScaled100() external view returns (uint256) {
+        return rakePercentScaled100;
+    }
 }

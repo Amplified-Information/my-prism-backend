@@ -54,7 +54,8 @@ contract Prism {
 
   uint256 public marketCreationFeeUsdc;
   uint256 public collateralTokenNdecimals;
-  
+  uint256 internal rakePercentScaled100;
+
   // Note: must also update the database scheme (event_* tables)
   event PositionTokensPurchased(uint128 marketId, address indexed buyer, uint256 collateralUsd, uint256 qtyScaled, bool primarySecondary);
   event MarketResolved(uint128 marketId, bool outcome);
@@ -72,6 +73,16 @@ contract Prism {
 
     marketCreationFeeUsdc = 100000; // defaults to 0.10 USDC (6 decimals)
     collateralTokenNdecimals = 6;   // defaults to 6
+    rakePercentScaled100 = 200; // defaults to 2%
+  }
+
+  /**
+  Function to set the rake percentage scaled by 100.
+  @param _rakePercentScaled100 The new rake percentage scaled by 100 (e.g., 200 = 2%).
+  */
+  function setRakeScaled100(uint256 _rakePercentScaled100) external onlyOwner {
+    require(_rakePercentScaled100 <= 10000, "Rake cannot exceed 100%");
+    rakePercentScaled100 = _rakePercentScaled100;
   }
 
   /**
@@ -217,22 +228,22 @@ contract Prism {
     uint256 nTokens = outcomes[marketId] ? yesTokens[marketId][msg.sender] : noTokens[marketId][msg.sender];
     require(nTokens > 0, "No winning tokens");
 
-    // TODO - 2% profit redeem fee...
-    // TODO - 1% profit fee for the market makers - TODO: how do we keep track of market makers?
-    // collateralToken.transfer(owner, nTokens * 1/50);
-    // collateralToken.transfer(msg.sender, nTokens * 49/50);
-
-    // Transfer collateral 1:1
+    // send the rake
+    uint256 rakeAmount = (nTokens * rakePercentScaled100) / 10000;
+    require(collateralToken.transfer(owner, rakeAmount), "Rake transfer failed");
+    nTokens -= rakeAmount;
+    
+    // Transfer (remaining, after rake) collateral 1:1
     require(collateralToken.transfer(msg.sender, nTokens), "Transfer failed");
 
     // Clear balances
     if (yesTokens[marketId][msg.sender] > 0 ) yesTokens[marketId][msg.sender] = 0;
     if (noTokens[marketId][msg.sender] > 0 ) noTokens[marketId][msg.sender] = 0;
 
-    // don't forget to reduce totalCollateral
-    totalCollateralUsd[marketId] = totalCollateralUsd[marketId] - nTokens;
+    // don't forget to reduce totalCollateral (including rake)
+    totalCollateralUsd[marketId] = totalCollateralUsd[marketId] - nTokens - rakeAmount;
     
-    emit WinningsRedeemed(marketId, msg.sender, nTokens);
+    emit WinningsRedeemed(marketId, msg.sender, nTokens /* excluding rake */);
 
     return nTokens; // nTokens === amountUSDC (1:1 mapping)
   }

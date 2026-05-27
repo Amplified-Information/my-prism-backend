@@ -332,6 +332,14 @@ curl "http://dev.prism.market/?q=<script>alert(1)</script>"
 # proxy> docker compose logs modsec -f
 ```
 
+## docker - free up disk space
+
+```bash
+df
+docker system prune -a
+df
+```
+
 ## Cloudwatch
 
 Use fluent-bit to stream to Amazon Cloudwatch :)
