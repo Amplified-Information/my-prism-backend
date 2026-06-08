@@ -468,3 +468,44 @@ func Md5(s string) string {
 	h := md5.Sum([]byte(s))
 	return hex.EncodeToString(h[:])
 }
+
+// NormalizeMatchTupleByPriceSign ensures tuple[0] is the positive-price leg and
+// tuple[1] is the negative-price leg, regardless of publish order.
+// This allows valid matches where both legs target the same token side
+// (for example YES buy vs YES sell).
+func NormalizeMatchTupleByPriceSign(tuple *[2]*pb_clob.CreateOrderRequestClob) error {
+	if tuple == nil || tuple[0] == nil || tuple[1] == nil {
+		return LogAndError(LOG_ERROR, "PROBLEM: nil order in match tuple")
+	}
+
+	if tuple[0].PriceUsd == 0.0 || tuple[1].PriceUsd == 0.0 {
+		return LogAndError(
+			LOG_ERROR,
+			"PROBLEM: invalid zero price in match tuple: [tx0=%s price0=%f | tx1=%s price1=%f]",
+			tuple[0].TxId,
+			tuple[0].PriceUsd,
+			tuple[1].TxId,
+			tuple[1].PriceUsd,
+		)
+	}
+
+	if tuple[0].PriceUsd > 0.0 && tuple[1].PriceUsd < 0.0 {
+		return nil
+	}
+
+	if tuple[0].PriceUsd < 0.0 && tuple[1].PriceUsd > 0.0 {
+		tuple[0], tuple[1] = tuple[1], tuple[0]
+		return nil
+	}
+
+	return LogAndError(
+		LOG_ERROR,
+		"PROBLEM: invalid price signs in match tuple: [tx0=%s price0=%f ps0=%s | tx1=%s price1=%f ps1=%s]",
+		tuple[0].TxId,
+		tuple[0].PriceUsd,
+		tuple[0].PrimarySecondary,
+		tuple[1].TxId,
+		tuple[1].PriceUsd,
+		tuple[1].PrimarySecondary,
+	)
+}

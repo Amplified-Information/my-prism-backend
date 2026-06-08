@@ -246,6 +246,9 @@ func (scer *SmartContractEventRepository) GetWinningsRedeemedEventByMarketIdAndW
 		Winner:   winnerEvmAddr,
 	})
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
 		return nil, lib.ErrorLog("failed to GetWinningsRedeemedEventByMarketIdAndWinner by marketId", "error", err, "marketId", marketId)
 	}
 	return &event, nil

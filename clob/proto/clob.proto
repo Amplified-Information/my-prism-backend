@@ -61,6 +61,7 @@ message OrderDetail {
   string account_id = 2 [json_name = "accountId"];
   double price_usd = 3  [json_name = "priceUsd"];
   double qty = 4        [json_name = "qty"];
+  string ps = 5         [json_name = "ps", (validate.rules).string = {in: ["p", "s"]}];
 }
 
 message BookSnapshot {

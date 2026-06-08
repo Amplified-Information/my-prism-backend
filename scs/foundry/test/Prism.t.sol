@@ -180,9 +180,10 @@ contract PrismTest is Test {
         assertEq(usdc.balanceOf(user2), user2BalBefore - collateral, "user2 USDC balance");
     }
 
-    // YES secondary, NO primary (true, false):
-    // user1 is selling YES tokens; user2 is buying NO tokens.
-    // user1 must already hold YES tokens.
+    // slot0 primary, slot1 secondary (false, true):
+    // slot0 README: +primary => BUY YES. slot1 README: -secondary => SELL YES.
+    // user1 (slot0) buys YES tokens; user2 (slot1) sells YES tokens.
+    // user2 must already hold YES tokens.
     function testSecondaryYesPrimaryNo() public {
         uint128 marketId = 11;
         _createAndFundMarket(marketId);
@@ -191,9 +192,8 @@ contract PrismTest is Test {
         uint256 qty        = 40e6;
         uint256 collateral = 40e6;
 
-        // Give user1 YES tokens and fund the contract with collateral to pay the seller
-        prism.setTokensForTest(marketId, user1, qty, 0);
-        // Contract must hold enough collateral to pay user1
+        // Give user2 YES tokens and fund the contract with collateral to pay the seller (slot1 secondary)
+        prism.setTokensForTest(marketId, user2, qty, 0);
         usdc.transfer(address(prism), collateral);
         prism.setTotalCollateralForTest(marketId, collateral);
 
@@ -206,25 +206,25 @@ contract PrismTest is Test {
             qty, qty,
             3, 4,
             hex"", hex"",
-            true, false  // YES=secondary, NO=primary
+            false, true  // slot0=primary(buy YES), slot1=secondary(sell YES)
         );
 
         (uint256 yesUser1,) = prism.getUserTokens(marketId, user1);
-        (, uint256 noUser2)  = prism.getUserTokens(marketId, user2);
+        (uint256 yesUser2,) = prism.getUserTokens(marketId, user2);
 
-        assertEq(yesUser1, 0,   "user1 YES tokens after selling");
-        assertEq(noUser2,  qty, "user2 NO tokens after buying");
+        assertEq(yesUser1, qty, "user1 YES tokens after buying");
+        assertEq(yesUser2, 0,   "user2 YES tokens after selling");
 
-        // user1 received collateral back; user2 paid collateral
-        assertEq(usdc.balanceOf(user1), user1BalBefore + collateral, "user1 USDC balance after selling");
-        assertEq(usdc.balanceOf(user2), user2BalBefore - collateral, "user2 USDC balance after buying");
+        // user1 paid collateral (primary buy); user2 received collateral (secondary sell)
+        assertEq(usdc.balanceOf(user1), user1BalBefore - collateral, "user1 USDC balance after buying");
+        assertEq(usdc.balanceOf(user2), user2BalBefore + collateral, "user2 USDC balance after selling");
 
-        // net change: +collateral (user2 deposit) - collateral (user1 payout) = 0 net, total stays same
         assertEq(prism.getTotalCollateral(marketId), collateral, "total collateral after");
     }
 
-    // YES primary, NO secondary (false, true):
-    // user1 is buying YES tokens; user2 is selling NO tokens.
+    // slot0 secondary, slot1 primary (true, false):
+    // slot0 README: +secondary => SELL NO. slot1 README: -primary => BUY NO.
+    // user1 (slot0) sells NO tokens; user2 (slot1) buys NO tokens.
     function testPrimaryYesSecondaryNo() public {
         uint128 marketId = 12;
         _createAndFundMarket(marketId);
@@ -233,8 +233,8 @@ contract PrismTest is Test {
         uint256 qty        = 30e6;
         uint256 collateral = 30e6;
 
-        // Give user2 NO tokens and fund the contract with collateral to pay the seller
-        prism.setTokensForTest(marketId, user2, 0, qty);
+        // Give user1 NO tokens (slot0 secondary: SELL NO) and fund contract to pay the seller
+        prism.setTokensForTest(marketId, user1, 0, qty);
         usdc.transfer(address(prism), collateral);
         prism.setTotalCollateralForTest(marketId, collateral);
 
@@ -247,23 +247,24 @@ contract PrismTest is Test {
             qty, qty,
             5, 6,
             hex"", hex"",
-            false, true  // YES=primary, NO=secondary
+            true, false  // slot0=secondary(sell NO), slot1=primary(buy NO)
         );
 
-        (uint256 yesUser1,) = prism.getUserTokens(marketId, user1);
-        (, uint256 noUser2)  = prism.getUserTokens(marketId, user2);
+        (, uint256 noUser1) = prism.getUserTokens(marketId, user1);
+        (, uint256 noUser2) = prism.getUserTokens(marketId, user2);
 
-        assertEq(yesUser1, qty, "user1 YES tokens after buying");
-        assertEq(noUser2,  0,   "user2 NO tokens after selling");
+        assertEq(noUser1, 0,   "user1 NO tokens after selling");
+        assertEq(noUser2, qty, "user2 NO tokens after buying");
 
-        assertEq(usdc.balanceOf(user1), user1BalBefore - collateral, "user1 USDC balance after buying");
-        assertEq(usdc.balanceOf(user2), user2BalBefore + collateral, "user2 USDC balance after selling");
+        assertEq(usdc.balanceOf(user1), user1BalBefore + collateral, "user1 USDC balance after selling");
+        assertEq(usdc.balanceOf(user2), user2BalBefore - collateral, "user2 USDC balance after buying");
 
         assertEq(prism.getTotalCollateral(marketId), collateral, "total collateral after");
     }
 
     // Both secondary (true, true):
-    // user1 selling YES, user2 selling NO; contract pays both.
+    // slot0 README: +secondary => SELL NO. slot1 README: -secondary => SELL YES.
+    // slot0 sells NO, slot1 sells YES; contract pays both.
     function testBothSecondary() public {
         uint128 marketId = 13;
         _createAndFundMarket(marketId);
@@ -273,8 +274,10 @@ contract PrismTest is Test {
         uint256 collateral = 20e6;
 
         // Give both users position tokens and fund the contract with 2x collateral
-        prism.setTokensForTest(marketId, user1, qty, 0);
-        prism.setTokensForTest(marketId, user2, 0, qty);
+        // slot0(user1): +secondary => SELL NO => needs NO tokens
+        // slot1(user2): -secondary => SELL YES => needs YES tokens
+        prism.setTokensForTest(marketId, user1, 0, qty);
+        prism.setTokensForTest(marketId, user2, qty, 0);
         usdc.transfer(address(prism), 2 * collateral);
         prism.setTotalCollateralForTest(marketId, 2 * collateral);
 
@@ -290,11 +293,11 @@ contract PrismTest is Test {
             true, true  // both secondary
         );
 
-        (uint256 yesUser1,) = prism.getUserTokens(marketId, user1);
-        (, uint256 noUser2)  = prism.getUserTokens(marketId, user2);
+        (, uint256 noUser1) = prism.getUserTokens(marketId, user1);
+        (uint256 yesUser2,) = prism.getUserTokens(marketId, user2);
 
-        assertEq(yesUser1, 0, "user1 YES tokens after selling");
-        assertEq(noUser2,  0, "user2 NO tokens after selling");
+        assertEq(noUser1,  0, "user1 NO tokens after selling");
+        assertEq(yesUser2, 0, "user2 YES tokens after selling");
 
         assertEq(usdc.balanceOf(user1), user1BalBefore + collateral, "user1 USDC balance after selling");
         assertEq(usdc.balanceOf(user2), user2BalBefore + collateral, "user2 USDC balance after selling");
@@ -302,7 +305,7 @@ contract PrismTest is Test {
         assertEq(prism.getTotalCollateral(marketId), 0, "total collateral after both sell");
     }
 
-    // Selling more YES tokens than held should revert
+    // slot0 secondary (+secondary = SELL NO); insufficient NO tokens should revert
     function testSecondaryYesInsufficientTokensReverts() public {
         uint128 marketId = 14;
         _createAndFundMarket(marketId);
@@ -310,12 +313,12 @@ contract PrismTest is Test {
 
         uint256 qty = 50e6;
 
-        // user1 holds only 10e6 YES tokens
-        prism.setTokensForTest(marketId, user1, 10e6, 0);
+        // user1 (slot0, +secondary) holds only 10e6 NO tokens but needs 50e6
+        prism.setTokensForTest(marketId, user1, 0, 10e6);
         usdc.transfer(address(prism), qty);
         prism.setTotalCollateralForTest(marketId, qty);
 
-        vm.expectRevert("Insufficient YES tokens");
+        vm.expectRevert("Insufficient NO tokens");
         prism.posColToksOnBehalfAtomic(
             marketId, user1, user2,
             qty, qty,
@@ -326,7 +329,7 @@ contract PrismTest is Test {
         );
     }
 
-    // Selling more NO tokens than held should revert
+    // slot1 secondary (-secondary = SELL YES); insufficient YES tokens should revert
     function testSecondaryNoInsufficientTokensReverts() public {
         uint128 marketId = 15;
         _createAndFundMarket(marketId);
@@ -334,12 +337,12 @@ contract PrismTest is Test {
 
         uint256 qty = 50e6;
 
-        // user2 holds only 5e6 NO tokens
-        prism.setTokensForTest(marketId, user2, 0, 5e6);
+        // user2 (slot1, -secondary) holds only 5e6 YES tokens but needs 50e6
+        prism.setTokensForTest(marketId, user2, 5e6, 0);
         usdc.transfer(address(prism), qty);
         prism.setTotalCollateralForTest(marketId, qty);
 
-        vm.expectRevert("Insufficient NO tokens");
+        vm.expectRevert("Insufficient YES tokens");
         prism.posColToksOnBehalfAtomic(
             marketId, user1, user2,
             qty, qty,
@@ -495,5 +498,118 @@ contract PrismTest is Test {
         vm.prank(user1);
         vm.expectRevert("No winning tokens");
         prism.redeem(marketId);
+    }
+
+    // --- claimCollateralAfterOneYear ---
+
+    function testClaimCollateralAfterOneYearByOwner() public {
+        uint128 marketId = 30;
+        uint256 collateral = 25e6;
+
+        vm.prank(user1);
+        prism.createNewMarket(marketId, "Claim collateral market");
+        usdc.transfer(address(prism), collateral);
+        prism.setTotalCollateralForTest(marketId, collateral);
+        prism.resolveMarket(marketId, true);
+
+        uint256 resolvedAt = prism.resolutionTimes(marketId);
+        vm.warp(resolvedAt + 366 days);
+
+        uint256 ownerBalBefore = usdc.balanceOf(owner);
+
+        prism.claimCollateralAfterOneYear(marketId);
+
+        assertEq(usdc.balanceOf(owner), ownerBalBefore + collateral, "owner receives remaining collateral");
+        assertEq(prism.getTotalCollateral(marketId), 0, "total collateral cleared");
+    }
+
+    function testClaimCollateralAfterOneYearTooEarlyReverts() public {
+        uint128 marketId = 31;
+        uint256 collateral = 10e6;
+
+        vm.prank(user1);
+        prism.createNewMarket(marketId, "Too early market");
+        usdc.transfer(address(prism), collateral);
+        prism.setTotalCollateralForTest(marketId, collateral);
+        prism.resolveMarket(marketId, true);
+
+        uint256 resolvedAt = prism.resolutionTimes(marketId);
+        vm.warp(resolvedAt + 365 days + 23 hours);
+
+        vm.expectRevert("Too early to claim collateral");
+        prism.claimCollateralAfterOneYear(marketId);
+    }
+
+    function testClaimCollateralAfterOneYearNotResolvedReverts() public {
+        uint128 marketId = 32;
+        vm.prank(user1);
+        prism.createNewMarket(marketId, "Unresolved claim market");
+
+        vm.expectRevert("Not resolved yet");
+        prism.claimCollateralAfterOneYear(marketId);
+    }
+
+    function testClaimCollateralAfterOneYearNoCollateralReverts() public {
+        uint128 marketId = 33;
+        vm.prank(user1);
+        prism.createNewMarket(marketId, "No collateral market");
+        prism.resolveMarket(marketId, true);
+
+        uint256 resolvedAt = prism.resolutionTimes(marketId);
+        vm.warp(resolvedAt + 366 days);
+
+        vm.expectRevert("No collateral to claim");
+        prism.claimCollateralAfterOneYear(marketId);
+    }
+
+    function testClaimCollateralAfterOneYearNonOwnerReverts() public {
+        uint128 marketId = 34;
+        uint256 collateral = 10e6;
+
+        vm.prank(user1);
+        prism.createNewMarket(marketId, "Non-owner claim market");
+        usdc.transfer(address(prism), collateral);
+        prism.setTotalCollateralForTest(marketId, collateral);
+        prism.resolveMarket(marketId, true);
+
+        uint256 resolvedAt = prism.resolutionTimes(marketId);
+        vm.warp(resolvedAt + 366 days);
+
+        vm.prank(user1);
+        vm.expectRevert("Only direct user calls are allowed for this function");
+        prism.claimCollateralAfterOneYear(marketId);
+    }
+
+    function testRedeemOnBehalfOfUserByOwner() public {
+        uint128 marketId = 26;
+        uint256 qty = 80e6;
+        _setupResolvedMarket(marketId, true, user2, qty);
+
+        uint256 rakeAmount = (qty * 200) / 10000;
+        uint256 expectedPayout = qty - rakeAmount;
+
+        uint256 user2BalBefore = usdc.balanceOf(user2);
+        uint256 ownerBalBefore = usdc.balanceOf(owner);
+
+        uint256 returned = prism.redeemOnBehalfOfUser(marketId, user2);
+
+        assertEq(returned, expectedPayout, "returned amount");
+        assertEq(usdc.balanceOf(user2), user2BalBefore + expectedPayout, "user2 receives payout");
+        assertEq(usdc.balanceOf(owner), ownerBalBefore + rakeAmount, "owner receives rake");
+        assertEq(prism.getTotalCollateral(marketId), 0, "total collateral cleared");
+
+        (uint256 yes, uint256 no) = prism.getUserTokens(marketId, user2);
+        assertEq(yes, 0, "YES tokens cleared");
+        assertEq(no, 0, "NO tokens cleared");
+    }
+
+    function testRedeemOnBehalfOfUserNonOwnerReverts() public {
+        uint128 marketId = 27;
+        uint256 qty = 10e6;
+        _setupResolvedMarket(marketId, true, user1, qty);
+
+        vm.prank(user1);
+        vm.expectRevert("Only direct user calls are allowed for this function");
+        prism.redeemOnBehalfOfUser(marketId, user1);
     }
 }

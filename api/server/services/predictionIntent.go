@@ -226,6 +226,10 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PrismPre
 		// secondary orders - additional checks for secondary orders
 		// ensure (on-chain read-only check) that the user has enough position tokens to cover their (secondary) predictionIntent
 		// this transfer will be attempted on-chain and will fail if there aren't enough position tokens to transfer, even if this API-side check fails
+		// sign convention for secondary orders:
+		// - positive price_usd => SELL/NO (requires NO tokens)
+		// - negative price_usd => SELL/YES (requires YES tokens)
+		lib.Log(lib.LOG_INFO, "[secondary] sign convention: positive price_usd => SELL/NO, negative price_usd => SELL/YES. Incoming price_usd=%.8f", req.PriceUsd)
 
 		// get user position tokens balance for this market
 		// call: getUserTokens(uint128 marketId, address user)
@@ -235,21 +239,58 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PrismPre
 		}
 		lib.Log(lib.LOG_INFO, "[secondary] User has %.8f 'yes' position tokens and %.8f 'no' position tokens on market %s", nYesPositionTokens, nNoPositionTokens, req.MarketId)
 
-		if req.PriceUsd > 0 {
-			// this is a secondary YES order - the user transfers YES tokens to the contract
-			if nYesPositionTokens >= req.Qty {
-				// OK - user has enough "yes" position tokens to cover this secondary YES order
-				lib.Log(lib.LOG_INFO, "[secondary] User has %.8f 'yes' position tokens for market %s, which is enough to cover this secondary YES order of %.8f tokens", nYesPositionTokens, req.MarketId, req.Qty)
+		marketUUID, err := uuid.Parse(req.MarketId)
+		if err != nil {
+			return "", lib.LogAndError(lib.LOG_ERROR, "invalid marketId uuid: %v", err)
+		}
+		// yes, from the db is sufficient; we are not querying the CLOB here:
+		existingOpenIntents, err := pis.predictionIntentsRepository.GetAllOpenPredictionIntentsByMarketIdAndAccountId(marketUUID, req.AccountId)
+		if err != nil {
+			return "", lib.LogAndError(lib.LOG_ERROR, "failed to load existing open intents for marketId=%s accountId=%s: %v", req.MarketId, req.AccountId, err)
+		}
+
+		reservedSecondaryYesQty := 0.0
+		reservedSecondaryNoQty := 0.0
+		for _, existingIntent := range existingOpenIntents {
+			if existingIntent.PrimarySecondary != "s" {
+				continue
+			}
+
+			matchedQtyForIntent, err := pis.predictionIntentsRepository.GetMatchedQtyForPredictionIntent(marketUUID, existingIntent.TxID)
+			if err != nil {
+				return "", lib.LogAndError(lib.LOG_ERROR, "failed to load matched qty for txId=%s in marketId=%s: %v", existingIntent.TxID.String(), req.MarketId, err)
+			}
+
+			remainingQtyForIntent := existingIntent.Qty - matchedQtyForIntent
+			if remainingQtyForIntent < 0 {
+				// Guard against minor drift from eventual consistency or floating point accumulation.
+				remainingQtyForIntent = 0
+			}
+
+			if existingIntent.PriceUsd > 0 {
+				reservedSecondaryNoQty += remainingQtyForIntent
 			} else {
-				return "", lib.LogAndError(lib.LOG_ERROR, "user has %.8f 'yes' position tokens but needs %.8f to place this secondary YES order", nYesPositionTokens, req.Qty)
+				reservedSecondaryYesQty += remainingQtyForIntent
+			}
+		}
+
+		if req.PriceUsd > 0 {
+			// this is a secondary NO order - the user transfers NO tokens to the contract
+			requiredNoQty := reservedSecondaryNoQty + req.Qty
+			if nNoPositionTokens >= requiredNoQty {
+				// OK - user has enough "no" position tokens to cover this secondary NO order
+				lib.Log(lib.LOG_INFO, "[secondary] User has %.8f 'no' position tokens for market %s, existing reserved secondary NO=%.8f, new order=%.8f, required total=%.8f", nNoPositionTokens, req.MarketId, reservedSecondaryNoQty, req.Qty, requiredNoQty)
+			} else {
+				return "", lib.LogAndError(lib.LOG_ERROR, "user has %.8f 'no' position tokens but needs %.8f total (existing number of reserved secondary NO position tokens = %.8f. This order requests an additional %.8f NO position tokens)", nNoPositionTokens, requiredNoQty, reservedSecondaryNoQty, req.Qty)
 			}
 		} else {
-			// this is a secondary NO order - the user transfers NO tokens to the contract
-			if nNoPositionTokens >= req.Qty {
-				// OK - user has enough "no" position tokens to cover this secondary NO order
-				lib.Log(lib.LOG_INFO, "[secondary] User has %.8f 'no' position tokens for market %s, which is enough to cover this secondary NO order of %.8f tokens", nNoPositionTokens, req.MarketId, req.Qty)
+			// this is a secondary YES order - the user transfers YES tokens to the contract
+			requiredYesQty := reservedSecondaryYesQty + req.Qty
+			if nYesPositionTokens >= requiredYesQty {
+				// OK - user has enough "yes" position tokens to cover this secondary YES order
+				lib.Log(lib.LOG_INFO, "[secondary] User has %.8f 'yes' position tokens for market %s, existing reserved secondary YES=%.8f, new order=%.8f, required total=%.8f", nYesPositionTokens, req.MarketId, reservedSecondaryYesQty, req.Qty, requiredYesQty)
 			} else {
-				return "", lib.LogAndError(lib.LOG_ERROR, "user has %.8f 'no' position tokens but needs %.8f to place this secondary NO order", nNoPositionTokens, req.Qty)
+				return "", lib.LogAndError(lib.LOG_ERROR, "user has %.8f 'yes' position tokens but needs %.8f total (existing number of reserved secondary YES position tokens = %.8f. This order requests an additional %.8f YES position tokens)", nYesPositionTokens, requiredYesQty, reservedSecondaryYesQty, req.Qty)
 			}
 		}
 	default:

@@ -116,106 +116,124 @@ contract Prism {
   Requires --optimize flag due to size of the call stack
   See: api/server/services/hedera.go `params := hiero.NewContractFunctionParameters()....`
   @param marketId The ID of the market
-  @param signerYes The (signing) address of the account buying YES position tokens
-  @param signerNo The (signing) address of the account buying NO position tokens
-  @param collateralUsdAbsScaledYes Yes side amount of collateral (in USDC) to be used for purchasing position tokens (scaled to the number of collatoral token decimal places).
-  @param collateralUsdAbsScaledNo  No side amount of collateral (in USDC) to be used for purchasing position tokens (scaled to the number of collatoral token decimal places).
-  @param qtyScaledYes The quantity of YES position tokens to buy (scaled up to the number of collateral token decimal places)
-  @param qtyScaledNo The quantity of NO position tokens to buy (scaled up to the number of collateral token decimal places)
-  @param txIdYes txId of the Yes side 
-  @param txIdNo txId of the No side
-  @param sigObjYes The signatureObject (includes the key type) of the YES transaction
-  @param sigObjNo The signatureObject (includes the key type) of the NO transaction
-  @param primarySecondaryYes A boolean indicating whether this is a primary or secondary market transaction for the YES side
-  @param primarySecondaryNo A boolean indicating whether this is a primary or secondary market transaction for the NO side
-  @return yes The updated number of YES position tokens held by the signerYes account
-  @return no The updated number of NO position tokens held by the signerNo account
+  @param signerSlot0 The signing address of slot 0 (positive-price leg)
+  @param signerSlot1 The signing address of slot 1 (negative-price leg)
+  @param collateralUsdAbsScaledSlot0 Slot 0 collateral amount (scaled)
+  @param collateralUsdAbsScaledSlot1 Slot 1 collateral amount (scaled)
+  @param qtyScaledSlot0 Slot 0 quantity (scaled)
+  @param qtyScaledSlot1 Slot 1 quantity (scaled)
+  @param txIdSlot0 txId of slot 0
+  @param txIdSlot1 txId of slot 1
+  @param sigObjSlot0 The signatureObject (includes key type) for slot 0
+  @param sigObjSlot1 The signatureObject (includes key type) for slot 1
+  @param primarySecondarySlot0 True if slot 0 is secondary (sell), false if primary (buy)
+  @param primarySecondarySlot1 True if slot 1 is secondary (sell), false if primary (buy)
+  @return yes The updated number of YES position tokens held by signerSlot0
+  @return no The updated number of NO position tokens held by signerSlot0
   */
   function posColToksOnBehalfAtomic(
     uint128 marketId,
-    address signerYes,
-    address signerNo,
-    uint256 collateralUsdAbsScaledYes, // need to send Yes and No collateral amounts for sig verification
-    uint256 collateralUsdAbsScaledNo,
-    uint256 qtyScaledYes,
-    uint256 qtyScaledNo,
+    address signerSlot0,
+    address signerSlot1,
+    uint256 collateralUsdAbsScaledSlot0,
+    uint256 collateralUsdAbsScaledSlot1,
+    uint256 qtyScaledSlot0,
+    uint256 qtyScaledSlot1,
     // uint256 priceUsdAbsScaledYes,
     // uint256 priceUsdAbsScaledNo,
-    uint128 txIdYes,
-    uint128 txIdNo,
-    bytes calldata sigObjYes,
-    bytes calldata sigObjNo,
-    bool primarySecondaryYes,
-    bool primarySecondaryNo
+    uint128 txIdSlot0,
+    uint128 txIdSlot1,
+    bytes calldata sigObjSlot0,
+    bytes calldata sigObjSlot1,
+    bool primarySecondarySlot0,
+    bool primarySecondarySlot1
   ) external onlyOwner returns (uint256 yes, uint256 no, uint256 yes2, uint256 no2) {
     require(resolutionTimes[marketId] == 0, "Market resolved");
     require(bytes(statements[marketId]).length > 0, "No market statement has been set");
 
     // calculate the lower collateral amount:
     uint256 collateralUsdAbsScaled_lower = 0; // the lower of the two collateral amounts
-    if (collateralUsdAbsScaledYes < collateralUsdAbsScaledNo) {
-      collateralUsdAbsScaled_lower = collateralUsdAbsScaledYes;
+    if (collateralUsdAbsScaledSlot0 < collateralUsdAbsScaledSlot1) {
+      collateralUsdAbsScaled_lower = collateralUsdAbsScaledSlot0;
     } else {
-      collateralUsdAbsScaled_lower = collateralUsdAbsScaledNo; // always transfer the lower amount of collateral (partial match)
+      collateralUsdAbsScaled_lower = collateralUsdAbsScaledSlot1; // always transfer the lower amount of collateral (partial match)
     }
 
     uint256 qty_lower = 0; // the lower of the two qty amounts
-    if (qtyScaledYes < qtyScaledNo) {
-      qty_lower = qtyScaledYes;
+    if (qtyScaledSlot0 < qtyScaledSlot1) {
+      qty_lower = qtyScaledSlot0;
     } else {
-      qty_lower = qtyScaledNo;
+      qty_lower = qtyScaledSlot1;
     }
 
-    // on-chain signature verifiaction using an on-chain assembled payload (check the original values at order entry):
-    require(isAuthorized(signerYes, assemblePayload(0xf0 /* YES MUST have this prefix */, collateralUsdAbsScaledYes, signerYes, marketId, txIdYes, primarySecondaryYes ? 0xf1 : 0xf0 /* true => secondary (0xf1), false => primary (0xf0) */), sigObjYes), "isAuthorized YES failed");
-    require(isAuthorized(signerNo,  assemblePayload(0xf1 /* NO MUST have this prefix */,  collateralUsdAbsScaledNo,  signerNo,  marketId, txIdNo, primarySecondaryNo ? 0xf1 : 0xf0 /* true => secondary (0xf1), false => primary (0xf0) */),  sigObjNo),  "isAuthorized NO failed");
-
+    // On-chain signature verification mirrors payload assembly in API/web:
+    // buySell byte is slot-position-based (slot0=0xf0, slot1=0xf1) because the
+    // API/frontend derives it from price sign (positive=0xf0, negative=0xf1)
+    // and slot0 always carries the positive leg, slot1 always carries the negative leg.
+    // primarySecondary suffix is derived from the actual order type boolean.
+    require(
+      isAuthorized(
+        signerSlot0,
+        assemblePayload(0xf0 /* slot0 = positive price = buy prefix */, collateralUsdAbsScaledSlot0, signerSlot0, marketId, txIdSlot0, primarySecondarySlot0 ? 0xf1 : 0xf0),
+        sigObjSlot0
+      ),
+      "isAuthorized slot0 failed"
+    );
+    require(
+      isAuthorized(
+        signerSlot1,
+        assemblePayload(0xf1 /* slot1 = negative price = sell prefix */, collateralUsdAbsScaledSlot1, signerSlot1, marketId, txIdSlot1, primarySecondarySlot1 ? 0xf1 : 0xf0),
+        sigObjSlot1
+      ),
+      "isAuthorized slot1 failed"
+    );
 
     /*
-    primarySecondaryYes	| primarySecondaryNo	| Collateral flow
-    --------------------|---------------------|-----------------
-    false	              | false	              | both deposit → contract
-    true	              | false	              | NO buyer deposits → contract pays YES seller
-    false	              | true	              | YES buyer deposits → contract pays NO seller
-    true	              | true	              | contract pays both sellers
+    Settlement semantics (README-aligned) with sign-ordered slots:
+    - signerSlot0 is the positive-price leg
+    - signerSlot1 is the negative-price leg
+
+    Token side per slot:
+    - positive+primary  => buy YES
+    - positive+secondary=> sell NO
+    - negative+primary  => buy NO
+    - negative+secondary=> sell YES
     */
 
-    // YES side: primary = buyer deposits collateral and receives YES tokens
-    //           secondary = seller surrenders YES tokens and receives collateral
-    if (primarySecondaryYes) {
-      // Secondary: signerYes is selling YES tokens back for collateral
-      require(yesTokens[marketId][signerYes] >= qty_lower, "Insufficient YES tokens");
-      yesTokens[marketId][signerYes] -= qty_lower;
-      require(collateralToken.transfer(signerYes, collateralUsdAbsScaled_lower), "Transfer to YES seller failed");
+    // positive-price slot (signerSlot0)
+    if (primarySecondarySlot0) {
+      // positive+secondary => SELL NO
+      require(noTokens[marketId][signerSlot0] >= qty_lower, "Insufficient NO tokens");
+      noTokens[marketId][signerSlot0] -= qty_lower;
+      require(collateralToken.transfer(signerSlot0, collateralUsdAbsScaled_lower), "Transfer to NO seller failed");
       totalCollateralUsd[marketId] -= collateralUsdAbsScaled_lower;
     } else {
-      // Primary: signerYes is buying YES tokens with collateral
-      require(collateralToken.transferFrom(signerYes, address(this), collateralUsdAbsScaled_lower), "Transfer from YES buyer failed");
-      yesTokens[marketId][signerYes] += qty_lower;                  // 1:1 mapping of collateral qty to position tokens
+      // positive+primary => BUY YES
+      require(collateralToken.transferFrom(signerSlot0, address(this), collateralUsdAbsScaled_lower), "Transfer from YES buyer failed");
+      yesTokens[marketId][signerSlot0] += qty_lower; // 1:1 mapping of collateral qty to position tokens
       totalCollateralUsd[marketId] += collateralUsdAbsScaled_lower;
     }
 
-    // NO side: primary = buyer deposits collateral and receives NO tokens
-    //          secondary = seller surrenders NO tokens and receives collateral
-    if (primarySecondaryNo) {
-      // Secondary: signerNo is selling NO tokens back for collateral
-      require(noTokens[marketId][signerNo] >= qty_lower, "Insufficient NO tokens");
-      noTokens[marketId][signerNo] -= qty_lower;
-      require(collateralToken.transfer(signerNo, collateralUsdAbsScaled_lower), "Transfer to NO seller failed");
+    // negative-price slot (signerSlot1)
+    if (primarySecondarySlot1) {
+      // negative+secondary => SELL YES
+      require(yesTokens[marketId][signerSlot1] >= qty_lower, "Insufficient YES tokens");
+      yesTokens[marketId][signerSlot1] -= qty_lower;
+      require(collateralToken.transfer(signerSlot1, collateralUsdAbsScaled_lower), "Transfer to YES seller failed");
       totalCollateralUsd[marketId] -= collateralUsdAbsScaled_lower;
     } else {
-      // Primary: signerNo is buying NO tokens with collateral
-      require(collateralToken.transferFrom(signerNo, address(this), collateralUsdAbsScaled_lower), "Transfer from NO buyer failed");
-      noTokens[marketId][signerNo] += qty_lower;                    // 1:1 mapping of collateral qty to position tokens
+      // negative+primary => BUY NO
+      require(collateralToken.transferFrom(signerSlot1, address(this), collateralUsdAbsScaled_lower), "Transfer from NO buyer failed");
+      noTokens[marketId][signerSlot1] += qty_lower; // 1:1 mapping of collateral qty to position tokens
       totalCollateralUsd[marketId] += collateralUsdAbsScaled_lower;
     }
 
-    emit PositionTokensPurchased(marketId, signerYes, collateralUsdAbsScaled_lower, qtyScaledYes, primarySecondaryYes);
-    emit PositionTokensPurchased(marketId, signerNo, collateralUsdAbsScaled_lower, qtyScaledNo, primarySecondaryNo);
+    emit PositionTokensPurchased(marketId, signerSlot0, collateralUsdAbsScaled_lower, qtyScaledSlot0, primarySecondarySlot0);
+    emit PositionTokensPurchased(marketId, signerSlot1, collateralUsdAbsScaled_lower, qtyScaledSlot1, primarySecondarySlot1);
 
-    return (yesTokens[marketId][signerYes] , noTokens[marketId][signerYes], yesTokens[marketId][signerNo] , noTokens[marketId][signerNo]); // return current balances
+    return (yesTokens[marketId][signerSlot0], noTokens[marketId][signerSlot0], yesTokens[marketId][signerSlot1], noTokens[marketId][signerSlot1]); // return current balances
   }
-  
+
   /**
   This function allows users to redeem their winning position tokens for collateral after the market has been resolved.
   A user (msg.sender) can only access their own winnings after the market is resolved
@@ -223,9 +241,31 @@ contract Prism {
   @return amountUSDC The amount of collateral (in USDC) redeemed by the user
   */
   function redeem(uint128 marketId) external returns (uint256 amountUSDC) {
+    return redeemInternal(marketId, msg.sender);
+  }
+
+  /**
+  An admin-only function to redeem winnings on behalf of a user
+  Can be used in cases where the user is unable to call the redeem function themselves
+  This function would require the admin to provide a valid signature from the user authorizing the redemption
+  @param marketId The ID of the market for the user the admin wants to redeem for
+  @param user_account The address of the user whose winnings are being redeemed
+  @return amountUSDC The amount of collateral (in USDC) redeemed by the user
+  */
+  function redeemOnBehalfOfUser(uint128 marketId, address user_account) external onlyOwner returns (uint256 amountUSDC) {
+    return redeemInternal(marketId, user_account);
+  }
+
+  /**
+  An internal-only function for redeeming winnings for a specific user on a specific marketId
+  @param marketId The ID of the market for which the user wants to redeem their winnings
+  @param winner The address of the user whose winnings are being redeemed
+  @return amountUSDC The amount of collateral (in USDC) redeemed by the user
+  */
+  function redeemInternal(uint128 marketId, address winner) internal returns (uint256 amountUSDC) {
     require(resolutionTimes[marketId] > 0, "Not resolved yet");
     
-    uint256 nTokens = outcomes[marketId] ? yesTokens[marketId][msg.sender] : noTokens[marketId][msg.sender];
+    uint256 nTokens = outcomes[marketId] ? yesTokens[marketId][winner] : noTokens[marketId][winner];
     require(nTokens > 0, "No winning tokens");
 
     // send the rake
@@ -234,18 +274,34 @@ contract Prism {
     nTokens -= rakeAmount;
     
     // Transfer (remaining, after rake) collateral 1:1
-    require(collateralToken.transfer(msg.sender, nTokens), "Transfer failed");
+    require(collateralToken.transfer(winner, nTokens), "Transfer failed");
 
     // Clear balances
-    if (yesTokens[marketId][msg.sender] > 0 ) yesTokens[marketId][msg.sender] = 0;
-    if (noTokens[marketId][msg.sender] > 0 ) noTokens[marketId][msg.sender] = 0;
+    if (yesTokens[marketId][winner] > 0 ) yesTokens[marketId][winner] = 0;
+    if (noTokens[marketId][winner] > 0 ) noTokens[marketId][winner] = 0;
 
     // don't forget to reduce totalCollateral (including rake)
     totalCollateralUsd[marketId] = totalCollateralUsd[marketId] - nTokens - rakeAmount;
     
-    emit WinningsRedeemed(marketId, msg.sender, nTokens /* excluding rake */);
+    emit WinningsRedeemed(marketId, winner, nTokens /* excluding rake */);
 
     return nTokens; // nTokens === amountUSDC (1:1 mapping)
+  }
+
+  /**
+  */
+  function claimCollateralAfterOneYear(uint128 marketId) external onlyOwner {
+    require(resolutionTimes[marketId] > 0, "Not resolved yet");
+    require(block.timestamp >= resolutionTimes[marketId] + 365 days + 1 days, "Too early to claim collateral");
+
+    uint256 remainingCollateral = totalCollateralUsd[marketId];
+    require(remainingCollateral > 0, "No collateral to claim");
+
+    // Transfer remaining collateral to owner
+    require(collateralToken.transfer(owner, remainingCollateral), "Transfer failed");
+
+    // Clear total collateral for the market
+    totalCollateralUsd[marketId] = 0;
   }
 
   /**
@@ -262,26 +318,9 @@ contract Prism {
     emit MarketResolved(marketId, noYes);
   }
 
-  // TODO - handle unresolved markets - user gets their USDC back (minus fees)
-
-  /**
-  TODO - implement this function
-  */
-  // function redeemOnBehalfOfUser(uint128 marketId, address user_account) external view onlyOwner returns (uint256 amountUSDC) {
-  //     // transfer - this costs gas - prism.market would pay the gas
-  //     return 0;
-  // }
-
-  // TODO - function for Prism to claim collateral tokens after 1 year + 1 day?
-
-  // TODO - implement an admin function to freeze a particular market?
-  // is suspending/freezing the orderbook sufficient, making this function unnecessary?
-
-  // TODO - implement storage pruning...
-
   // TODO - implement an admin function close a market and return funds 50/50 to YES and NO token holders respectively
 
-    
+  // TODO - implement storage pruning...
 
 
   /////

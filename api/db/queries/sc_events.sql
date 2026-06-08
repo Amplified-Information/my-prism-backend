@@ -51,7 +51,8 @@ WHERE market_id = $1;
 -- name: GetWinningsRedeemedEventByMarketIdAndWinner :one
 -- there's only ever one row - constraint on the table
 SELECT * FROM event_winnings_redeemed
-WHERE market_id = $1 AND winner = $2;
+WHERE market_id = $1
+  AND lower(replace(winner, '0x', '')) = lower(replace(sqlc.arg(winner), '0x', ''));
 
 
 

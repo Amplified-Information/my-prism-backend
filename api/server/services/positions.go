@@ -79,10 +79,10 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 		// redeemed_at: look up table event_markret_resolved - sc_events
 		var redeemedAt string
 		eventWinningsRedeemed, err := ps.smartContractEventRepository.GetWinningsRedeemedEventByMarketIdAndWinner(userPosition.MarketID.String(), userPosition.EvmAddress)
-		if err == nil && eventWinningsRedeemed != nil {
+		if err != nil {
+			lib.Log(lib.LOG_WARN, "MarketID=%s: WinningsRedeemed event (not in db - no redemptions yet): %v", userPosition.MarketID.String(), err)
+		} else if eventWinningsRedeemed != nil {
 			redeemedAt = eventWinningsRedeemed.CreatedAt.Time.String()
-		} else {
-			lib.Log(lib.LOG_WARN, "market %s: did not find a Solidity:WinningsRedeemed event in the db: %v", userPosition.MarketID.String(), err)
 		}
 
 		position := &pb_api.Position{

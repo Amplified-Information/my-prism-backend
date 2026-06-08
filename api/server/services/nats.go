@@ -2,9 +2,8 @@ package services
 
 import (
 	"encoding/json"
-	"fmt"
-	"math"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -114,23 +113,24 @@ func (ns *NatsService) HandleOrderMatches() error {
 
 		// assert that priceUsd is not 0.0
 		if orderRequestClobTuple[0].PriceUsd == 0.0 {
-			lib.Log(lib.LOG_ERROR, "PROBLEM: priceUsd is 0.0 - this is not allowed (txid=%s).", orderRequestClobTuple[0].TxId)
+			lib.Log(lib.LOG_ERROR, "PROBLEM: orderRequestClobTuple[0].PriceUsd  is 0.0 - this is not allowed (txid=%s).", orderRequestClobTuple[0].TxId)
+			return
+		}
+		if orderRequestClobTuple[1].PriceUsd == 0.0 {
+			lib.Log(lib.LOG_ERROR, "PROBLEM: orderRequestClobTuple[1].PriceUsd  is 0.0 - this is not allowed (txid=%s).", orderRequestClobTuple[1].TxId)
 			return
 		}
 
 		// assert that the keyType is not 0
 		if orderRequestClobTuple[0].KeyType == 0 || orderRequestClobTuple[1].KeyType == 0 {
-			lib.Log(lib.LOG_ERROR, "PROBLEM: keyType is 0 - this is not allowed (txid=%s).", orderRequestClobTuple[0].TxId)
+			lib.Log(lib.LOG_ERROR, "PROBLEM: keyType is 0 - this is not allowed (txid0=%s, txid1=%s).", orderRequestClobTuple[0].TxId, orderRequestClobTuple[1].TxId)
 			return
 		}
 
-		// assert that orderRequestClobTuple[0].priceUsd > 0 and orderRequestClobTuple[1].priceUsd < 0 (i.e. one is a bid and the other is an ask)
-		if orderRequestClobTuple[0].PriceUsd < 0.0 {
-			lib.Log(lib.LOG_ERROR, "PROBLEM: orderRequestClobTuple[0].PriceUsd(%f) MUST be greater than 0 (txid=%s).", orderRequestClobTuple[0].PriceUsd, orderRequestClobTuple[0].TxId)
-			return
-		}
-		if orderRequestClobTuple[1].PriceUsd > 0.0 {
-			lib.Log(lib.LOG_ERROR, "PROBLEM: orderRequestClobTuple[1].PriceUsd(%f) MUST be less than 0 (txid=%s).", orderRequestClobTuple[1].PriceUsd, orderRequestClobTuple[1].TxId)
+		// Normalize tuple order for downstream code paths.
+		// CLOB no longer normalizes publish order; ensure tuple[0] is positive and tuple[1] is negative.
+		if err := lib.NormalizeMatchTupleByPriceSign(&orderRequestClobTuple); err != nil {
+			lib.Log(lib.LOG_ERROR, "PROBLEM: failed to normalize match tuple by price sign (txid0=%s, txid1=%s).", orderRequestClobTuple[0].TxId, orderRequestClobTuple[1].TxId)
 			return
 		}
 
@@ -152,8 +152,7 @@ func (ns *NatsService) HandleOrderMatches() error {
 		// }
 
 		_, err := ns.matchesRepository.CreateMatch(
-			// note: orderRequestClobTuple[0] is YES side (positive priceUsd)
-			//			 orderRequestClobTuple[1] is NO side (negative priceUsd)
+			// note: orderRequestClobTuple[0] is positive-price leg and [1] is negative-price leg
 			[2]*pb_clob.CreateOrderRequestClob{orderRequestClobTuple[0], orderRequestClobTuple[1]},
 			"notYetAvailable",
 		)
@@ -162,19 +161,31 @@ func (ns *NatsService) HandleOrderMatches() error {
 		}
 
 		/////
-		// Now, for every match (doesn't matter if partial or full), if the qty remaining is <=0; mark the relevant prediction intent (timestamp) as "fully matched" in the db
-		// find out if it's tx1 or tx2 that is fully matched
-		var amountUsdTx0Abs float64 = math.Abs(orderRequestClobTuple[0].Qty / orderRequestClobTuple[0].PriceUsd)
-		var amountUsdTx1Abs float64 = math.Abs(orderRequestClobTuple[1].Qty / orderRequestClobTuple[1].PriceUsd)
+		// Determine which order(s) are fully consumed.
+		// clob.matches.full => both fully matched.
+		// clob.matches.partial => smaller qty order is fully matched.
+		/////
+		isPartial := msg.Subject == lib.NATS_CLOB_MATCHES_PARTIAL
+		qtyTx0Abs := orderRequestClobTuple[0].Qty
+		if qtyTx0Abs < 0 {
+			qtyTx0Abs = -qtyTx0Abs
+		}
+		qtyTx1Abs := orderRequestClobTuple[1].Qty
+		if qtyTx1Abs < 0 {
+			qtyTx1Abs = -qtyTx1Abs
+		}
 
 		markAsMatched := [2]bool{false, false}
-		if amountUsdTx0Abs < amountUsdTx1Abs {
-			markAsMatched[0] = true // mark tx0 for deletion
+		if !isPartial {
+			markAsMatched[0] = true
+			markAsMatched[1] = true
+		} else if qtyTx0Abs < qtyTx1Abs {
+			markAsMatched[0] = true // smaller order fully consumed
+		} else if qtyTx1Abs < qtyTx0Abs {
+			markAsMatched[1] = true // smaller order fully consumed
 		} else {
-			markAsMatched[1] = true // mark tx1 for deletion
-		}
-		if amountUsdTx0Abs == amountUsdTx1Abs {
-			markAsMatched[0] = true // mark both for deletion
+			// equal qty on a partial subject is unexpected; fail-safe mark both
+			markAsMatched[0] = true
 			markAsMatched[1] = true
 		}
 
@@ -249,18 +260,21 @@ func (ns *NatsService) HandleSmartContractEvents() error {
 			lib.Log(lib.LOG_WARN, "Unknown network: %s", network)
 			return
 		}
-		// Validate it's the contractId of interest
-		expectedContractId := os.Getenv(fmt.Sprintf("%s_SMART_CONTRACT_ID", strings.ToUpper(network)))
-		if contractId != expectedContractId {
-			lib.Log(lib.LOG_WARN, "Received event for unexpected contractId: %s (expected: %s)", contractId, expectedContractId)
-			return
-		}
-		// Validate contractId (optional, if you want to check format)
+
+		// Validate the smart contract ID format:
 		_, err := hiero.ContractIDFromString(contractId)
 		if err != nil {
 			lib.Log(lib.LOG_WARN, "Invalid contractId: %s", contractId)
 			return
 		}
+
+		// NO - log all events, regardless of the smart contract ID configured in env vars for this net
+		// Validate it's the contractId of interest
+		// expectedContractId := os.Getenv(fmt.Sprintf("%s_SMART_CONTRACT_ID", strings.ToUpper(network)))
+		// if contractId != expectedContractId {
+		// 	lib.Log(lib.LOG_WARN, "Received event for unexpected contractId: %s (expected: %s)", contractId, expectedContractId)
+		// 	return
+		// }
 
 		/////
 		// OK - let's look at the body
@@ -275,10 +289,27 @@ func (ns *NatsService) HandleSmartContractEvents() error {
 		// common fields:
 		eventType, _ := event["event"].(string)
 		timestampStr, _ := event["timestamp"].(string)
-		timestampNano, _ := time.Parse(time.RFC3339Nano, timestampStr)
+		timestampNano, err := time.Parse(time.RFC3339Nano, timestampStr)
+		if err != nil {
+			// Some emitters send unix seconds with fractional nanos (e.g. "1780412710.315602953").
+			unixSeconds, parseErr := strconv.ParseFloat(timestampStr, 64)
+			if parseErr != nil {
+				lib.Log(lib.LOG_WARN, "Invalid event timestamp format: %s", timestampStr)
+				timestampNano = time.Now().UTC()
+			} else {
+				secs := int64(unixSeconds)
+				nanos := int64((unixSeconds - float64(secs)) * 1e9)
+				timestampNano = time.Unix(secs, nanos).UTC()
+			}
+		}
 		txHash, _ := event["txHash"].(string)
 		hostname, _ := event["host"].(string)
 		md5uniq := lib.Md5(msg.Subject + string(msg.Data)) // concatenation of the subject and the stringified body
+		eventArgs, ok := event["args"].(map[string]interface{})
+		if !ok {
+			lib.Log(lib.LOG_ERROR, "Event payload missing args object: %v", event)
+			return
+		}
 
 		// specific fields will be parsed in the relevant case statements below
 
@@ -289,28 +320,36 @@ func (ns *NatsService) HandleSmartContractEvents() error {
 		switch eventType {
 		case "PositionTokensPurchased":
 			lib.Log(lib.LOG_INFO, "Received PositionTokensPurchased event (%s:%s): %v", network, contractId, event)
-			err = ns.smartContractEventRepository.CreatePositionTokensPurchasedEvent(network, contractId, timestampNano, txHash, hostname, md5uniq, event)
+			err = ns.smartContractEventRepository.CreatePositionTokensPurchasedEvent(network, contractId, timestampNano, txHash, hostname, md5uniq, eventArgs)
 			if err != nil {
 				lib.Log(lib.LOG_ERROR, "Failed to CreatePositionTokensPurchasedEvent: %v", err)
 			}
 		case "MarketResolved":
 			lib.Log(lib.LOG_INFO, "Received MarketResolved event (%s:%s): %v", network, contractId, event)
-			err = ns.smartContractEventRepository.CreateMarketResolvedEvent(network, contractId, timestampNano, txHash, hostname, md5uniq, event)
+			err = ns.smartContractEventRepository.CreateMarketResolvedEvent(network, contractId, timestampNano, txHash, hostname, md5uniq, eventArgs)
 			if err != nil {
 				lib.Log(lib.LOG_ERROR, "Failed to CreateMarketResolvedEvent: %v", err)
 			}
 		case "WinningsRedeemed":
 			lib.Log(lib.LOG_INFO, "Received WinningsRedeemed event (%s:%s): %v", network, contractId, event)
-			marketId, winningEvm, err := ns.smartContractEventRepository.CreateWinningsRedeemedEvent(network, contractId, timestampNano, txHash, hostname, md5uniq, event)
+			marketId, winningEvm, err := ns.smartContractEventRepository.CreateWinningsRedeemedEvent(network, contractId, timestampNano, txHash, hostname, md5uniq, eventArgs)
 			if err != nil {
 				lib.Log(lib.LOG_ERROR, "Failed to CreateWinningsRedeemedEvent: %v", err)
+				return
+			}
+			if marketId == nil || winningEvm == nil {
+				lib.Log(lib.LOG_ERROR, "CreateWinningsRedeemedEvent returned nil values (marketId=%v, winningEvm=%v)", marketId, winningEvm)
+				return
 			}
 
 			// Finally, set redeemed_at timestamp in prediction_intents table
-			ns.predictionIntentsRepository.MarkPredictionIntentAsRedeemedForAccount(*marketId, *winningEvm)
+			err = ns.predictionIntentsRepository.MarkPredictionIntentAsRedeemedForAccount(*marketId, *winningEvm)
+			if err != nil {
+				lib.Log(lib.LOG_ERROR, "Failed to MarkPredictionIntentAsRedeemedForAccount: %v", err)
+			}
 		case "TokenAssociated":
 			lib.Log(lib.LOG_INFO, "Received TokenAssociated event (%s:%s): %v", network, contractId, event)
-			err = ns.smartContractEventRepository.CreateTokenAssociatedEvent(network, contractId, timestampNano, txHash, hostname, md5uniq, event)
+			err = ns.smartContractEventRepository.CreateTokenAssociatedEvent(network, contractId, timestampNano, txHash, hostname, md5uniq, eventArgs)
 			if err != nil {
 				lib.Log(lib.LOG_ERROR, "Failed to CreateTokenAssociatedEvent: %v", err)
 			}

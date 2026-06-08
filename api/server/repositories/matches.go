@@ -50,14 +50,18 @@ func (matchesRepository *MatchesRepository) CreateMatch(orderRequestClobTuple [2
 		return nil, lib.ErrorLog("database not initialized")
 	}
 
-	// txId1 MUST be the YES side (positive priceUsd)
-	// txId2 MUST be the NO side (negative priceUsd)
-	// the CLOB should already be enforcing this on the way in to this function - if not, error here
-	if orderRequestClobTuple[0].PriceUsd < 0 {
-		return nil, lib.ErrorLog("txId1 must be the YES side (positive priceUsd)", "txId1", orderRequestClobTuple[0].TxId, "priceUsd", orderRequestClobTuple[0].PriceUsd)
-	}
-	if orderRequestClobTuple[1].PriceUsd > 0 {
-		return nil, lib.ErrorLog("txId2 must be the NO side (negative priceUsd)", "txId2", orderRequestClobTuple[1].TxId, "priceUsd", orderRequestClobTuple[1].PriceUsd)
+	// // Normalize tuple order by sign so txId1/qty1 is always YES-side (positive)
+	// // and txId2/qty2 is always NO-side (negative), independent of publish order.
+	// if orderRequestClobTuple[0].PriceUsd < 0 && orderRequestClobTuple[1].PriceUsd > 0 {
+	// 	orderRequestClobTuple[0], orderRequestClobTuple[1] = orderRequestClobTuple[1], orderRequestClobTuple[0]
+	// } else if !(orderRequestClobTuple[0].PriceUsd > 0 && orderRequestClobTuple[1].PriceUsd < 0) {
+	// 	return nil, lib.ErrorLog("invalid priceUsd signs for match tuple", "txId1", orderRequestClobTuple[0].TxId, "priceUsd1", orderRequestClobTuple[0].PriceUsd, "txId2", orderRequestClobTuple[1].TxId, "priceUsd2", orderRequestClobTuple[1].PriceUsd)
+	// }
+
+	// Normalize tuple to sign ordering for downstream code paths.
+	// CLOB no longer does this normalization at publish time.
+	if err := lib.NormalizeMatchTupleByPriceSign(&orderRequestClobTuple); err != nil {
+		return nil, lib.ErrorLog("failed to normalize match tuple by price sign", "error", err)
 	}
 
 	// marketIds should match
@@ -101,50 +105,6 @@ func (matchesRepository *MatchesRepository) CreateMatch(orderRequestClobTuple [2
 
 	return &match, nil
 }
-
-// func (dbRepository *DbRepository) CreateMatch(sideYes *pb_clob.CreateOrderRequestClob, sideNo *pb_clob.CreateOrderRequestClob, txHash string) error {
-// 	// guards
-// 	if dbRepository.db == nil {
-// 		return fmt.Errorf("database not initialized")
-// 	}
-
-// 	txId1, err := uuid.Parse(sideYes.TxId)
-// 	if err != nil {
-// 		return fmt.Errorf("invalid txId1 uuid: %v", err)
-// 	}
-
-// 	txId2, err := uuid.Parse(sideNo.TxId)
-// 	if err != nil {
-// 		return fmt.Errorf("invalid txId2 uuid: %v", err)
-// 	}
-
-// 	marketUUID, err := uuid.Parse(sideYes.MarketId)
-// 	if err != nil {
-// 		return fmt.Errorf("invalid marketId uuid: %v", err)
-// 	}
-
-// 	if len(txHash) == 0 {
-// 		return fmt.Errorf("txHash must be non-empty")
-// 	}
-
-// 	// OK
-// 	params := sqlc.CreateMatchParams{
-// 		MarketID:      marketUUID,
-// 		TxId1:         txId1,
-// 		TxId2:         txId2,
-// 		Qty1Remaining: sideYes.Qty,
-// 		Qty2Remaining: sideNo.Qty,
-// 		TxHash:        sql.NullString{String: txHash, Valid: txHash != ""},
-// 	}
-
-// 	q := sqlc.New(dbRepository.db)
-// 	_, err = q.CreateMatch(context.Background(), params)
-// 	if err != nil {
-// 		return fmt.Errorf("CreateMatch failed: %v", err)
-// 	}
-
-// 	return nil
-// }
 
 func (matchesRepository *MatchesRepository) UpdateMatch(marketId string, tx1 string, tx2 string, txHash string, hcsTxId *string /* optional */) error {
 	if matchesRepository.db == nil {

@@ -704,7 +704,7 @@ func main() {
 	}
 
 	cronKickOutUnfundedService := services.CronKickOutUnfundedService{}
-	err = cronKickOutUnfundedService.Init(&marketsRepository, &predictionIntentsRepository, &predictionIntentsService)
+	err = cronKickOutUnfundedService.Init(&marketsRepository, &predictionIntentsRepository, &hederaService, &predictionIntentsService)
 	if err != nil {
 		fatal("Failed to initialize CronKickOutUnfunded service: %v", err)
 	}

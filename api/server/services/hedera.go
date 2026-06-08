@@ -146,12 +146,7 @@ func (hs *HederaService) BuyOrSellPositionTokens(sideYes *pb_clob.CreateOrderReq
 
 	// OK - proceed
 
-	// sideYes should have the positive priceUsd, sideNo should have the negative priceUsd
-	// enforce this ordering - buy comes first, sell comes second - to simplify the logic downstream (smart contract function parameters and signature verification logic that depends on the priceUsd sign)
-	if sideYes.PriceUsd <= 0 {
-		// flip yes and no sides
-		sideYes, sideNo = sideNo, sideYes
-	}
+	// Upstream tuple normalization guarantees sign ordering (positive first, negative second).
 
 	usdcDecimalsStr := os.Getenv("USDC_DECIMALS")
 	usdcDecimals, err := strconv.ParseUint(usdcDecimalsStr, 10, 64)
@@ -291,10 +286,21 @@ func (hs *HederaService) BuyOrSellPositionTokens(sideYes *pb_clob.CreateOrderReq
 	params.AddBool(strings.ToLower(sideYes.PrimarySecondary) == "s") // true => secondary (hedged), false => primary
 	params.AddBool(strings.ToLower(sideNo.PrimarySecondary) == "s")  // true => secondary (hedged), false => primary
 
+	slot0PrimarySecondary := strings.ToLower(sideYes.PrimarySecondary) == "s"
+	slot1PrimarySecondary := strings.ToLower(sideNo.PrimarySecondary) == "s"
+	slot0Action := "BUY YES"
+	if slot0PrimarySecondary {
+		slot0Action = "SELL NO"
+	}
+	slot1Action := "BUY NO"
+	if slot1PrimarySecondary {
+		slot1Action = "SELL YES"
+	}
+
 	lib.Log(lib.LOG_INFO, "Prepared smart contract parameters for BuyPositionTokens")
 	lib.Log(lib.LOG_INFO, "marketIdBytes (hex): %s", hex.EncodeToString(marketIdBig.Bytes()))
-	lib.Log(lib.LOG_INFO, "accountIdYes: %s", sideYes.EvmAddress)
-	lib.Log(lib.LOG_INFO, "accountIdNo: %s", sideNo.EvmAddress)
+	lib.Log(lib.LOG_INFO, "slot0 (positive-price leg): account=%s action=%s primarySecondary=%t", sideYes.EvmAddress, slot0Action, slot0PrimarySecondary)
+	lib.Log(lib.LOG_INFO, "slot1 (negative-price leg): account=%s action=%s primarySecondary=%t", sideNo.EvmAddress, slot1Action, slot1PrimarySecondary)
 	// lib.Log(lib.LOG_INFO, "collateralUsdAbsScaledYes: %s", collateralUsdAbsScaledYes.String())
 	// lib.Log(lib.LOG_INFO, "collateralUsdAbsScaledNo: %s", collateralUsdAbsScaledNo.String())
 	lib.Log(lib.LOG_INFO, "txIdYesBig (hex): %s", hex.EncodeToString(txIdYesBig.Bytes()))
@@ -578,7 +584,14 @@ func (hs *HederaService) GetUserPositionTokenBalance(networkSelected hiero.Ledge
 		SetGas(1_000_000).
 		SetFunction("getUserTokens", params)
 
+	// first get the cost of the query:
+	queryCost, err := query.GetCost(hs.hedera_clients[networkSelected.String()])
+	if err != nil {
+		return 0, 0, lib.LogAndError(lib.LOG_ERROR, "failed to estimate contract call cost (GetPositionTokenBalance): %v", err)
+	}
+
 	result, err := query.
+		SetQueryPayment(hiero.HbarFromTinybar(queryCost.AsTinybar() + 10_000)).
 		Execute(hs.hedera_clients[networkSelected.String()])
 	if err != nil {
 		return 0, 0, lib.LogAndError(lib.LOG_ERROR, "failed to execute contract call (GetPositionTokenBalance): %v", err)

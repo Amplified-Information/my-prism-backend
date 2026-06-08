@@ -286,18 +286,36 @@ impl OrderBook {
     async fn match_order(nats_service: &nats::NatsService, mut incoming_order: CreateOrderRequestClob, opposite_orders: &mut Vec<CreateOrderRequestClob>, same_side_orders: &mut Vec<CreateOrderRequestClob>) {
         // No guards for performance - assume validated upstream
 
-        opposite_orders.sort_by(|a, b| b.price_usd.partial_cmp(&a.price_usd).unwrap());
+        // Price-time priority by side:
+        // - incoming BUY matches lowest ask first (ask prices are stored as negative, compare by abs asc)
+        // - incoming SELL matches highest bid first (bid prices are stored as positive, compare desc)
+        if incoming_order.price_usd > 0.0 {
+            opposite_orders.sort_by(|a, b| a.price_usd.abs().partial_cmp(&b.price_usd.abs()).unwrap());
+        } else {
+            opposite_orders.sort_by(|a, b| b.price_usd.partial_cmp(&a.price_usd).unwrap());
+        }
 
         let i = 0;
         while i < opposite_orders.len() {
             let existing_order = &mut opposite_orders[i];
+
+            // // Prevent self-trading: skip matching against the same account or wallet.
+            // if incoming_order.evm_address.eq_ignore_ascii_case(&existing_order.evm_address) ||
+            //    incoming_order.account_id.eq_ignore_ascii_case(&existing_order.account_id) {
+            //     i += 1;
+            //     continue;
+            // }
+
             // Match based on price constraints
             if (incoming_order.price_usd > 0.0 && incoming_order.price_usd >= existing_order.price_usd.abs()) ||
                (incoming_order.price_usd < 0.0 && existing_order.price_usd >= incoming_order.price_usd.abs()) {
 
                 let orc2= existing_order.clone();
                 if incoming_order.qty <= existing_order.qty {
-                    // FULL match!
+                    // Incoming fully consumed; existing may still have remainder.
+                    let matched_qty = incoming_order.qty;
+                    let existing_remainder = existing_order.qty - matched_qty;
+
                     existing_order.qty -= incoming_order.qty;
                     if existing_order.qty.abs() < 1e-3 { // small EPSILON to account for floating point precision
                         opposite_orders.remove(i);
@@ -305,40 +323,45 @@ impl OrderBook {
 
                     log::info!("MATCH \t OrderRequestClob: {:?}", incoming_order);
                     
-                    // Notify NATS of full match - spawn to fire/forget
+                    // Publish pre-match order sizes so downstream can infer which order was fully consumed.
                     let orc1 = incoming_order.clone();
+
                     let nats_clone = nats_service.clone();
                     tokio::spawn(async move {
-                        // ensure the positive price order is always first!
-                        let (first, second) = if orc1.price_usd >= 0.0 {
-                            (&orc1, &orc2)
-                        } else {
-                            (&orc2, &orc1)
-                        };
-                        if let Err(e) = nats_clone.publish_match(false, first, second).await {
+                        // // ensure the positive price order is always first!
+                        // let (first, second) = if orc1.price_usd >= 0.0 {
+                        //     (orc1, orc2)
+                        // } else {
+                        //     (orc2, orc1)
+                        // };
+                        let is_partial_match = existing_remainder.abs() >= 1e-3;
+                        if let Err(e) = nats_clone.publish_match(is_partial_match, &orc1, &orc2).await {
                             log::error!("NATS\tFailed to publish match: {}", e);
                         }
                     });
                     
                     return;
                 } else {
-                    // PARTIAL match
-                    incoming_order.qty -= existing_order.qty;
+                    // Existing fully consumed; incoming still has remainder.
+                    let matched_qty = existing_order.qty;
+                    let incoming_before_match = incoming_order.clone();
+                    incoming_order.qty -= matched_qty;
                     opposite_orders.remove(i);
 
                     log::info!("MATCH_PARTIAL \t Remaining incoming order quantity: {}", incoming_order.qty);
                     
-                     // Notify NATS of partial match - spawn to fire/forget
-                    let orc1 = incoming_order.clone();
+                    // Publish pre-match order sizes so downstream can infer which order was fully consumed.
+                    let orc1 = incoming_before_match;
+
                     let nats_clone = nats_service.clone();
                     tokio::spawn(async move {
-                        // ensure the positive price order is always first!
-                        let (first, second) = if orc1.price_usd >= 0.0 {
-                            (&orc1, &orc2)
-                        } else {
-                            (&orc2, &orc1)
-                        };
-                        if let Err(e) = nats_clone.publish_match(true, first, second).await {
+                        // // ensure the positive price order is always first!
+                        // let (first, second) = if orc1.price_usd >= 0.0 {
+                        //     (orc1, orc2)
+                        // } else {
+                        //     (orc2, orc1)
+                        // };
+                        if let Err(e) = nats_clone.publish_match(true, &orc1, &orc2).await {
                             log::error!("NATS\tFailed to publish (partial) match: {}", e);
                         }
                     });
@@ -365,12 +388,14 @@ impl OrderBook {
                 account_id: order.account_id.clone(),
                 price_usd: order.price_usd,
                 qty: order.qty,
+                ps: order.primary_secondary.clone(),
             }).collect(),
             asks: self.sell_orders.iter().map(|order| OrderDetail {
                 tx_id: order.tx_id.clone(),
                 account_id: order.account_id.clone(),
                 price_usd: order.price_usd,
                 qty: order.qty,
+                ps: order.primary_secondary.clone(),
             }).take(effective_depth).collect(),
         }
     }

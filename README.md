@@ -7,7 +7,7 @@ deployable services:
 - `clob`: an off-chain CLOB which matches cryptographically signed buy/sell order intents
 - `api`: an API backend
 - `web`: [`prism-front-end`](https://github.com/PrismMarketLabs/prism-front-end) - the main Lovable web app (Note: this is a git **submodule** to a *separate* front-end repo)
-- `web.lp`: a landing page
+- `web.lp`: a separate landing page https://github.com/PrismMarketLabs/prism-landing-page-v2
 - `web.admin`: a separate web app for administrating Prism [`prism-front-end`](https://github.com/PrismMarketLabs/prism-admin) (Note: this is a git **submodule** to a *separate* front-end repo)
 - `proxy`: a proxy to marshall traffic
 - `modsec`: modsecurity filtering for Prism
@@ -51,29 +51,23 @@ To release a new version of a service, follow the release procedure here: https:
 
 `dev`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1779899344) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1779899344) | [data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1779899344) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1780747815) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1780747815) | [data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1780747815) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1779899344) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1779899344) | ![data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1779899344) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1780747815) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1780747815) | ![data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1780747815) |
 
 `uat`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1779899344) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1779899344) | [data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1779899344) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1780747815) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1780747815) | [data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1780747815) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1779899344) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1779899344) | ![data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1779899344) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1780747815) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1780747815) | ![data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1780747815) |
 
 `prod`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1779899344) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1779899344) | [data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1779899344) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1780747815) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1780747815) | [data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1780747815) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1779899344) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1779899344) | ![data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1779899344) |
-
-*Note: see .git/hooks/pre-commit to see how to update the cache-busting nonce*
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1780747815) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1780747815) | ![data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1780747815) |
 
 ## Quickstart
-
-To develop the application locally, edit `grpcClient.ts` and set the baseUrl to the dev environment:
-
-`baseUrl: 'https://dev.prism.market:443'`
 
 Install dependencies:
 
@@ -90,6 +84,10 @@ Run the web app (vite - port 5173):
 You can now open the application at:
 
 `localhost:5173`
+
+If required, you can optionally edit `grpcClient.ts` and set the baseUrl to the dev environment. For example:
+
+`baseUrl: 'https://dev.prism.market:443'`
 
 ## Quickstart (docker-compose)
 
@@ -152,7 +150,7 @@ To develop the application locally, start up each of the following services (in 
 - `web`: see [web/README.md](web/README.md)
 - `proxy`: see [proxy/README.md](proxy/README.md)
 
-## login with SSM
+## login to EC2 boxes with SSM
 
 Run the utility script:
 
@@ -204,6 +202,7 @@ The following files and documentation notes MUST be kept in sync. If you add/rem
  - eventbus/Dockerfile (including the run command documentation)
  - eventbus/.config*
  - eventbus/.secrets
+ - blocknode/.config*
 
 `docker-compose-monolith.yml`
  - api/Dockerfile (including the run command documentation)
@@ -369,8 +368,7 @@ docker compose pull modsec && docker compose up -d --force-recreate modsec
 
 View all the images here: https://github.com/orgs/PrismMarketLabs/packages
 
-**Please do NOT push tagged images that were built locally/manually - only tag those images that were built via github Actions**
-
+For security reasons, **please do NOT push tagged images that were built locally/manually - only tag those images that were built via github Actions**
 
 ### 2. update the docker-compose-SERVICE.ENV.yml file
 
@@ -383,7 +381,6 @@ And update the docker-compose-SERVICE.ENV.yml with the new version.
 `git commit -m"..."`
 
 `git push`
-
 
 ```bash
 ## **Please note**: there is now a script to peform this more quickly:
@@ -684,40 +681,144 @@ on:
 
 `git submodule update --remote -- web`
 
+## Smart contract matching logic
 
-## OLD
+It is critical to the correct execution of the Prism smart contract that a user's `PrismPredictionIntentRequest` is presented to the smart contract in the required format.
 
-bastion boxes are deprecated
+<!-- ## PrismPredictionIntentRequest order types
 
-| environment | host       | port |
-|-------------|------------|------|
-| local       | localhost  | 5432 |
-| dev         | localhost* | 9999 |
-| uat         | localhost* | 9999 |
-| ...         |            |      |
-| prod        | localhost* | 9999 |
+| price_usd | primary_secondary |  | order type | note                                                              |
+|-----------|-------------------|--|------------|-------------------------------------------------------------------|
+| +         | p                 |\|| BUY        | BUY/YES                                                           |
+| +         | s                 |\|| SELL       | SELL/NO                                                           |
+| -         | p                 |\|| BUY        | a negative price_usd with primary_secondary = 's' is a BUY/NO     |
+| -         | s                 |\|| SELL       | a negative price_usd with a primary_secondary = 's' is a SELL/YES | -->
 
-**via ssh tunnel - see instructions below to start an ssh tunnel to the environment you want to connect to*
+## Order of events emitted by the CLOB
 
-To connect to a remote database (e.g. `dev`), in a separate terminal, open up an ssh tunnel:
+When a match occurs, the two equal and opposing orders are sent to a Hedera smart contract for settlement.
+
+The form of this match is a tuple `[order1, order2]`.
+
+For primary orders (primary_secondary='p') the order with a positive price is **always** at position 0 in the tuple.
+
+For secondary orders (primary_secondary='s'), the ordering is slightly different.
+
+Must ensure that the following smart contract logic is valid in Solidity:
+
+| primarySecondarySlot0 | primarySecondarySlot1  | Collateral flow                                                 |
+|----------------------|------------------------|-----------------------------------------------------------------|
+| false                | false                  | both deposit collateral into the contract                       |
+| true                 | false                  | buyer deposits collateral into the contract, pays seller        |
+| false                | true                   | buyer deposits collateral into contract, pays seller            |
+| true                 | true                   | contract pays both sellers                                      |
+
+*Note: primarySeconarySlot0 is always the first element in the tuple. primarySecondarySlot1 is always the second element in the tuple*
+
+For the smart contract call, the ordering is token-side based, never price-sign based.
+
+Use this invariant for the Solidity function `posColToksOnBehalfAtomic(...)`:
+
+1. Argument set YES: signerSlot0, txIdSlot0, sigObjSlot0, primarySeconarySlot0 **must** correspond to the YES leg.
+2. Argument set NO: signerSlot1, txIdSlot1, sigObjSlot1, primarySecondarySlot1 **must** correspond to the NO leg.
+
+And for secondary orders:
+
+1. SELL/YES (secondary) must be passed in the YES slot with primarySeconarySlot0=true.
+2. SELL/NO (secondary) must be passed in the NO slot with primarySecondarySlot1=true.
+
+In short: YES first, NO second at the contract boundary, **always**.
+
+Why: the contract enforces YES/NO semantics by parameter position and booleans (not by an external price_usd convention)
+
+```solidity
+function posColToksOnBehalfAtomic(
+    uint128 marketId,
+    address signerSlot0,
+    address signerSlot1,
+    uint256 collateralUsdAbsScaledSlot0,
+    uint256 collateralUsdAbsScaledSlot1,
+    uint256 qtyScaledSlot0,
+    uint256 qtyScaledSlot1,
+    uint128 txIdSlot0,
+    uint128 txIdSlot1,
+    bytes calldata sigObjSlot0,
+    bytes calldata sigObjSlot1,
+    bool primarySecondarySlot0,
+    bool primarySecondarySlot1
+  ) { ...
+```
+
+If you map by price sign (`price_usd`) instead of token side, you can trigger the wrong branch (for example, "Insufficient NO tokens" contract errors when actually selling YES).
+
+Below is the authoritative format for `PrismPredictionIntentRequest` which the API expects:
+
+| | price_usd | primary_secondary |\|| YES/NO | buy/sell |
+|-|-----------|-------------------|--|--------|----------|
+|1| +         | p                 |\|| Y      | buy      |
+|2| +         | s                 |\|| N      | sell     |
+|3| -         | p                 |\|| N      | buy      |
+|4| -         | s                 |\|| Y      | sell     |
+
+Ensure:
+
+- on-chain settlement slot handling in `Prism.sol`
+- tuple routing in nats.go reflect the same README mapping end-to-end
+
+Example 1 (API log having received a `PrismPredictionIntentRequest` from the frontend):
 
 ```bash
-# first, ensure you have added the keys for all the environments to your ssh agent
-# these keys can be downloaded from the Prism Bitwarden account
-ssh-add ~/Desktop/dev-bastion.pem
-ssh-add ~/Desktop/dev.pem
-ssh-add ~/Desktop/uat-bastion.pem
-ssh-add ~/Desktop/uat.pem
-ssh-add ~/Desktop/prod-bastion.pem
-ssh-add ~/Desktop/prod.pem
+2026-06-07 11:13:26	INFO	prediction intent request	{"request": "tx_id:\"019ea192-a2b0-7103-b904-a54b6383ee2e\"  net:\"testnet\"  market_id:\"019e893d-9d92-775d-afa6-1016a1ee3af6\"  generated_at:\"2026-06-07T10:13:22.225Z\"  account_id:\"0.0.7090546\"  price_usd:0.49  qty:0.6122448979591837  sig:\"AeYyNBZZJTS5szxehEQQymqLy0ZdcGT3pDb/RrZNJUVb/xLnxW59JPP6EFPTmp9fsjq1o879lxRod/wJExHrbg==\"  public_key:\"03b6e6702057a1b8be59b567314abecf4c2c3a7492ceb289ca0422b18edbac0787\"  evm_address:\"440a1d7af93b92920bce50b4c0d2a8e6dcfebfd6\"  key_type:2  primary_secondary:\"p\""}
+2026-06-07 11:13:26	INFO	payloadUtf8: f000000000000000000000000000000000000000000000000000000000000493e0440a1d7af93b92920bce50b4c0d2a8e6dcfebfd6019e893d9d92775dafa61016a1ee3af6019ea192a2b07103b904a54b6383ee2ef0
+2026-06-07 11:13:26	INFO	**Signature is valid for account 0.0.7090546**
+2026-06-07 11:13:26	INFO	https://testnet.mirrornode.hedera.com/api/v1/accounts/0.0.7090546/allowances/tokens?spender.id=eq:0.0.9070333&token.id=eq:0.0.429274
+2026-06-07 11:13:26	INFO	Allowance amount: 15493596
+2026-06-07 11:13:26	INFO	Spender allowance for account 0.0.7090546 on contract 0.0.9070333: $15.49
+2026-06-07 11:13:27	INFO	Current USDC balance for account 0.0.7090546: $82.27
+2026-06-07 11:13:27	INFO	Spender allowance for account 0.0.7090546: $15.49
+2026-06-07 11:13:27	INFO	[primary] User has enough allowance and balance to cover this order of $USD0.30
+2026-06-07 11:13:27	INFO	Published order to NATS subject 'clob.orders': {"tx_id":"019ea192-a2b0-7103-b904-a54b6383ee2e","net":"testnet","market_id":"019e893d-9d92-775d-afa6-1016a1ee3af6","account_id":"0.0.7090546","price_usd":0.49,"qty":0.6122448979591837,"qty_orig":0.6122448979591837,"sig":"AeYyNBZZJTS5szxehEQQymqLy0ZdcGT3pDb/RrZNJUVb/xLnxW59JPP6EFPTmp9fsjq1o879lxRod/wJExHrbg==","public_key":"03b6e6702057a1b8be59b567314abecf4c2c3a7492ceb289ca0422b18edbac0787","evm_address":"440a1d7af93b92920bce50b4c0d2a8e6dcfebfd6","key_type":2,"primary_secondary":"p"}
+2026-06-07 11:13:27	INFO	prediction intent saved	{"accountId": "0.0.7090546", "txId": "019ea192-a2b0-7103-b904-a54b6383ee2e"}
+```
 
-#remove all keys with:
-ssh-add -D
+Example 2 (API log having received a `PrismPredictionIntentRequest` from the frontend):
 
-# You can now connect to a remote box using `ssh -A ...` and the ssh agent will automatically use the appropriate key you loaded into the ssh agent using the ssh-add command above
+```bash
+2026-06-07 11:12:02	INFO	prediction intent request	{"request": "tx_id:\"019ea191-3ef1-742e-a36b-335cf29cf5e1\"  net:\"testnet\"  market_id:\"019e893d-9d92-775d-afa6-1016a1ee3af6\"  generated_at:\"2026-06-07T10:11:51.155Z\"  account_id:\"0.0.7090546\"  price_usd:0.49  qty:0.02  sig:\"9vnvPXvvJkFSWJEqWxJFArcUHTnxXONQlG/eO6PDlOUFlwfpDTglLPktZ5Yd1ZJVDvoD57As4xsN7nh53LZRLA==\"  public_key:\"03b6e6702057a1b8be59b567314abecf4c2c3a7492ceb289ca0422b18edbac0787\"  evm_address:\"440a1d7af93b92920bce50b4c0d2a8e6dcfebfd6\"  key_type:2  primary_secondary:\"s\""}
+2026-06-07 11:12:02	INFO	payloadUtf8: f00000000000000000000000000000000000000000000000000000000000002648440a1d7af93b92920bce50b4c0d2a8e6dcfebfd6019e893d9d92775dafa61016a1ee3af6019ea1913ef1742ea36b335cf29cf5e1f1
+2026-06-07 11:12:02	INFO	**Signature is valid for account 0.0.7090546**
+2026-06-07 11:12:02	INFO	[secondary] sign convention: negative price_usd => SELL/YES, positive price_usd => SELL/NO. Incoming price_usd=0.49000000
+2026-06-07 11:12:03	INFO	[secondary] User has 4.24135200 'yes' position tokens and 0.16191800 'no' position tokens on market 019e893d-9d92-775d-afa6-1016a1ee3af6
+2026-06-07 11:12:03	INFO	[secondary] User has 0.16191800 'no' position tokens for market 019e893d-9d92-775d-afa6-1016a1ee3af6, existing reserved secondary NO=0.10000000, new order=0.02000000, required total=0.12000000
+2026-06-07 11:12:03	INFO	Published order to NATS subject 'clob.orders': {"tx_id":"019ea191-3ef1-742e-a36b-335cf29cf5e1","net":"testnet","market_id":"019e893d-9d92-775d-afa6-1016a1ee3af6","account_id":"0.0.7090546","price_usd":0.49,"qty":0.02,"qty_orig":0.02,"sig":"9vnvPXvvJkFSWJEqWxJFArcUHTnxXONQlG/eO6PDlOUFlwfpDTglLPktZ5Yd1ZJVDvoD57As4xsN7nh53LZRLA==","public_key":"03b6e6702057a1b8be59b567314abecf4c2c3a7492ceb289ca0422b18edbac0787","evm_address":"440a1d7af93b92920bce50b4c0d2a8e6dcfebfd6","key_type":2,"primary_secondary":"s"}
+2026-06-07 11:12:03	INFO	prediction intent saved	{"accountId": "0.0.7090546", "txId": "019ea191-3ef1-742e-a36b-335cf29cf5e1"}
+```
 
-# example of setting up the tunnel for a remote db connection:
-./bastions.sh # get the HOST
-export HOST=ec2-44-222-140-176.compute-1.amazonaws.com # retrieve from the AWS EC2 web UI
-ssh -A -L 9999:10.0.1.12:5432 -N admin@$HOST
+Example 3 (API log having received a `PrismPredictionIntentRequest` from the frontend):
+
+```bash
+2026-06-07 11:15:11	INFO	prediction intent request	{"request": "tx_id:\"019ea194-2f9c-7334-9d04-2a8a56e59072\"  net:\"testnet\"  market_id:\"019e893d-9d92-775d-afa6-1016a1ee3af6\"  generated_at:\"2026-06-07T10:15:03.837Z\"  account_id:\"0.0.7090546\"  price_usd:-0.51  qty:0.6734693877551021  sig:\"bzbxCmijyRu+c+S7c/xreePP9bDYhddA9isQMkOfgkRVb6D81s/sMzoz7WUur/RNU3bSXhQ0FNVr9InxhsWJHw==\"  public_key:\"03b6e6702057a1b8be59b567314abecf4c2c3a7492ceb289ca0422b18edbac0787\"  evm_address:\"440a1d7af93b92920bce50b4c0d2a8e6dcfebfd6\"  key_type:2  primary_secondary:\"p\""}
+2026-06-07 11:15:11	INFO	payloadUtf8: f10000000000000000000000000000000000000000000000000000000000053dad440a1d7af93b92920bce50b4c0d2a8e6dcfebfd6019e893d9d92775dafa61016a1ee3af6019ea1942f9c73349d042a8a56e59072f0
+2026-06-07 11:15:11	INFO	**Signature is valid for account 0.0.7090546**
+2026-06-07 11:15:11	INFO	https://testnet.mirrornode.hedera.com/api/v1/accounts/0.0.7090546/allowances/tokens?spender.id=eq:0.0.9070333&token.id=eq:0.0.429274
+2026-06-07 11:15:11	INFO	Allowance amount: 15493596
+2026-06-07 11:15:11	INFO	Spender allowance for account 0.0.7090546 on contract 0.0.9070333: $15.49
+2026-06-07 11:15:11	INFO	Current USDC balance for account 0.0.7090546: $82.27
+2026-06-07 11:15:11	INFO	Spender allowance for account 0.0.7090546: $15.49
+2026-06-07 11:15:11	INFO	[primary] User has enough allowance and balance to cover this order of $USD0.33
+2026-06-07 11:15:11	INFO	Published order to NATS subject 'clob.orders': {"tx_id":"019ea194-2f9c-7334-9d04-2a8a56e59072","net":"testnet","market_id":"019e893d-9d92-775d-afa6-1016a1ee3af6","account_id":"0.0.7090546","price_usd":-0.51,"qty":0.6734693877551021,"qty_orig":0.6734693877551021,"sig":"bzbxCmijyRu+c+S7c/xreePP9bDYhddA9isQMkOfgkRVb6D81s/sMzoz7WUur/RNU3bSXhQ0FNVr9InxhsWJHw==","public_key":"03b6e6702057a1b8be59b567314abecf4c2c3a7492ceb289ca0422b18edbac0787","evm_address":"440a1d7af93b92920bce50b4c0d2a8e6dcfebfd6","key_type":2,"primary_secondary":"p"}
+2026-06-07 11:15:11	INFO	prediction intent saved	{"accountId": "0.0.7090546", "txId": "019ea194-2f9c-7334-9d04-2a8a56e59072"}
+```
+
+Example 4 (API log having received a `PrismPredictionIntentRequest` from the frontend):
+
+```bash
+2026-06-07 11:17:18	INFO	prediction intent request	{"request": "tx_id:\"019ea196-1de7-7274-891e-73c2cebab544\"  net:\"testnet\"  market_id:\"019e893d-9d92-775d-afa6-1016a1ee3af6\"  generated_at:\"2026-06-07T10:17:10.376Z\"  account_id:\"0.0.7090546\"  price_usd:-0.52  qty:0.17  sig:\"oiUvKMIQXQMbTYu3MC9mqlFOpU5QjXAX06kWULSHPKot8SWjAwZp9tJ2Q1fE0k15KCSLFEF59izEzsPnVs6PuQ==\"  public_key:\"03b6e6702057a1b8be59b567314abecf4c2c3a7492ceb289ca0422b18edbac0787\"  evm_address:\"440a1d7af93b92920bce50b4c0d2a8e6dcfebfd6\"  key_type:2  primary_secondary:\"s\""}
+2026-06-07 11:17:18	INFO	payloadUtf8: f10000000000000000000000000000000000000000000000000000000000015950440a1d7af93b92920bce50b4c0d2a8e6dcfebfd6019e893d9d92775dafa61016a1ee3af6019ea1961de77274891e73c2cebab544f1
+2026-06-07 11:17:18	INFO	**Signature is valid for account 0.0.7090546**
+2026-06-07 11:17:18	INFO	[secondary] sign convention: negative price_usd => SELL/YES, positive price_usd => SELL/NO. Incoming price_usd=-0.52000000
+2026-06-07 11:17:19	INFO	[secondary] User has 4.24135200 'yes' position tokens and 0.16191800 'no' position tokens on market 019e893d-9d92-775d-afa6-1016a1ee3af6
+2026-06-07 11:17:19	INFO	[secondary] User has 4.24135200 'yes' position tokens for market 019e893d-9d92-775d-afa6-1016a1ee3af6, existing reserved secondary YES=0.00000000, new order=0.17000000, required total=0.17000000
+2026-06-07 11:17:19	INFO	Published order to NATS subject 'clob.orders': {"tx_id":"019ea196-1de7-7274-891e-73c2cebab544","net":"testnet","market_id":"019e893d-9d92-775d-afa6-1016a1ee3af6","account_id":"0.0.7090546","price_usd":-0.52,"qty":0.17,"qty_orig":0.17,"sig":"oiUvKMIQXQMbTYu3MC9mqlFOpU5QjXAX06kWULSHPKot8SWjAwZp9tJ2Q1fE0k15KCSLFEF59izEzsPnVs6PuQ==","public_key":"03b6e6702057a1b8be59b567314abecf4c2c3a7492ceb289ca0422b18edbac0787","evm_address":"440a1d7af93b92920bce50b4c0d2a8e6dcfebfd6","key_type":2,"primary_secondary":"s"}
+2026-06-07 11:17:19	INFO	prediction intent saved	{"accountId": "0.0.7090546", "txId": "019ea196-1de7-7274-891e-73c2cebab544"}
 ```

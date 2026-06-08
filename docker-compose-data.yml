@@ -32,7 +32,7 @@ services:
     ports:
       - "6379:6379"
   blocknode:
-    image: ghcr.io/prismmarketlabs/blocknode:0.1.3
+    image: ghcr.io/prismmarketlabs/blocknode:0.1.8
     restart: always
     ports:
       - "7777:7777"
@@ -48,3 +48,4 @@ services:
       ABI_TESTNET_0_0_8946970: "${ABI_TESTNET_0_0_8946970}"
       ABI_TESTNET_0_0_8947052: "${ABI_TESTNET_0_0_8947052}"
       ABI_TESTNET_0_0_9070333: "${ABI_TESTNET_0_0_9070333}"
+      ABI_TESTNET_0_0_9159758: "${ABI_TESTNET_0_0_9159758}"

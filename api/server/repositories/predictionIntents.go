@@ -229,6 +229,34 @@ func (pir *PredictionIntentsRepository) GetAllOpenPredictionIntentsByMarketIdAnd
 	return orderIntents, nil
 }
 
+// GetMatchedQtyForPredictionIntent returns the total matched quantity for a tx across all match rows.
+// It uses qty1 when txId is on the YES side and qty2 when txId is on the NO side.
+func (pir *PredictionIntentsRepository) GetMatchedQtyForPredictionIntent(marketId uuid.UUID, txId uuid.UUID) (float64, error) {
+	if pir.db == nil {
+		return 0, lib.ErrorLog("database not initialized")
+	}
+
+	q := sqlc.New(pir.db)
+	matches, err := q.GetAllMatchesForMarketIdTxId(context.Background(), sqlc.GetAllMatchesForMarketIdTxIdParams{
+		MarketID: marketId,
+		TxId1:    txId,
+	})
+	if err != nil {
+		return 0, lib.ErrorLog("GetAllMatchesForMarketIdTxId failed", "error", err, "marketId", marketId.String(), "txId", txId.String())
+	}
+
+	matchedQty := 0.0
+	for _, match := range matches {
+		if match.TxId1 == txId {
+			matchedQty += match.Qty1
+		} else if match.TxId2 == txId {
+			matchedQty += match.Qty2
+		}
+	}
+
+	return matchedQty, nil
+}
+
 func (pir *PredictionIntentsRepository) MarkPredictionIntentAsEvicted(txId uuid.UUID) error {
 	if pir.db == nil {
 		return lib.ErrorLog("database not initialized")

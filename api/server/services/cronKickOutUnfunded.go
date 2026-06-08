@@ -1,6 +1,7 @@
 package services
 
 import (
+	sqlc "api/gen/sqlc"
 	"api/server/lib"
 	repositories "api/server/repositories"
 	"fmt"
@@ -15,15 +16,15 @@ import (
 type CronKickOutUnfundedService struct {
 	marketsRepository           *repositories.MarketsRepository
 	predictionIntentsRepository *repositories.PredictionIntentsRepository
-	// hederaService               *HederaService
-	predictionIntentsService *PredictionIntentsService
+	hederaService               *HederaService
+	predictionIntentsService    *PredictionIntentsService
 }
 
-func (cs *CronKickOutUnfundedService) Init(mr *repositories.MarketsRepository, pir *repositories.PredictionIntentsRepository, pis *PredictionIntentsService) error {
+func (cs *CronKickOutUnfundedService) Init(mr *repositories.MarketsRepository, pir *repositories.PredictionIntentsRepository, hs *HederaService, pis *PredictionIntentsService) error {
 	// inject deps
 	cs.marketsRepository = mr
 	cs.predictionIntentsRepository = pir
-	// cs.hederaService = hs
+	cs.hederaService = hs
 	cs.predictionIntentsService = pis
 
 	lib.Log(lib.LOG_INFO, "Service: CronKickOutUnfunded service initialized successfully")
@@ -114,7 +115,6 @@ func (cs *CronKickOutUnfundedService) KickOutOrderIntentsNotBackedByFunds() {
 			lib.Log(lib.LOG_INFO, "-> Account ID %s has USDC balance %f", accountIdStr, usdcBalance)
 
 			// retrieve all live orderIntents for this market, for this specific accountId
-			sumTotalOfAllPredictionIntents := 0.0
 			usersOpenPredictionIntents, err := cs.predictionIntentsRepository.GetAllOpenPredictionIntentsByMarketIdAndAccountId(market.MarketID, accountIdStr)
 			if err != nil {
 				lib.Log(lib.LOG_ERROR, " Failed to fetch live prediction intents for market ID %s and account ID %s: %v", market.MarketID, accountIdStr, err)
@@ -127,28 +127,110 @@ func (cs *CronKickOutUnfundedService) KickOutOrderIntentsNotBackedByFunds() {
 			}
 			lib.Log(lib.LOG_INFO, "usersOpenPredictionIntents (%d): %v", len(usersOpenPredictionIntents), txIds)
 
+			// Separate primary and secondary orders
+			var primaryOrders, secondaryOrders []sqlc.PredictionIntent
 			for _, pi := range usersOpenPredictionIntents {
-				lib.Log(lib.LOG_INFO, "processing txId=%s", pi.TxID.String())
-				sumTotalOfAllPredictionIntents += (math.Abs(pi.PriceUsd) * pi.Qty)
-				lib.Log(lib.LOG_INFO, "sumTotalOfAllPredictionIntent: %f", sumTotalOfAllPredictionIntents)
+				if pi.PrimarySecondary == "p" {
+					primaryOrders = append(primaryOrders, pi)
+				} else {
+					secondaryOrders = append(secondaryOrders, pi)
+				}
+			}
 
-				if sumTotalOfAllPredictionIntents > usdcBalance {
-					// cancel this prediction intent
-					_, err := cs.predictionIntentsService.CancelPredictionIntent(market.MarketID.String(), pi.TxID.String())
-					// err = cs.predictionIntentsRepository.CancelPredictionIntent(pi.TxID.String())
-					if err != nil {
-						lib.Log(lib.LOG_ERROR, "Failed to cancel prediction intent txId %s for market ID %s and account ID %s: %v", pi.TxID.String(), market.MarketID, accountIdStr, err)
-						continue
-					}
-					lib.Log(lib.LOG_WARN, "-> Cancelled prediction intent txId %s for market ID %s and account ID %s due to insufficient funds (total required: %f, allowance: %f, balance: %f)", pi.TxID.String(), market.MarketID, accountIdStr, sumTotalOfAllPredictionIntents, allowance, usdcBalance)
+			// Validate primary orders (USDC-backed)
+			cs.validateAndKickoutPrimaryOrders(primaryOrders, &market, accountIdStr, usdcBalance, allowance)
 
-					// and mark predictionIntent as evicted:
-					err = cs.predictionIntentsRepository.MarkPredictionIntentAsEvicted(pi.TxID)
-					if err != nil {
-						lib.Log(lib.LOG_ERROR, "Failed to mark as evicted prediction intent txId %s for market ID %s and account ID %s: %v", pi.TxID.String(), market.MarketID, accountIdStr, err)
-						continue
-					}
-					lib.Log(lib.LOG_WARN, "-> Marked as evicted prediction intent txId %s for market ID %s and account ID %s", pi.TxID.String(), market.MarketID, accountIdStr)
+			// Validate secondary orders (position token-backed)
+			if len(secondaryOrders) > 0 {
+				cs.validateAndKickoutSecondaryOrders(secondaryOrders, &market, accountIdStr, *net)
+			}
+		}
+	}
+}
+func (cs *CronKickOutUnfundedService) validateAndKickoutPrimaryOrders(primaryOrders []sqlc.PredictionIntent, market *repositories.MarketAug, accountIdStr string, usdcBalance float64, allowance float64) {
+	sumTotalOfAllPrimaryIntents := 0.0
+	for _, pi := range primaryOrders {
+		lib.Log(lib.LOG_INFO, "[primary] processing txId=%s", pi.TxID.String())
+		sumTotalOfAllPrimaryIntents += (math.Abs(pi.PriceUsd) * pi.Qty)
+		lib.Log(lib.LOG_INFO, "[primary] sumTotalOfAllPrimaryIntents: %f", sumTotalOfAllPrimaryIntents)
+
+		if sumTotalOfAllPrimaryIntents > usdcBalance {
+			_, err := cs.predictionIntentsService.CancelPredictionIntent(market.MarketID.String(), pi.TxID.String())
+			if err != nil {
+				lib.Log(lib.LOG_ERROR, "Failed to cancel primary prediction intent txId %s for market ID %s and account ID %s: %v", pi.TxID.String(), market.MarketID, accountIdStr, err)
+				continue
+			}
+			lib.Log(lib.LOG_WARN, "-> Cancelled primary prediction intent txId %s for market ID %s and account ID %s due to insufficient USDC (total required: %f, balance: %f)", pi.TxID.String(), market.MarketID, accountIdStr, sumTotalOfAllPrimaryIntents, usdcBalance)
+
+			err = cs.predictionIntentsRepository.MarkPredictionIntentAsEvicted(pi.TxID)
+			if err != nil {
+				lib.Log(lib.LOG_ERROR, "Failed to mark as evicted prediction intent txId %s: %v", pi.TxID.String(), err)
+				continue
+			}
+			lib.Log(lib.LOG_WARN, "-> Marked as evicted prediction intent txId %s", pi.TxID.String())
+		}
+	}
+}
+
+func (cs *CronKickOutUnfundedService) validateAndKickoutSecondaryOrders(secondaryOrders []sqlc.PredictionIntent, market *repositories.MarketAug, accountIdStr string, net hiero.LedgerID) {
+	if len(secondaryOrders) == 0 {
+		return
+	}
+
+	template := secondaryOrders[0]
+	evmAddress := template.Evmaddress
+
+	yesTokens, noTokens, err := cs.hederaService.GetUserPositionTokenBalance(net, market.MarketID.String(), evmAddress)
+	if err != nil {
+		lib.Log(lib.LOG_ERROR, "Failed to get position token balance for account %s on market %s: %v", evmAddress, market.MarketID, err)
+		return
+	}
+	lib.Log(lib.LOG_INFO, "[secondary] User %s has YES=%.8f NO=%.8f tokens on market %s", evmAddress, yesTokens, noTokens, market.MarketID)
+
+	var sumYesRequired, sumNoRequired float64
+	for _, pi := range secondaryOrders {
+		lib.Log(lib.LOG_INFO, "[secondary] processing txId=%s with priceUsd=%.2f qty=%.8f", pi.TxID.String(), pi.PriceUsd, pi.Qty)
+
+		if pi.PriceUsd < 0 {
+			sumYesRequired += pi.Qty
+		} else {
+			sumNoRequired += pi.Qty
+		}
+	}
+
+	lib.Log(lib.LOG_INFO, "[secondary] Required: YES=%.8f NO=%.8f | Have: YES=%.8f NO=%.8f", sumYesRequired, sumNoRequired, yesTokens, noTokens)
+
+	if sumYesRequired > yesTokens {
+		for _, pi := range secondaryOrders {
+			if pi.PriceUsd < 0 {
+				_, err := cs.predictionIntentsService.CancelPredictionIntent(market.MarketID.String(), pi.TxID.String())
+				if err != nil {
+					lib.Log(lib.LOG_ERROR, "Failed to cancel secondary YES prediction intent txId %s: %v", pi.TxID.String(), err)
+					continue
+				}
+				lib.Log(lib.LOG_WARN, "-> Cancelled secondary YES prediction intent txId %s due to insufficient YES tokens (required: %.8f, have: %.8f)", pi.TxID.String(), sumYesRequired, yesTokens)
+
+				err = cs.predictionIntentsRepository.MarkPredictionIntentAsEvicted(pi.TxID)
+				if err != nil {
+					lib.Log(lib.LOG_ERROR, "Failed to mark as evicted prediction intent txId %s: %v", pi.TxID.String(), err)
+				}
+			}
+		}
+	}
+
+	if sumNoRequired > noTokens {
+		for _, pi := range secondaryOrders {
+			if pi.PriceUsd > 0 {
+				_, err := cs.predictionIntentsService.CancelPredictionIntent(market.MarketID.String(), pi.TxID.String())
+				if err != nil {
+					lib.Log(lib.LOG_ERROR, "Failed to cancel secondary NO prediction intent txId %s: %v", pi.TxID.String(), err)
+					continue
+				}
+				lib.Log(lib.LOG_WARN, "-> Cancelled secondary NO prediction intent txId %s due to insufficient NO tokens (required: %.8f, have: %.8f)", pi.TxID.String(), sumNoRequired, noTokens)
+
+				err = cs.predictionIntentsRepository.MarkPredictionIntentAsEvicted(pi.TxID)
+				if err != nil {
+					lib.Log(lib.LOG_ERROR, "Failed to mark as evicted prediction intent txId %s: %v", pi.TxID.String(), err)
 				}
 			}
 		}

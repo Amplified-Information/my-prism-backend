@@ -20,7 +20,7 @@ func (c *CategoriesService) Init(d *repositories.CategoriesRepository) error {
 func (s *CategoriesService) CreateCategory(name string, isActive bool, description string) (*sqlc.Category, error) {
 	result, err := s.categoriesRepository.CreateCategory(name, isActive, description)
 	if err != nil {
-		return nil, lib.LogAndError(lib.LOG_ERROR, "create category failed", err)
+		return nil, lib.LogAndError(lib.LOG_ERROR, "create category failed - %v", err)
 	}
 
 	return result, nil
@@ -29,7 +29,7 @@ func (s *CategoriesService) CreateCategory(name string, isActive bool, descripti
 func (s *CategoriesService) UpdateCategory(id int32, name string, isActive bool, description string) (*sqlc.Category, error) {
 	result, err := s.categoriesRepository.UpdateCategory(id, name, isActive, description)
 	if err != nil {
-		return nil, lib.LogAndError(lib.LOG_ERROR, "update category failed", err)
+		return nil, lib.LogAndError(lib.LOG_ERROR, "update category failed - %v", err)
 	}
 
 	return result, nil
@@ -38,7 +38,7 @@ func (s *CategoriesService) UpdateCategory(id int32, name string, isActive bool,
 func (s *CategoriesService) DeleteCategory(id int32) error {
 	err := s.categoriesRepository.DeleteCategory(id)
 	if err != nil {
-		return lib.LogAndError(lib.LOG_ERROR, "delete category failed", err)
+		return lib.LogAndError(lib.LOG_ERROR, "delete category failed - %v", err)
 	}
 
 	return nil
@@ -47,7 +47,7 @@ func (s *CategoriesService) DeleteCategory(id int32) error {
 func (s *CategoriesService) SetCategoriesForMarket(marketId string, categoryIds []int32) ([]int32, error) {
 	result, err := s.categoriesRepository.SetCategoriesForMarket(marketId, categoryIds)
 	if err != nil {
-		return nil, lib.LogAndError(lib.LOG_ERROR, "set categories for market failed", err)
+		return nil, lib.LogAndError(lib.LOG_ERROR, "set categories for market failed - %v", err)
 	}
 
 	return result, nil
