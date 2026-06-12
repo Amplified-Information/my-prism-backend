@@ -103,7 +103,10 @@ WHERE positions.market_id = $1
   AND markets.is_suspended = FALSE 
   AND markets.is_paused = FALSE;
 
-
+-- name: GetCostBasisForUserOnMarket :one
+SELECT cost_basis_price_yes_usd, cost_basis_price_no_usd
+FROM positions
+WHERE market_id = $1 AND evm_address = $2;
 
 
 

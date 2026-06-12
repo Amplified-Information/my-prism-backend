@@ -153,6 +153,10 @@ func (marketsRepository *MarketsRepository) CreateMarket(marketId string, _net s
 		return nil, lib.ErrorLog("CreateMarket failed", "error", err, "marketId", marketId)
 	}
 
+	if err := tx.Commit(); err != nil {
+		return nil, lib.ErrorLog("failed to commit transaction", "error", err, "marketId", marketId)
+	}
+
 	lib.Info("market created", "marketId", market.MarketID.String())
 	return &market, nil
 }

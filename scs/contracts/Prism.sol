@@ -79,7 +79,7 @@ contract Prism {
 
   @return allowance The remaining allowance of the collateral token for the market creator.
   */
-  function createNewMarket(uint128 marketId, string memory _statement) public returns (uint256 allowance) {
+  function createNewMarket(uint128 marketId, string memory _statement) public onlyOwner returns (uint256 allowance) {
     require(keccak256(abi.encodePacked(statements[marketId])) == keccak256(abi.encodePacked("")), "Market already exists");
     
     // transfer the market creation fee from the owner to the contract

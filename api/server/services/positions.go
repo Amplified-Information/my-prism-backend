@@ -85,6 +85,11 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 			redeemedAt = eventWinningsRedeemed.CreatedAt.Time.String()
 		}
 
+		costBasisYes, costBasisNo, err := ps.positionsRepository.GetCostBasisForUser(userPosition.MarketID, userPosition.EvmAddress)
+		if err != nil {
+			lib.Log(lib.LOG_WARN, "MarketID=%s: failed to get cost basis for user %s: %v", userPosition.MarketID.String(), userPosition.EvmAddress, err)
+		}
+
 		position := &pb_api.Position{
 			MarketId:   userPosition.MarketID.String(),
 			EvmAddress: userPosition.EvmAddress,
@@ -95,11 +100,13 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 		}
 
 		elem := &pb_api.PositionInfo{
-			Position:   position,
-			PriceUsd:   priceUsd,
-			IsPaused:   market.IsPaused,
-			ResolvedAt: market.ResolvedAt.Time.String(),
-			RedeemedAt: redeemedAt,
+			Position:     position,
+			PriceUsd:     priceUsd,
+			IsPaused:     market.IsPaused,
+			ResolvedAt:   market.ResolvedAt.Time.String(),
+			RedeemedAt:   redeemedAt,
+			CostBasisYes: costBasisYes,
+			CostBasisNo:  costBasisNo,
 		}
 
 		response.Positions[userPosition.MarketID.String()] = elem

@@ -134,3 +134,21 @@ func (positionsRepository *PositionsRepository) GetPositionsByMarketIdNoPointsAw
 
 	return nil, result
 }
+
+func (positionsRepository *PositionsRepository) GetCostBasisForUser(marketId uuid.UUID, evmAddress string) (float64, float64, error) {
+	if positionsRepository.db == nil {
+		return 0.0, 0.0, lib.ErrorLog("database not initialized")
+	}
+
+	q := sqlc.New(positionsRepository.db)
+
+	result, err := q.GetCostBasisForUserOnMarket(context.Background(), sqlc.GetCostBasisForUserOnMarketParams{
+		MarketID:   marketId,
+		EvmAddress: evmAddress,
+	})
+
+	if err != nil {
+		return 0.0, 0.0, lib.ErrorLog("GetCostBasisForUser failed", "error", err, "marketId", marketId.String(), "evmAddress", evmAddress)
+	}
+	return result.CostBasisPriceYesUsd, result.CostBasisPriceNoUsd, nil
+}
