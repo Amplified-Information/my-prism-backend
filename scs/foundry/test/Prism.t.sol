@@ -385,6 +385,58 @@ contract PrismTest is Test {
         prism.setRakeScaled100(500);
     }
 
+    // --- DAO/oracle role management ---
+
+    function testSetDaoOnlyDaoRevertsForNonDao() public {
+        vm.prank(user1);
+        vm.expectRevert("Only DAO can call this function");
+        prism.setDao(user2);
+    }
+
+    function testSetDaoZeroAddressReverts() public {
+        vm.expectRevert("DAO cannot be zero address");
+        prism.setDao(address(0));
+    }
+
+    function testSetDaoTransfersDaoPrivileges() public {
+        prism.setDao(user1);
+
+        vm.expectRevert("Only DAO can call this function");
+        prism.setRakeScaled100(300);
+
+        vm.prank(user1);
+        prism.setRakeScaled100(300);
+        assertEq(prism.getRakePercentScaled100(), 300);
+    }
+
+    function testSetOracleOnlyDaoRevertsForNonDao() public {
+        vm.prank(user1);
+        vm.expectRevert("Only DAO can call this function");
+        prism.setOracle(user2);
+    }
+
+    function testSetOracleZeroAddressReverts() public {
+        vm.expectRevert("Oracle cannot be zero address");
+        prism.setOracle(address(0));
+    }
+
+    function testSetOracleTransfersResolvePrivilege() public {
+        uint128 marketId = 16;
+        vm.prank(user1);
+        prism.createNewMarket(marketId, "Oracle role market");
+
+        prism.setOracle(user1);
+
+        vm.expectRevert("Only oracle can call this function");
+        prism.resolveMarket(marketId, true);
+
+        vm.prank(user1);
+        prism.resolveMarket(marketId, true);
+
+        assertEq(prism.outcomes(marketId), 1);
+        assertGt(prism.resolutionTimes(marketId), 0);
+    }
+
     // --- redeem with rake ---
 
     function _setupResolvedMarket(uint128 marketId, bool yesWins, address winner, uint256 qty) internal {
@@ -497,6 +549,17 @@ contract PrismTest is Test {
 
         vm.prank(user1);
         vm.expectRevert("No winning tokens");
+        prism.redeem(marketId);
+    }
+
+    function testRedeemInvalidMarketOutcomeReverts() public {
+        uint128 marketId = 28;
+        _setupResolvedMarket(marketId, true, user1, 100e6);
+
+        prism.setOutcomeForTest(marketId, 3);
+
+        vm.prank(user1);
+        vm.expectRevert("Invalid market outcome");
         prism.redeem(marketId);
     }
 

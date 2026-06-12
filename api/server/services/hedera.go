@@ -383,7 +383,7 @@ func (hs *HederaService) BuyOrSellPositionTokens(sideYes *pb_clob.CreateOrderReq
 	// 	return false, fmt.Errorf("Error saving price history for market %s: %v", sideNo.MarketId, err)
 	// }
 
-	// 3. record the YES/NO balances
+	// 3. record the YES/NO balances on database
 	resultYes, err := hs.positionsRepository.UpsertUserPositions(sideYes.EvmAddress, sideYes.MarketId, nYesTokens.Int64(), nNoTokens.Int64(), sideYes.PriceUsd)
 	if err != nil {
 		return false, lib.LogAndError(lib.LOG_ERROR, "Error upserting user position tokens for %s on market %s: %v", sideYes.EvmAddress, sideYes.MarketId, err)
@@ -462,7 +462,7 @@ func (hs *HederaService) CreateNewMarket(marketId string, statement string, net 
 	return remainingAllowance.Uint64(), nil
 }
 
-func (hs *HederaService) ResolveMarketOnChain(net string, marketId string, contractIdStr string, noYes bool) (bool, error) {
+func (hs *HederaService) ResolveMarketOnChain(net string, marketId string, contractIdStr string, outcome int32) (bool, error) {
 	contractId, err := hiero.ContractIDFromString(contractIdStr)
 	if err != nil {
 		return false, lib.LogAndError(lib.LOG_ERROR, "failed to parse smart contract ID from market data: %v", err)
@@ -475,7 +475,7 @@ func (hs *HederaService) ResolveMarketOnChain(net string, marketId string, contr
 
 	params := hiero.NewContractFunctionParameters()
 	params.AddUint128BigInt(marketIdBig) // marketId
-	params.AddBool(noYes)                // no = false, yes = true
+	params.AddBool(outcome == 1)         // no = false, yes = true
 
 	result, err := hiero.NewContractExecuteTransaction().
 		SetContractID(contractId).
@@ -492,7 +492,7 @@ func (hs *HederaService) ResolveMarketOnChain(net string, marketId string, contr
 	}
 
 	lib.Log(lib.LOG_INFO, "ResolveMarket - tx successful. Hedera txId = %s", result.TransactionID.String())
-	lib.Log(lib.LOG_INFO, "Market resolved as %s", map[bool]string{true: "YES", false: "NO"}[noYes])
+	lib.Log(lib.LOG_INFO, "Market resolved as %s", map[int32]string{0: "NO", 1: "YES"}[outcome])
 	return true, nil
 }
 
@@ -557,7 +557,7 @@ func (hs *HederaService) SendHTStokens(networkSelected hiero.LedgerID, tokenId h
 /*
 on-chain : retrieve a user's number of position tokens
 */
-func (hs *HederaService) GetUserPositionTokenBalance(networkSelected hiero.LedgerID, marketId string, userEvmAddress string) (float64, float64, error) {
+func (hs *HederaService) GetUserPositionTokenBalanceOnChain(networkSelected hiero.LedgerID, marketId string, userEvmAddress string) (float64, float64, error) {
 	// Solidity:
 	// getUserTokens(uint128 marketId, address user) returns (uint256)
 
@@ -594,6 +594,10 @@ func (hs *HederaService) GetUserPositionTokenBalance(networkSelected hiero.Ledge
 		SetQueryPayment(hiero.HbarFromTinybar(queryCost.AsTinybar() + 10_000)).
 		Execute(hs.hedera_clients[networkSelected.String()])
 	if err != nil {
+		// if strings.Contains(strings.ToUpper(err.Error()), "INSUFFICIENT_PAYER_BALANCE") {
+		// 	lib.Log(lib.LOG_WARN, "GetPositionTokenBalance falling back to DB after insufficient payer balance", "marketId", marketId, "userEvmAddress", userEvmAddress)
+		// 	return hs.GetUserPositionTokenBalanceFromDb(marketId, userEvmAddress)
+		// }
 		return 0, 0, lib.LogAndError(lib.LOG_ERROR, "failed to execute contract call (GetPositionTokenBalance): %v", err)
 	}
 
@@ -612,4 +616,32 @@ func (hs *HederaService) GetUserPositionTokenBalance(networkSelected hiero.Ledge
 	noTokens := float64(noBig.Uint64()) / math.Pow(10, nDecimals)
 
 	return yesTokens, noTokens, nil
+}
+
+func (hs *HederaService) GetUserPositionTokenBalanceFromDb(marketId string, userEvmAddress string) (float64, float64, error) {
+	positions, err := hs.positionsRepository.GetUserPositionsByMarketId(userEvmAddress, marketId)
+	if err != nil {
+		return 0, 0, lib.LogAndError(lib.LOG_ERROR, "failed to get position token balance from DB: %v", err)
+	}
+
+	if len(positions) == 0 {
+		return 0, 0, nil
+	}
+
+	nDecimals, err := strconv.ParseFloat(os.Getenv("USDC_DECIMALS"), 64)
+	if err != nil {
+		return 0, 0, lib.LogAndError(lib.LOG_ERROR, "failed to parse USDC_DECIMALS: %v", err)
+	}
+
+	yesTokens := float64(positions[0].NYes) / math.Pow(10, nDecimals)
+	noTokens := float64(positions[0].NNo) / math.Pow(10, nDecimals)
+
+	return yesTokens, noTokens, nil
+}
+
+func (hs *HederaService) GetRakePercent(marketId string) (float32, error) {
+	// TODO - look up most recent event_rake_updated entry
+	// extract the float value
+	rakePercent := float32(2.0)
+	return rakePercent, nil
 }

@@ -1,8 +1,8 @@
 -- CREATE
 
 -- name: CreateMarket :one
-INSERT INTO markets (market_id, net, statement, image_url, smart_contract_id, closes_at, description, is_paused, alias_yes, alias_no, hex_color_yes, hex_color_no)
-VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE, $8, $9, $10, $11)
+INSERT INTO markets (market_id, net, statement, image_url, smart_contract_id, closes_at, description, rules, is_paused, alias_yes, alias_no, hex_color_yes, hex_color_no)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, FALSE, $9, $10, $11, $12)
 RETURNING *;
 
 -- name: AssociateMarketCategoriesBatch :exec
@@ -108,6 +108,18 @@ UPDATE markets -- cannot be toggled back on
 SET deleted_at = CURRENT_TIMESTAMP
 WHERE market_id = $1;
 
+-- name: PatchMarket :one
+-- PatchMarket(marketId string, imageUrl string, description string, rules string, aliasYes string, aliasNo string, hexColorYes string, hexColorNo string)
+UPDATE markets
+SET image_url = COALESCE(NULLIF($2, ''), image_url),
+    description = COALESCE(NULLIF($3, ''), description),
+    rules = COALESCE(NULLIF($4, ''), rules),
+    alias_yes = COALESCE(NULLIF($5, ''), alias_yes),
+    alias_no = COALESCE(NULLIF($6, ''), alias_no),
+    hex_color_yes = COALESCE(NULLIF($7, ''), hex_color_yes),
+    hex_color_no = COALESCE(NULLIF($8, ''), hex_color_no)
+WHERE market_id = $1
+RETURNING *;
 
 
 

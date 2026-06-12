@@ -35,10 +35,16 @@ func (pps *PrismPointsService) AwardPrismPoints(marketId string) (bool, error) {
 		return false, lib.LogAndError(lib.LOG_ERROR, "market ID %s is not resolved yet", marketId)
 	}
 
+	if resolvedMarket.Outcome.Int32 != 0 && resolvedMarket.Outcome.Int32 != 1 {
+		return false, lib.LogAndError(lib.LOG_ERROR, "market ID %s has unsupported outcome=%d for points calculation", marketId, resolvedMarket.Outcome.Int32)
+	}
+
+	noYesOutcome := resolvedMarket.Outcome.Int32 == 1
+
 	// loop through each item in the 'evm_address' column
 	for _, position := range positions {
 		// mark the database with the points awarded to the user for this market resolution:
-		_, err := pps.markInDbPointsForUser(resolvedMarket.Outcome.Bool, marketId, position.EvmAddress, position.NYes, position.NNo, position.CostBasisPriceYesUsd, position.CostBasisPriceNoUsd)
+		_, err := pps.markInDbPointsForUser(noYesOutcome, marketId, position.EvmAddress, position.NYes, position.NNo, position.CostBasisPriceYesUsd, position.CostBasisPriceNoUsd)
 		if err != nil {
 			lib.Log(lib.LOG_ERROR, "failed to award points to user %s for market ID %s: %v", position.EvmAddress, marketId, err)
 			continue // continue awarding points to other users even if one fails

@@ -106,7 +106,7 @@ output "ghrc_secret_name" { value = var.ghrc_secret_name }
 
 
 
-output "ami" { value = "ami-0f9c27b471bdcd702" } // Debian 13
+output "ami" { value = "ami-0b75f821522bcff85" } // Debian 13
 # output "fixed_ip_bastion" { value = "10.0.0.9" } // N.B. bastion is on the public subnet 
 output "fixed_ip_proxy" { value = "10.0.1.10" }     // private subnet 
 output "fixed_ip_monolith" { value = "10.0.1.11" }  // private subnet 

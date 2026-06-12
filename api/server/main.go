@@ -319,6 +319,18 @@ func (s *server) UpdateMarket(ctx context.Context, req *pb_api.UpdateMarketReque
 	}, nil
 }
 
+func (s *server) PatchMarket(ctx context.Context, req *pb_api.PatchMarketRequest) (*pb_api.MarketResponse, error) {
+	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
+		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
+	}
+
+	result, err := s.marketsService.PatchMarket(req)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (s *server) DeleteMarket(ctx context.Context, req *pb_api.MarketIdRequest) (*pb_api.StdResponse, error) {
 	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
 		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
@@ -683,7 +695,7 @@ func main() {
 
 	// initialize Markets service
 	marketsService := services.MarketsService{}
-	err = marketsService.Init(&marketsRepository, &hederaService, &priceService, &prismPointsService)
+	err = marketsService.Init(&marketsRepository, &hederaService, &priceService, &prismPointsService, &categoriesRepository)
 	if err != nil {
 		fatal("Failed to initialize Markets service: %v", err)
 	}

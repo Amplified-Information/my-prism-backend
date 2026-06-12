@@ -7,7 +7,7 @@ deployable services:
 - `clob`: an off-chain CLOB which matches cryptographically signed buy/sell order intents
 - `api`: an API backend
 - `web`: [`prism-front-end`](https://github.com/PrismMarketLabs/prism-front-end) - the main Lovable web app (Note: this is a git **submodule** to a *separate* front-end repo)
-- `web.lp`: a separate landing page https://github.com/PrismMarketLabs/prism-landing-page-v2
+- `web.lp`: a separate landing page [`prism-landing-page-v2`](https://github.com/PrismMarketLabs/prism-landing-page-v2)
 - `web.admin`: a separate web app for administrating Prism [`prism-front-end`](https://github.com/PrismMarketLabs/prism-admin) (Note: this is a git **submodule** to a *separate* front-end repo)
 - `proxy`: a proxy to marshall traffic
 - `modsec`: modsecurity filtering for Prism
@@ -43,53 +43,45 @@ https://github.com/PrismMarketLabs/prism/actions
 ![redis](https://github.com/PrismMarketLabs/prism/actions/workflows/build-redis.yml/badge.svg)
 ![web](https://github.com/PrismMarketLabs/prism/actions/workflows/build-web__submodule__.yml/badge.svg)
 ![web.admin](https://github.com/PrismMarketLabs/prism/actions/workflows/build-web.admin__submodule__.yml/badge.svg)
-![web.lp](https://github.com/PrismMarketLabs/prism/actions/workflows/build-web.lp.yml/badge.svg)
+![web.lp](https://github.com/PrismMarketLabs/prism/actions/workflows/build-web.lp__submodule__.yml/badge.svg)
 
 ## currently released (live):
+
+Below is a comprehensive and up-to-date (live) view of the version of all services that are currently deployed across the different environments.
 
 To release a new version of a service, follow the release procedure here: https://github.com/PrismMarketLabs/prism?tab=readme-ov-file#release-procedure
 
 `dev`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1780747815) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1780747815) | [data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1780747815) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg) | [data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg?nonce=1780747815) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg?nonce=1780747815) | ![data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg?nonce=1780747815) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/dev/proxy.svg) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/dev/monolith.svg) | ![data](https://pl-deployment-badges.s3.amazonaws.com/dev/data.svg) |
 
-`uat`
+<!-- `uat`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1780747815) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1780747815) | [data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1780747815) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg) | [data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg?nonce=1780747815) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg?nonce=1780747815) | ![data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg?nonce=1780747815) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/uat/proxy.svg) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/uat/monolith.svg) | ![data](https://pl-deployment-badges.s3.amazonaws.com/uat/data.svg) | -->
 
 `prod`
 
-| [proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1780747815) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1780747815) | [data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1780747815) |
+| [proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg) | [monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg) | [data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg) |
 |---|---|---|
-| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg?nonce=1780747815) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg?nonce=1780747815) | ![data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg?nonce=1780747815) |
+| ![proxy](https://pl-deployment-badges.s3.amazonaws.com/prod/proxy.svg) | ![monolith](https://pl-deployment-badges.s3.amazonaws.com/prod/monolith.svg) | ![data](https://pl-deployment-badges.s3.amazonaws.com/prod/data.svg) |
+
+## Prism domain names
+
+Access the application at:
+
+| Environment | URI                        | Password? |
+|-------------|----------------------------|-----------|
+| `local`     | http://prism.local:8090    | Y         |
+| `dev`       | https://dev.prism.market   | Y         |
+| `uat`       | https://uat.prism.market   | Y         |
+| ...         | ...                        |           |
+| `prod`      | https://prism.market       | N         |
 
 ## Quickstart
-
-Install dependencies:
-
-`npm i`
-
-Generate TypeScript interfaces:
-
-`npm run gen`
-
-Run the web app (vite - port 5173):
-
-`npm run local`
-
-You can now open the application at:
-
-`localhost:5173`
-
-If required, you can optionally edit `grpcClient.ts` and set the baseUrl to the dev environment. For example:
-
-`baseUrl: 'https://dev.prism.market:443'`
-
-## Quickstart (docker-compose)
 
 Add the following to your /etc/hosts file:
 
@@ -103,11 +95,13 @@ Add the following to your /etc/hosts file:
 ```
 
 ```bash
-# convenience script:
+# ensure docker is installed on your machine and `docker compose` is available
+
+# convenience script to start db, eventbus, proxy, blocknode:
 ./localRun.sh
 docker ps
 
-# then:
+# convenience script to stop db, eventbus, proxy, blocknode:
 ./localStop.sh
 docker ps
 
@@ -129,17 +123,45 @@ docker compose -f docker-compose-data.yml up -d
 docker compose -f docker-compose-monolith.yml up -d
 ```
 
-Access the application at:
+## Start web apps
 
-| Environment | URI                        | Password? |
-|-------------|----------------------------|-----------|
-| `local`     | http://localhost:8090      | Y         |
-| `dev`       | https://dev.prism.market   | Y         |
-| `uat`       | https://uat.prism.market   | Y         |
-| ...         | ...                        |           |
-| `prod`      | https://prism.market       | N         |
+There are 3 web apps:
 
-## Quickstart (local machine)
+- `web`
+- `web.lp` - landing page
+- `web.admin` - admin page
+
+Open a separate tab for each web app:
+
+**web**
+
+`cd web && npm install && npm gen`
+
+`npm run dev`
+
+If required, you can optionally edit `grpcClient.ts` and set the baseUrl to the dev environment. For example: `baseUrl: 'https://dev.prism.market:443'`
+
+**web.lp**
+
+`web.lp && npm gen && npm install`
+
+`npm run dev`
+
+**web.admin**
+
+`npm.admin && npm gen && npm install`
+
+`npm run dev`
+
+Can now access the three web applications at:
+
+| app       | URL                              |
+|-----------|----------------------------------|
+| web.lp    | http://prism.local:8090/         |
+| web       | http://testnet.prism.local:8090/ |
+| web.admin | http://admin.prism.local:8090/   |
+
+## Manual start (local development)
 
 To develop the application locally, start up each of the following services (in the order below) in a separate terminal window:
 
@@ -474,6 +496,7 @@ source ./api/loadEnv.sh local
 source ./clob/loadEnv.sh local
 source ./db/loadEnv.sh local
 source ./eventbus/loadEnv.sh local
+source ./blocknode/loadEnv.sh local
 source ./proxy/loadEnv.sh local
 
 docker compose -f docker-compose-proxy.yml up -d
@@ -710,8 +733,10 @@ Must ensure that the following smart contract logic is valid in Solidity:
 |----------------------|------------------------|-----------------------------------------------------------------|
 | false                | false                  | both deposit collateral into the contract                       |
 | true                 | false                  | buyer deposits collateral into the contract, pays seller        |
-| false                | true                   | buyer deposits collateral into contract, pays seller            |
+| false                | true                   | buyer deposits collateral into the contract, pays seller            |
 | true                 | true                   | contract pays both sellers                                      |
+
+*Note: `primarySecondarySlot{0,1}` is of type `boolean`. primary is **false**. secondary is **true**.*
 
 *Note: primarySeconarySlot0 is always the first element in the tuple. primarySecondarySlot1 is always the second element in the tuple*
 
@@ -762,8 +787,9 @@ Below is the authoritative format for `PrismPredictionIntentRequest` which the A
 
 Ensure:
 
+- Front end user interface comforms to the logic in the table above
 - on-chain settlement slot handling in `Prism.sol`
-- tuple routing in nats.go reflect the same README mapping end-to-end
+- the tuple routing in `nats.go` accurately reflects end-to-end, the README.md definition
 
 Example 1 (API log having received a `PrismPredictionIntentRequest` from the frontend):
 

@@ -25,6 +25,11 @@ contract PrismTestHelper is Prism {
         totalCollateralUsd[marketId] = amount;
     }
 
+    /// @dev Test-only: directly set market outcome to exercise guard branches.
+    function setOutcomeForTest(uint128 marketId, uint8 outcome) external {
+        outcomes[marketId] = outcome;
+    }
+
     /// @dev Test-only: expose private rakePercentScaled100 for assertions.
     function getRakePercentScaled100() external view returns (uint256) {
         return rakePercentScaled100;

@@ -1,20 +1,24 @@
 -- keep in sync with Prism.sol
--- event PositionTokensPurchased(uint128 marketId, address indexed buyer, uint256 collateralUsd, uint256 qtyScaled);
--- event MarketResolved(uint128 marketId, bool outcome);
--- event WinningsRedeemed(uint128 marketId, address indexed winner, uint256 amount);
--- event TokenAssociated(address indexed token);
+--  event DaoUpdated(address newDao);
+--  event MarketResolved(uint128 marketId, uint8 outcome);
+--  event OracleUpdated(address newOracle);
+--  event PositionTokensPurchased(uint128 marketId, address indexed buyer, uint256 collateralUsd, uint256 qtyScaled, bool primarySecondary);
+--  event RakeUpdated(uint256 newRakePercentScaled100);
+--  event TokenAssociated(address indexed token);
+--  event WinningsRedeemed(uint128 marketId, address indexed winner, uint256 amount);
+
 
 -- CREATE
 
--- name: CreatePositionTokensPurchased :one
-INSERT INTO event_position_tokens_purchased (
+-- name: CreateDaoUpdatedEvent :one
+INSERT INTO event_dao_updated (
   net, smart_contract_id, timestamp_nano, tx_hash, hostname,
   md5_uniq,
-  market_id, buyer, collateral_usd, qty_scaled, primary_secondary)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+  new_dao_address)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
--- name: CreateMarketResolved :one
+-- name: CreateMarketResolvedEvent :one
 INSERT INTO event_market_resolved (
   net, smart_contract_id, timestamp_nano, tx_hash, hostname,
   md5_uniq,
@@ -22,15 +26,31 @@ INSERT INTO event_market_resolved (
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 RETURNING *;
 
--- name: CreateWinningsRedeemed :one
-INSERT INTO event_winnings_redeemed (
+-- name: CreateOracleUpdatedEvent :one
+INSERT INTO event_oracle_updated (
   net, smart_contract_id, timestamp_nano, tx_hash, hostname,
   md5_uniq,
-  market_id, winner, amount)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+  new_oracle_address)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
--- name: CreateTokenAssociated :one
+-- name: CreatePositionTokensPurchasedEvent :one
+INSERT INTO event_position_tokens_purchased (
+  net, smart_contract_id, timestamp_nano, tx_hash, hostname,
+  md5_uniq,
+  market_id, buyer, collateral_usd, qty_scaled, primary_secondary)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+RETURNING *;
+
+-- name: CreateRakeUpdatedEvent :one
+INSERT INTO event_rake_updated (
+  net, smart_contract_id, timestamp_nano, tx_hash, hostname,
+  md5_uniq,
+  new_rake_percent_scaled_100)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING *;
+
+-- name: CreateTokenAssociatedEvent :one
 INSERT INTO event_token_associated (
   net, smart_contract_id, timestamp_nano, tx_hash, hostname,
   md5_uniq,
@@ -38,6 +58,13 @@ INSERT INTO event_token_associated (
 VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
+-- name: CreateWinningsRedeemedEvent :one
+INSERT INTO event_winnings_redeemed (
+  net, smart_contract_id, timestamp_nano, tx_hash, hostname,
+  md5_uniq,
+  market_id, winner, amount)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING *;
 
 
 

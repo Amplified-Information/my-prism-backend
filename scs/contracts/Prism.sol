@@ -8,7 +8,6 @@ interface IERC20 {
   function transferFrom(address from, address to, uint256 amount) external returns (bool);
   function balanceOf(address account) external view returns (uint256);
   function allowance(address owner, address spender) external view returns (uint256);
-  // function approve(address spender, uint256 amount) external returns (bool);
 }
 
 // Hedera Token Service (HTS) precompile interface (testnet/mainnet share the same precompile)
@@ -22,15 +21,8 @@ interface IHederaAccountService {
   function isAuthorized(address account, bytes memory message, bytes memory signature) external returns (int64 responseCode, bool authorized);
 }
 
-// oraclePubkeys = [
-//   "302a300506032b6570032100b4c8cfcaaea7e1d9e8fbbacfa1cbbacfa1cbbacfa1cbbacfa1cbbac",
-//   "302a300506032b6570032100a3dcbdbfbdcd9e8f8fbbacfa1cbbacfa1cbbacfa1cbbacfa1cbbac",
-//   "asdfasdfasd"
-// ]
-
 /**
 prism.market prediction market smart contract
-Authors: ionneb
 */
 contract Prism {
   // For USDC addresses, see: https://www.circle.com/multi-chain-usdc/hedera
@@ -40,12 +32,12 @@ contract Prism {
   IHederaAccountService constant HAS = IHederaAccountService(address(0x16a));
 
   address owner;
+  address oracle;
+  address dao;
   mapping(address => bool) public associatedTokens;
 
-  mapping(uint128 => bool) public usedTxIds; // to prevent replay attacks
-
   mapping(uint128 => string) public statements;
-  mapping(uint128 => bool) public outcomes;               // true = YES wins, false = NO wins
+  mapping(uint128 => uint8) public outcomes; // 0 = NO wins, 1 = YES wins, 2 = EmergClose5050
   mapping(uint128 => uint256) public resolutionTimes;
   mapping(uint128 => uint256) public totalCollateralUsd;
   
@@ -56,12 +48,14 @@ contract Prism {
   uint256 public collateralTokenNdecimals;
   uint256 internal rakePercentScaled100;
 
-  // Note: must also update the database scheme (event_* tables)
+  // events in alphabetical order:
+  event DaoUpdated(address newDao);
+  event MarketResolved(uint128 marketId, uint8 outcome);
+  event OracleUpdated(address newOracle);
   event PositionTokensPurchased(uint128 marketId, address indexed buyer, uint256 collateralUsd, uint256 qtyScaled, bool primarySecondary);
-  event MarketResolved(uint128 marketId, bool outcome);
-  event WinningsRedeemed(uint128 marketId, address indexed winner, uint256 amount);
+  event RakeUpdated(uint256 newRakePercentScaled100);
   event TokenAssociated(address indexed token);
-  // event AccountAuthorizationResponse(int64 responseCode, address account, bool response);
+  event WinningsRedeemed(uint128 marketId, address indexed winner, uint256 amount);
 
   /**
   Smart contract contructor to initialize the contract with the specified collateral token.
@@ -70,19 +64,12 @@ contract Prism {
   constructor(address _collateralToken) {
     collateralToken = IERC20(_collateralToken);
     owner = msg.sender;
+    oracle = msg.sender;
+    dao = msg.sender;
 
     marketCreationFeeUsdc = 100000; // defaults to 0.10 USDC (6 decimals)
     collateralTokenNdecimals = 6;   // defaults to 6
     rakePercentScaled100 = 200; // defaults to 2%
-  }
-
-  /**
-  Function to set the rake percentage scaled by 100.
-  @param _rakePercentScaled100 The new rake percentage scaled by 100 (e.g., 200 = 2%).
-  */
-  function setRakeScaled100(uint256 _rakePercentScaled100) external onlyOwner {
-    require(_rakePercentScaled100 <= 10000, "Rake cannot exceed 100%");
-    rakePercentScaled100 = _rakePercentScaled100;
   }
 
   /**
@@ -92,7 +79,7 @@ contract Prism {
 
   @return allowance The remaining allowance of the collateral token for the market creator.
   */
-  function createNewMarket(uint128 marketId, string memory _statement) public returns (uint256 allowance) { // TODO: uint8 txFee - configure fees per-market?
+  function createNewMarket(uint128 marketId, string memory _statement) public returns (uint256 allowance) {
     require(keccak256(abi.encodePacked(statements[marketId])) == keccak256(abi.encodePacked("")), "Market already exists");
     
     // transfer the market creation fee from the owner to the contract
@@ -111,7 +98,7 @@ contract Prism {
   }
 
   /**
-  -> posColToksOnBehalfAtomic <- (atomically) allocate position/collateral tokens on behalf of two users
+  posColToksOnBehalfAtomic - (atomically) allocate position/collateral tokens on behalf of two users
   This function allows the CLOB to initiate the buying of YES and NO position tokens atomically on behalf of two accounts "yes" and "no".
   Requires --optimize flag due to size of the call stack
   See: api/server/services/hedera.go `params := hiero.NewContractFunctionParameters()....`
@@ -139,8 +126,6 @@ contract Prism {
     uint256 collateralUsdAbsScaledSlot1,
     uint256 qtyScaledSlot0,
     uint256 qtyScaledSlot1,
-    // uint256 priceUsdAbsScaledYes,
-    // uint256 priceUsdAbsScaledNo,
     uint128 txIdSlot0,
     uint128 txIdSlot1,
     bytes calldata sigObjSlot0,
@@ -264,28 +249,42 @@ contract Prism {
   */
   function redeemInternal(uint128 marketId, address winner) internal returns (uint256 amountUSDC) {
     require(resolutionTimes[marketId] > 0, "Not resolved yet");
-    
-    uint256 nTokens = outcomes[marketId] ? yesTokens[marketId][winner] : noTokens[marketId][winner];
-    require(nTokens > 0, "No winning tokens");
+
+    uint256 grossWinnings;
+    if (outcomes[marketId] == 1) { // YES outcome
+      grossWinnings = yesTokens[marketId][winner];
+    } else if (outcomes[marketId] == 0) { // NO outcome
+      grossWinnings = noTokens[marketId][winner];
+    } else if (outcomes[marketId] == 2) { // EmergClose5050 outcome - split collateral 50/50 to YES and NO holders
+      grossWinnings = (yesTokens[marketId][winner] + noTokens[marketId][winner]) / 2;
+    } else {
+      revert("Invalid market outcome");
+    }
+
+    require(grossWinnings > 0, "No winning tokens");
 
     // send the rake
-    uint256 rakeAmount = (nTokens * rakePercentScaled100) / 10000;
+    uint256 rakeAmount = (grossWinnings * rakePercentScaled100) / 10000;
+    uint256 payoutAmount = grossWinnings - rakeAmount;
+
+    // Prevent underflow panic and provide a clear reason if market accounting is insolvent.
+    require(totalCollateralUsd[marketId] >= grossWinnings, "Insufficient market collateral");
+
     require(collateralToken.transfer(owner, rakeAmount), "Rake transfer failed");
-    nTokens -= rakeAmount;
     
     // Transfer (remaining, after rake) collateral 1:1
-    require(collateralToken.transfer(winner, nTokens), "Transfer failed");
+    require(collateralToken.transfer(winner, payoutAmount), "Transfer failed");
 
     // Clear balances
     if (yesTokens[marketId][winner] > 0 ) yesTokens[marketId][winner] = 0;
     if (noTokens[marketId][winner] > 0 ) noTokens[marketId][winner] = 0;
 
     // don't forget to reduce totalCollateral (including rake)
-    totalCollateralUsd[marketId] = totalCollateralUsd[marketId] - nTokens - rakeAmount;
+    totalCollateralUsd[marketId] -= grossWinnings;
     
-    emit WinningsRedeemed(marketId, winner, nTokens /* excluding rake */);
+    emit WinningsRedeemed(marketId, winner, payoutAmount /* excluding rake */);
 
-    return nTokens; // nTokens === amountUSDC (1:1 mapping)
+    return payoutAmount; // payoutAmount === amountUSDC (1:1 mapping after rake)
   }
 
   /**
@@ -312,15 +311,62 @@ contract Prism {
   function resolveMarket(uint128 marketId, bool noYes) external onlyOracle {
     require(resolutionTimes[marketId] == 0, "Already resolved");
 
-    outcomes[marketId] = noYes;
+    outcomes[marketId] = noYes ? 1 : 0; // 1 = YES wins, 0 = NO wins
     resolutionTimes[marketId] = block.timestamp;
    
-    emit MarketResolved(marketId, noYes);
+    emit MarketResolved(marketId, noYes ? 1 : 0);
   }
 
-  // TODO - implement an admin function close a market and return funds 50/50 to YES and NO token holders respectively
+  /////
+  // DAO-only functions
+  /////
 
-  // TODO - implement storage pruning...
+  /**
+  Function to set the rake percentage scaled by 100.
+  @param _rakePercentScaled100 The new rake percentage scaled by 100 (e.g., 200 = 2%).
+  */
+  function setRakeScaled100(uint256 _rakePercentScaled100) external onlyDao {
+    require(_rakePercentScaled100 <= 10000, "Rake cannot exceed 100%");
+    rakePercentScaled100 = _rakePercentScaled100;
+    emit RakeUpdated(_rakePercentScaled100);
+  }
+
+  /**
+  Function to set the DAO address
+  Note: be extremely careful calling this function
+  Note: Transferring control to the wrong address could result in loss of funds or a broken contract if the new DAO address does not have the expected functionality to manage the contract properly
+  @param _dao The new address of the DAO
+  */
+  function setDao(address _dao) external onlyDao {
+    require(_dao != address(0), "DAO cannot be zero address");
+    dao = _dao;
+    emit DaoUpdated(_dao);
+  }
+
+  /**
+  Function to set the Oracle address
+  Note: be extremely careful calling this function
+  Note: Transferring control to the wrong address could result in loss of funds or a broken contract if the new Oracle address does not have the expected functionality to manage the contract properly
+  @param _oracle The new address of the Oracle
+  */
+  function setOracle(address _oracle) external onlyDao {
+    require(_oracle != address(0), "Oracle cannot be zero address");
+    oracle = _oracle;
+    emit OracleUpdated(_oracle);
+  }
+
+  /**
+  Function to emergency close a market and return funds 50/50 to YES and NO token holders.
+  @param marketId The ID of the market to be closed.
+  */
+  function emergencyCloseMarket5050(uint128 marketId) external onlyDao {
+    require(resolutionTimes[marketId] == 0, "Market already resolved");
+
+    resolutionTimes[marketId] = block.timestamp;
+    outcomes[marketId] = 2; // emergency close with 50/50 payout (EmergClose5050)
+
+    emit MarketResolved(marketId, 2);
+  }
 
 
   /////
@@ -363,7 +409,6 @@ contract Prism {
   function isAuthorized(address account, bytes memory message, bytes memory signatureMap) internal returns (bool) {
     (int64 responseCode, bool authorized) = HAS.isAuthorized(account, message, signatureMap);
     require(responseCode == 22, "isAuthorized failed");
-    // emit AccountAuthorizationResponse(responseCode, account, authorized);
     return authorized;
   }
 
@@ -428,7 +473,15 @@ contract Prism {
   Only Oracle guard
   */
   modifier onlyOracle() {
-    require(msg.sender == owner /* TODO - change to Oracle address */, "Only oracle can call this function");
+    require(msg.sender == oracle, "Only oracle can call this function");
+    _;
+  }
+
+  /**
+  Only DAO guard
+  */
+  modifier onlyDao() {
+    require(msg.sender == dao, "Only DAO can call this function");
     _;
   }
 }

@@ -204,6 +204,48 @@ ALTER SEQUENCE public.comments_comment_id_seq OWNED BY public.comments.comment_i
 
 
 --
+-- Name: event_dao_updated; Type: TABLE; Schema: public; Owner: your_db_user
+--
+
+CREATE TABLE public.event_dao_updated (
+    id integer NOT NULL,
+    net character varying(20) NOT NULL,
+    smart_contract_id character varying(256) NOT NULL,
+    timestamp_nano timestamp(6) without time zone NOT NULL,
+    tx_hash character varying(256) NOT NULL,
+    hostname character varying(256) NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    md5_uniq character varying(32) NOT NULL,
+    new_dao_address text NOT NULL,
+    CONSTRAINT event_dao_updated_net_check CHECK (((net)::text = ANY ((ARRAY['previewnet'::character varying, 'testnet'::character varying, 'mainnet'::character varying])::text[])))
+);
+
+
+ALTER TABLE public.event_dao_updated OWNER TO your_db_user;
+
+--
+-- Name: event_dao_updated_id_seq; Type: SEQUENCE; Schema: public; Owner: your_db_user
+--
+
+CREATE SEQUENCE public.event_dao_updated_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.event_dao_updated_id_seq OWNER TO your_db_user;
+
+--
+-- Name: event_dao_updated_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: your_db_user
+--
+
+ALTER SEQUENCE public.event_dao_updated_id_seq OWNED BY public.event_dao_updated.id;
+
+
+--
 -- Name: event_market_resolved; Type: TABLE; Schema: public; Owner: your_db_user
 --
 
@@ -217,7 +259,7 @@ CREATE TABLE public.event_market_resolved (
     created_at timestamp with time zone DEFAULT now(),
     md5_uniq character varying(32) NOT NULL,
     market_id character varying(64) NOT NULL,
-    outcome boolean NOT NULL,
+    outcome integer,
     CONSTRAINT event_market_resolved_net_check CHECK (((net)::text = ANY ((ARRAY['previewnet'::character varying, 'testnet'::character varying, 'mainnet'::character varying])::text[])))
 );
 
@@ -244,6 +286,48 @@ ALTER SEQUENCE public.event_market_resolved_id_seq OWNER TO your_db_user;
 --
 
 ALTER SEQUENCE public.event_market_resolved_id_seq OWNED BY public.event_market_resolved.id;
+
+
+--
+-- Name: event_oracle_updated; Type: TABLE; Schema: public; Owner: your_db_user
+--
+
+CREATE TABLE public.event_oracle_updated (
+    id integer NOT NULL,
+    net character varying(20) NOT NULL,
+    smart_contract_id character varying(256) NOT NULL,
+    timestamp_nano timestamp(6) without time zone NOT NULL,
+    tx_hash character varying(256) NOT NULL,
+    hostname character varying(256) NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    md5_uniq character varying(32) NOT NULL,
+    new_oracle_address text NOT NULL,
+    CONSTRAINT event_oracle_updated_net_check CHECK (((net)::text = ANY ((ARRAY['previewnet'::character varying, 'testnet'::character varying, 'mainnet'::character varying])::text[])))
+);
+
+
+ALTER TABLE public.event_oracle_updated OWNER TO your_db_user;
+
+--
+-- Name: event_oracle_updated_id_seq; Type: SEQUENCE; Schema: public; Owner: your_db_user
+--
+
+CREATE SEQUENCE public.event_oracle_updated_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.event_oracle_updated_id_seq OWNER TO your_db_user;
+
+--
+-- Name: event_oracle_updated_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: your_db_user
+--
+
+ALTER SEQUENCE public.event_oracle_updated_id_seq OWNED BY public.event_oracle_updated.id;
 
 
 --
@@ -290,6 +374,48 @@ ALTER SEQUENCE public.event_position_tokens_purchased_id_seq OWNER TO your_db_us
 --
 
 ALTER SEQUENCE public.event_position_tokens_purchased_id_seq OWNED BY public.event_position_tokens_purchased.id;
+
+
+--
+-- Name: event_rake_updated; Type: TABLE; Schema: public; Owner: your_db_user
+--
+
+CREATE TABLE public.event_rake_updated (
+    id integer NOT NULL,
+    net character varying(20) NOT NULL,
+    smart_contract_id character varying(256) NOT NULL,
+    timestamp_nano timestamp(6) without time zone NOT NULL,
+    tx_hash character varying(256) NOT NULL,
+    hostname character varying(256) NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    md5_uniq character varying(32) NOT NULL,
+    new_rake_percent_scaled_100 numeric NOT NULL,
+    CONSTRAINT event_rake_updated_net_check CHECK (((net)::text = ANY ((ARRAY['previewnet'::character varying, 'testnet'::character varying, 'mainnet'::character varying])::text[])))
+);
+
+
+ALTER TABLE public.event_rake_updated OWNER TO your_db_user;
+
+--
+-- Name: event_rake_updated_id_seq; Type: SEQUENCE; Schema: public; Owner: your_db_user
+--
+
+CREATE SEQUENCE public.event_rake_updated_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.event_rake_updated_id_seq OWNER TO your_db_user;
+
+--
+-- Name: event_rake_updated_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: your_db_user
+--
+
+ALTER SEQUENCE public.event_rake_updated_id_seq OWNED BY public.event_rake_updated.id;
 
 
 --
@@ -443,12 +569,13 @@ CREATE TABLE public.markets (
     closes_at timestamp with time zone DEFAULT (now() + '30 days'::interval) NOT NULL,
     description text NOT NULL,
     is_suspended boolean DEFAULT false NOT NULL,
-    outcome boolean,
+    outcome integer,
     deleted_at timestamp with time zone,
     alias_yes character varying(255) DEFAULT NULL::character varying,
     alias_no character varying(255) DEFAULT NULL::character varying,
     hex_color_yes character varying(7) DEFAULT NULL::character varying,
     hex_color_no character varying(7) DEFAULT NULL::character varying,
+    rules text,
     CONSTRAINT markets_hex_color_no_check CHECK ((((hex_color_no)::text ~ '^#[A-Fa-f0-9]{6}$'::text) OR (hex_color_no IS NULL))),
     CONSTRAINT markets_hex_color_yes_check CHECK ((((hex_color_yes)::text ~ '^#[A-Fa-f0-9]{6}$'::text) OR (hex_color_yes IS NULL))),
     CONSTRAINT smart_contract_id_check CHECK (((length((smart_contract_id)::text) >= 5) AND ((smart_contract_id)::text ~~ '%.%.%'::text)))
@@ -1149,6 +1276,13 @@ ALTER TABLE ONLY public.comments ALTER COLUMN comment_id SET DEFAULT nextval('pu
 
 
 --
+-- Name: event_dao_updated id; Type: DEFAULT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.event_dao_updated ALTER COLUMN id SET DEFAULT nextval('public.event_dao_updated_id_seq'::regclass);
+
+
+--
 -- Name: event_market_resolved id; Type: DEFAULT; Schema: public; Owner: your_db_user
 --
 
@@ -1156,10 +1290,24 @@ ALTER TABLE ONLY public.event_market_resolved ALTER COLUMN id SET DEFAULT nextva
 
 
 --
+-- Name: event_oracle_updated id; Type: DEFAULT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.event_oracle_updated ALTER COLUMN id SET DEFAULT nextval('public.event_oracle_updated_id_seq'::regclass);
+
+
+--
 -- Name: event_position_tokens_purchased id; Type: DEFAULT; Schema: public; Owner: your_db_user
 --
 
 ALTER TABLE ONLY public.event_position_tokens_purchased ALTER COLUMN id SET DEFAULT nextval('public.event_position_tokens_purchased_id_seq'::regclass);
+
+
+--
+-- Name: event_rake_updated id; Type: DEFAULT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.event_rake_updated ALTER COLUMN id SET DEFAULT nextval('public.event_rake_updated_id_seq'::regclass);
 
 
 --
@@ -1264,6 +1412,22 @@ ALTER TABLE ONLY public.comments
 
 
 --
+-- Name: event_dao_updated event_dao_updated_md5_uniq_key; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.event_dao_updated
+    ADD CONSTRAINT event_dao_updated_md5_uniq_key UNIQUE (md5_uniq);
+
+
+--
+-- Name: event_dao_updated event_dao_updated_pkey; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.event_dao_updated
+    ADD CONSTRAINT event_dao_updated_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: event_market_resolved event_market_resolved_market_id_unique; Type: CONSTRAINT; Schema: public; Owner: your_db_user
 --
 
@@ -1288,6 +1452,22 @@ ALTER TABLE ONLY public.event_market_resolved
 
 
 --
+-- Name: event_oracle_updated event_oracle_updated_md5_uniq_key; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.event_oracle_updated
+    ADD CONSTRAINT event_oracle_updated_md5_uniq_key UNIQUE (md5_uniq);
+
+
+--
+-- Name: event_oracle_updated event_oracle_updated_pkey; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.event_oracle_updated
+    ADD CONSTRAINT event_oracle_updated_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: event_position_tokens_purchased event_position_tokens_purchased_md5_uniq_key; Type: CONSTRAINT; Schema: public; Owner: your_db_user
 --
 
@@ -1301,6 +1481,22 @@ ALTER TABLE ONLY public.event_position_tokens_purchased
 
 ALTER TABLE ONLY public.event_position_tokens_purchased
     ADD CONSTRAINT event_position_tokens_purchased_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: event_rake_updated event_rake_updated_md5_uniq_key; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.event_rake_updated
+    ADD CONSTRAINT event_rake_updated_md5_uniq_key UNIQUE (md5_uniq);
+
+
+--
+-- Name: event_rake_updated event_rake_updated_pkey; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.event_rake_updated
+    ADD CONSTRAINT event_rake_updated_pkey PRIMARY KEY (id);
 
 
 --

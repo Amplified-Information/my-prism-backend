@@ -147,7 +147,7 @@ func (cs *CronKickOutUnfundedService) KickOutOrderIntentsNotBackedByFunds() {
 		}
 	}
 }
-func (cs *CronKickOutUnfundedService) validateAndKickoutPrimaryOrders(primaryOrders []sqlc.PredictionIntent, market *repositories.MarketAug, accountIdStr string, usdcBalance float64, allowance float64) {
+func (cs *CronKickOutUnfundedService) validateAndKickoutPrimaryOrders(primaryOrders []sqlc.PredictionIntent, market *sqlc.Market, accountIdStr string, usdcBalance float64, allowance float64) {
 	sumTotalOfAllPrimaryIntents := 0.0
 	for _, pi := range primaryOrders {
 		lib.Log(lib.LOG_INFO, "[primary] processing txId=%s", pi.TxID.String())
@@ -172,7 +172,7 @@ func (cs *CronKickOutUnfundedService) validateAndKickoutPrimaryOrders(primaryOrd
 	}
 }
 
-func (cs *CronKickOutUnfundedService) validateAndKickoutSecondaryOrders(secondaryOrders []sqlc.PredictionIntent, market *repositories.MarketAug, accountIdStr string, net hiero.LedgerID) {
+func (cs *CronKickOutUnfundedService) validateAndKickoutSecondaryOrders(secondaryOrders []sqlc.PredictionIntent, market *sqlc.Market, accountIdStr string, net hiero.LedgerID) {
 	if len(secondaryOrders) == 0 {
 		return
 	}
@@ -180,7 +180,8 @@ func (cs *CronKickOutUnfundedService) validateAndKickoutSecondaryOrders(secondar
 	template := secondaryOrders[0]
 	evmAddress := template.Evmaddress
 
-	yesTokens, noTokens, err := cs.hederaService.GetUserPositionTokenBalance(net, market.MarketID.String(), evmAddress)
+	// yesTokens, noTokens, err := cs.hederaService.GetUserPositionTokenBalanceOnChain(net, market.MarketID.String(), evmAddress)
+	yesTokens, noTokens, err := cs.hederaService.GetUserPositionTokenBalanceFromDb(market.MarketID.String(), evmAddress)
 	if err != nil {
 		lib.Log(lib.LOG_ERROR, "Failed to get position token balance for account %s on market %s: %v", evmAddress, market.MarketID, err)
 		return

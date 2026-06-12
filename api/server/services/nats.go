@@ -313,22 +313,50 @@ func (ns *NatsService) HandleSmartContractEvents() error {
 
 		// specific fields will be parsed in the relevant case statements below
 
+		// event DaoUpdated(address newDao);
+		// event MarketResolved(uint128 marketId, uint8 outcome);
+		// event OracleUpdated(address newOracle);
 		// event PositionTokensPurchased(uint128 marketId, address indexed buyer, uint256 collateralUsd, uint256 qtyScaled, bool primarySecondary);
-		// event MarketResolved(uint128 marketId, bool outcome);
-		// event WinningsRedeemed(uint128 marketId, address indexed winner, uint256 amount);
+		// event RakeUpdated(uint256 newRakePercentScaled100);
 		// event TokenAssociated(address indexed token);
+		// event WinningsRedeemed(uint128 marketId, address indexed winner, uint256 amount);
+
 		switch eventType {
-		case "PositionTokensPurchased":
-			lib.Log(lib.LOG_INFO, "Received PositionTokensPurchased event (%s:%s): %v", network, contractId, event)
-			err = ns.smartContractEventRepository.CreatePositionTokensPurchasedEvent(network, contractId, timestampNano, txHash, hostname, md5uniq, eventArgs)
+		case "DaoUpdated":
+			lib.Log(lib.LOG_INFO, "Received DaoUpdated event (%s:%s): %v", network, contractId, event)
+			err = ns.smartContractEventRepository.CreateDaoUpdatedEvent(network, contractId, timestampNano, txHash, hostname, md5uniq, eventArgs)
 			if err != nil {
-				lib.Log(lib.LOG_ERROR, "Failed to CreatePositionTokensPurchasedEvent: %v", err)
+				lib.Log(lib.LOG_ERROR, "Failed to CreateDaoUpdatedEvent: %v", err)
 			}
 		case "MarketResolved":
 			lib.Log(lib.LOG_INFO, "Received MarketResolved event (%s:%s): %v", network, contractId, event)
 			err = ns.smartContractEventRepository.CreateMarketResolvedEvent(network, contractId, timestampNano, txHash, hostname, md5uniq, eventArgs)
 			if err != nil {
 				lib.Log(lib.LOG_ERROR, "Failed to CreateMarketResolvedEvent: %v", err)
+			}
+		case "OracleUpdated":
+			lib.Log(lib.LOG_INFO, "Received OracleUpdated event (%s:%s): %v", network, contractId, event)
+			err = ns.smartContractEventRepository.CreateOracleUpdatedEvent(network, contractId, timestampNano, txHash, hostname, md5uniq, eventArgs)
+			if err != nil {
+				lib.Log(lib.LOG_ERROR, "Failed to CreateOracleUpdatedEvent: %v", err)
+			}
+		case "PositionTokensPurchased":
+			lib.Log(lib.LOG_INFO, "Received PositionTokensPurchased event (%s:%s): %v", network, contractId, event)
+			err = ns.smartContractEventRepository.CreatePositionTokensPurchasedEvent(network, contractId, timestampNano, txHash, hostname, md5uniq, eventArgs)
+			if err != nil {
+				lib.Log(lib.LOG_ERROR, "Failed to CreatePositionTokensPurchasedEvent: %v", err)
+			}
+		case "RakeUpdated":
+			lib.Log(lib.LOG_INFO, "Received RakeUpdated event (%s:%s): %v", network, contractId, event)
+			err = ns.smartContractEventRepository.CreateRakeUpdatedEvent(network, contractId, timestampNano, txHash, hostname, md5uniq, eventArgs)
+			if err != nil {
+				lib.Log(lib.LOG_ERROR, "Failed to CreateRakeUpdatedEvent: %v", err)
+			}
+		case "TokenAssociated":
+			lib.Log(lib.LOG_INFO, "Received TokenAssociated event (%s:%s): %v", network, contractId, event)
+			err = ns.smartContractEventRepository.CreateTokenAssociatedEvent(network, contractId, timestampNano, txHash, hostname, md5uniq, eventArgs)
+			if err != nil {
+				lib.Log(lib.LOG_ERROR, "Failed to CreateTokenAssociatedEvent: %v", err)
 			}
 		case "WinningsRedeemed":
 			lib.Log(lib.LOG_INFO, "Received WinningsRedeemed event (%s:%s): %v", network, contractId, event)
@@ -347,14 +375,6 @@ func (ns *NatsService) HandleSmartContractEvents() error {
 			if err != nil {
 				lib.Log(lib.LOG_ERROR, "Failed to MarkPredictionIntentAsRedeemedForAccount: %v", err)
 			}
-		case "TokenAssociated":
-			lib.Log(lib.LOG_INFO, "Received TokenAssociated event (%s:%s): %v", network, contractId, event)
-			err = ns.smartContractEventRepository.CreateTokenAssociatedEvent(network, contractId, timestampNano, txHash, hostname, md5uniq, eventArgs)
-			if err != nil {
-				lib.Log(lib.LOG_ERROR, "Failed to CreateTokenAssociatedEvent: %v", err)
-			}
-		case "AccountAuthorizationResponse":
-			lib.Log(lib.LOG_WARN, "AccountAuthorizationResponse event received - not stored in database")
 		default:
 			lib.Log(lib.LOG_WARN, "Unknown event type: %s", eventType)
 		}

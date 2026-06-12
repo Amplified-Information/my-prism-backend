@@ -17,12 +17,6 @@ type MarketsRepository struct {
 	db *sql.DB
 }
 
-type MarketAug struct {
-	sqlc.Market
-	// augmented fields:
-	CategoryIds []int32 `json:"categoryIds"`
-}
-
 func (marketsRepository *MarketsRepository) CloseDb() error {
 	var err = marketsRepository.db.Close()
 	if err != nil {
@@ -49,7 +43,7 @@ func (marketsRepository *MarketsRepository) InitDb() error {
 	return nil
 }
 
-func (marketsRepository *MarketsRepository) GetMarketById(marketId string, isAdmin bool) (*MarketAug, error) {
+func (marketsRepository *MarketsRepository) GetMarketById(marketId string, isAdmin bool) (*sqlc.Market, error) {
 	if marketsRepository.db == nil {
 		return nil, lib.ErrorLog("database not initialized")
 	}
@@ -68,22 +62,10 @@ func (marketsRepository *MarketsRepository) GetMarketById(marketId string, isAdm
 		return nil, lib.ErrorLog("GetMarketById failed", "error", err, "marketId", marketId)
 	}
 
-	categoryIds, err := q.GetCategoriesForMarket(context.Background(), marketUUID)
-	if err != nil {
-		return nil, lib.ErrorLog("GetCategoriesForMarket failed", "error", err, "marketId", marketId)
-	}
-	categoryIds32 := make([]int32, len(categoryIds))
-	for i, category := range categoryIds {
-		categoryIds32[i] = int32(category.ID)
-	}
-
-	return &MarketAug{
-		Market:      market,
-		CategoryIds: categoryIds32,
-	}, nil
+	return &market, nil
 }
 
-func (marketsRepository *MarketsRepository) GetMarkets(limit int32, offset int32, isAdmin bool) ([]MarketAug, error) {
+func (marketsRepository *MarketsRepository) GetMarkets(limit int32, offset int32, isAdmin bool) ([]sqlc.Market, error) {
 	if marketsRepository.db == nil {
 		return nil, lib.ErrorLog("database not initialized")
 	}
@@ -98,25 +80,7 @@ func (marketsRepository *MarketsRepository) GetMarkets(limit int32, offset int32
 		return nil, lib.ErrorLog("GetMarkets failed", "error", err, "limit", limit, "offset", offset)
 	}
 
-	marketAugs := make([]MarketAug, len(markets))
-	for i, market := range markets {
-
-		categoryIds, err := q.GetCategoriesForMarket(context.Background(), market.MarketID)
-		if err != nil {
-			return nil, lib.ErrorLog("GetCategoriesForMarket failed", "error", err, "marketId", market.MarketID)
-		}
-		categoryIds32 := make([]int32, len(categoryIds))
-		for i, category := range categoryIds {
-			categoryIds32[i] = int32(category.ID)
-		}
-		lib.Info("GetMarkets: categoryIds for market", "marketId", market.MarketID, "categoryIds", categoryIds32)
-
-		marketAugs[i] = MarketAug{
-			Market:      market,
-			CategoryIds: categoryIds32,
-		}
-	}
-	return marketAugs, nil
+	return markets, nil
 }
 
 func (marketsRepository *MarketsRepository) GetCategories() ([]sqlc.Category, error) {
@@ -133,7 +97,7 @@ func (marketsRepository *MarketsRepository) GetCategories() ([]sqlc.Category, er
 	return categories, nil
 }
 
-func (marketsRepository *MarketsRepository) CreateMarket(marketId string, _net string, _imageUrl string, _statement string, closesAt time.Time, _description string, smartContractId string, categoryIds []int32, aliasYes string, aliasNo string, hexColorYes string, hexColorNo string) (*MarketAug, error) {
+func (marketsRepository *MarketsRepository) CreateMarket(marketId string, _net string, _imageUrl string, _statement string, closesAt time.Time, _description string, _rules string, smartContractId string, aliasYes string, aliasNo string, hexColorYes string, hexColorNo string) (*sqlc.Market, error) {
 	if marketsRepository.db == nil {
 		return nil, lib.ErrorLog("database not initialized")
 	}
@@ -159,6 +123,7 @@ func (marketsRepository *MarketsRepository) CreateMarket(marketId string, _net s
 	}
 
 	description := strings.TrimSpace(_description)
+	rules := strings.TrimSpace(_rules)
 
 	// OK
 	// Start a transaction
@@ -177,6 +142,7 @@ func (marketsRepository *MarketsRepository) CreateMarket(marketId string, _net s
 		SmartContractID: smartContractId,
 		ClosesAt:        closesAt,
 		Description:     description,
+		Rules:           sql.NullString{String: rules, Valid: rules != ""},
 		AliasYes:        sql.NullString{String: aliasYes, Valid: aliasYes != ""},
 		AliasNo:         sql.NullString{String: aliasNo, Valid: aliasNo != ""},
 		HexColorYes:     sql.NullString{String: hexColorYes, Valid: hexColorYes != ""},
@@ -187,29 +153,39 @@ func (marketsRepository *MarketsRepository) CreateMarket(marketId string, _net s
 		return nil, lib.ErrorLog("CreateMarket failed", "error", err, "marketId", marketId)
 	}
 
-	// And update the market_categories table:
-	// now associate the market with its categories in the market_categories table
-	if len(categoryIds) > 0 {
-		err = q.AssociateMarketCategoriesBatch(context.Background(), sqlc.AssociateMarketCategoriesBatchParams{
-			MarketID: marketUUID,
-			Column2:  categoryIds,
-		})
-		if err != nil {
-			tx.Rollback() // Rollback the transaction on error
-			return nil, lib.ErrorLog("AssociateMarketCategoriesBatch failed", "error", err, "marketId", marketId, "categoryIds", categoryIds)
-		}
-	}
-
-	// Commit the transaction
-	if err := tx.Commit(); err != nil {
-		return nil, lib.ErrorLog("failed to commit transaction", "error", err)
-	}
-
 	lib.Info("market created", "marketId", market.MarketID.String())
-	return &MarketAug{
-		Market:      market,
-		CategoryIds: categoryIds,
-	}, nil
+	return &market, nil
+}
+
+func (marketsRepository *MarketsRepository) PatchMarket(marketId string, imageUrl string, description string, rules string, aliasYes string, aliasNo string, hexColorYes string, hexColorNo string) (*sqlc.Market, error) {
+	if marketsRepository.db == nil {
+		return nil, lib.ErrorLog("database not initialized")
+	}
+
+	marketUUID, err := uuid.Parse(marketId)
+	if err != nil {
+		return nil, lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
+	}
+
+	imageUrl = strings.TrimSpace(imageUrl)
+	description = strings.TrimSpace(description)
+	rules = strings.TrimSpace(rules)
+	q := sqlc.New(marketsRepository.db)
+	market, err := q.PatchMarket(context.Background(), sqlc.PatchMarketParams{
+		MarketID: marketUUID,
+		Column2:  sql.NullString{String: imageUrl, Valid: imageUrl != ""},
+		Column3:  sql.NullString{String: description, Valid: description != ""},
+		Column4:  sql.NullString{String: rules, Valid: rules != ""},
+		Column5:  sql.NullString{String: aliasYes, Valid: aliasYes != ""},
+		Column6:  sql.NullString{String: aliasNo, Valid: aliasNo != ""},
+		Column7:  sql.NullString{String: hexColorYes, Valid: hexColorYes != ""},
+		Column8:  sql.NullString{String: hexColorNo, Valid: hexColorNo != ""},
+	})
+	if err != nil {
+		return nil, lib.ErrorLog("PatchMarket failed", "error", err, "marketId", marketId)
+	}
+
+	return &market, nil
 }
 
 func (marketsRepository *MarketsRepository) CountUnresolvedMarkets() (int64, error) {
@@ -226,7 +202,7 @@ func (marketsRepository *MarketsRepository) CountUnresolvedMarkets() (int64, err
 	return count, nil
 }
 
-func (marketsRepository *MarketsRepository) GetAllUnresolvedMarkets() ([]MarketAug, error) {
+func (marketsRepository *MarketsRepository) GetAllUnresolvedMarkets() ([]sqlc.Market, error) {
 	if marketsRepository.db == nil {
 		return nil, lib.ErrorLog("database not initialized")
 	}
@@ -237,27 +213,10 @@ func (marketsRepository *MarketsRepository) GetAllUnresolvedMarkets() ([]MarketA
 		return nil, lib.ErrorLog("GetAllUnresolvedMarkets failed", "error", err)
 	}
 
-	var marketAugs []MarketAug
-	for _, market := range markets {
-		categoryIds, err := q.GetCategoriesForMarket(context.Background(), market.MarketID)
-		if err != nil {
-			return nil, lib.ErrorLog("GetCategoriesForMarket failed", "error", err, "marketId", market.MarketID)
-		}
-		categoryIds32 := make([]int32, len(categoryIds))
-		for i, category := range categoryIds {
-			categoryIds32[i] = int32(category.ID)
-		}
-
-		marketAugs = append(marketAugs, MarketAug{
-			Market:      market,
-			CategoryIds: categoryIds32,
-		})
-	}
-
-	return marketAugs, nil
+	return markets, nil
 }
 
-func (marketsRepository *MarketsRepository) ToggleMarketPause(marketId string) (*MarketAug, error) {
+func (marketsRepository *MarketsRepository) ToggleMarketPause(marketId string) (*sqlc.Market, error) {
 	if marketsRepository.db == nil {
 		return nil, lib.ErrorLog("database not initialized")
 	}
@@ -273,22 +232,10 @@ func (marketsRepository *MarketsRepository) ToggleMarketPause(marketId string) (
 		return nil, lib.ErrorLog("ToggleMarketPause failed", "error", err, "marketId", marketId)
 	}
 
-	categoryIds, err := q.GetCategoriesForMarket(context.Background(), marketUUID)
-	if err != nil {
-		return nil, lib.ErrorLog("GetCategoriesForMarket failed", "error", err, "marketId", marketId)
-	}
-	categoryIds32 := make([]int32, len(categoryIds))
-	for i, category := range categoryIds {
-		categoryIds32[i] = int32(category.ID)
-	}
-
-	return &MarketAug{
-		Market:      market,
-		CategoryIds: categoryIds32,
-	}, nil
+	return &market, nil
 }
 
-func (marketsRepository *MarketsRepository) ToggleMarketSuspend(marketId string) (*MarketAug, error) {
+func (marketsRepository *MarketsRepository) ToggleMarketSuspend(marketId string) (*sqlc.Market, error) {
 	if marketsRepository.db == nil {
 		return nil, lib.ErrorLog("database not initialized")
 	}
@@ -304,22 +251,10 @@ func (marketsRepository *MarketsRepository) ToggleMarketSuspend(marketId string)
 		return nil, lib.ErrorLog("ToggleMarketSuspend failed", "error", err, "marketId", marketId)
 	}
 
-	categoryIds, err := q.GetCategoriesForMarket(context.Background(), marketUUID)
-	if err != nil {
-		return nil, lib.ErrorLog("GetCategoriesForMarket failed", "error", err, "marketId", marketId)
-	}
-	categoryIds32 := make([]int32, len(categoryIds))
-	for i, category := range categoryIds {
-		categoryIds32[i] = int32(category.ID)
-	}
-
-	return &MarketAug{
-		Market:      market,
-		CategoryIds: categoryIds32,
-	}, nil
+	return &market, nil
 }
 
-func (marketsRepository *MarketsRepository) ResolveMarket(marketId string, outcome bool) (bool, error) {
+func (marketsRepository *MarketsRepository) ResolveMarket(marketId string, outcome int32) (bool, error) {
 	if marketsRepository.db == nil {
 		return false, lib.ErrorLog("database not initialized")
 	}
@@ -332,7 +267,7 @@ func (marketsRepository *MarketsRepository) ResolveMarket(marketId string, outco
 	q := sqlc.New(marketsRepository.db)
 	err = q.ResolveMarket(context.Background(), sqlc.ResolveMarketParams{
 		MarketID: marketUUID,
-		Outcome:  sql.NullBool{Bool: outcome, Valid: true},
+		Outcome:  sql.NullInt32{Int32: outcome, Valid: true},
 	})
 	if err != nil {
 		return false, lib.ErrorLog("ResolveMarket failed", "error", err, "marketId", marketId)

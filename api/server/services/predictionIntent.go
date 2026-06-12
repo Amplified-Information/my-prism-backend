@@ -233,7 +233,8 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PrismPre
 
 		// get user position tokens balance for this market
 		// call: getUserTokens(uint128 marketId, address user)
-		nYesPositionTokens, nNoPositionTokens, err := pis.natsService.hederaService.GetUserPositionTokenBalance(*_networkSelected, req.MarketId, req.EvmAddress)
+		// nYesPositionTokens, nNoPositionTokens, err := pis.natsService.hederaService.GetUserPositionTokenBalanceOnChain(*_networkSelected, req.MarketId, req.EvmAddress)
+		nYesPositionTokens, nNoPositionTokens, err := pis.natsService.hederaService.GetUserPositionTokenBalanceFromDb(req.MarketId, req.EvmAddress)
 		if err != nil {
 			return "", lib.LogAndError(lib.LOG_ERROR, "failed to get user's position token balance: %v", err)
 		}

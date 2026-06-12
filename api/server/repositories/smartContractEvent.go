@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,6 +42,120 @@ func (scer *SmartContractEventRepository) InitDb() error {
 	}
 
 	lib.Info("repository connected", "repository", "SmartContractEventRepository")
+	return nil
+}
+
+/*
+Solidity: event DaoUpdated(address newDao)
+*/
+func (scer *SmartContractEventRepository) CreateDaoUpdatedEvent(net string, contractId string, timestampNano time.Time, txHash string, hostname string, md5uniq string, event map[string]interface{}) error {
+	if scer.db == nil {
+		return lib.ErrorLog("database not initialized")
+	}
+
+	// note: the event map contains string values - parse them safely - the event interface could change
+
+	newDao, _ := event["newDao"].(string)
+
+	params := sqlc.CreateDaoUpdatedEventParams{
+		Net:             net,
+		SmartContractID: contractId,
+		TimestampNano:   timestampNano,
+		TxHash:          txHash,
+		Hostname:        hostname,
+		Md5Uniq:         md5uniq,
+		// args:
+		NewDaoAddress: newDao,
+	}
+
+	q := sqlc.New(scer.db)
+	_, err := q.CreateDaoUpdatedEvent(context.Background(), params)
+	if err != nil {
+		return lib.ErrorLog("EventDaoUpdated failed", "error", err, "txId", txHash, "newDao", newDao)
+	}
+
+	lib.Info("EventDaoUpdated", "txId", txHash, "newDao", newDao)
+	return nil
+}
+
+/*
+Solidity: event MarketResolved(uint128 marketId, uint8 outcome);
+*/
+func (scer *SmartContractEventRepository) CreateMarketResolvedEvent(net string, contractId string, timestampNano time.Time, txHash string, hostname string, md5uniq string, event map[string]interface{}) error {
+	if scer.db == nil {
+		return lib.ErrorLog("database not initialized")
+	}
+
+	// note: the event map contains string values - parse them safely - the event interface could change
+
+	marketIdBigInt, ok := new(big.Int).SetString(fmt.Sprintf("%v", event["marketId"]), 10)
+	if !ok {
+		return lib.ErrorLog("failed to parse marketId from event", "event", event)
+	}
+	marketID, err := lib.Bigint_to_uuid7(marketIdBigInt)
+	if err != nil {
+		return lib.ErrorLog("failed to convert marketId to UUID7", "event", event)
+	}
+
+	outcomeStr, _ := event["outcome"].(string)
+	outcomeInt, err := strconv.Atoi(outcomeStr)
+	if err != nil {
+		return lib.ErrorLog("failed to parse outcome from event", "event", event)
+	}
+	outcome := int32(outcomeInt)
+
+	params := sqlc.CreateMarketResolvedEventParams{
+		Net:             net,
+		SmartContractID: contractId,
+		TimestampNano:   timestampNano,
+		TxHash:          txHash,
+		Hostname:        hostname,
+		Md5Uniq:         md5uniq,
+		// args:
+		MarketID: marketID,
+		Outcome:  sql.NullInt32{Int32: outcome, Valid: true},
+	}
+
+	q := sqlc.New(scer.db)
+	_, err = q.CreateMarketResolvedEvent(context.Background(), params)
+	if err != nil {
+		return lib.ErrorLog("EventMarketResolved failed", "error", err, "txId", txHash, "marketId", marketID, "outcome", outcome)
+	}
+
+	lib.Info("EventMarketResolved", "txId", txHash, "marketId", marketID, "outcome", outcome)
+	return nil
+}
+
+/*
+Solidity: event OracleUpdated(address newOracle)
+*/
+func (scer *SmartContractEventRepository) CreateOracleUpdatedEvent(net string, contractId string, timestampNano time.Time, txHash string, hostname string, md5uniq string, event map[string]interface{}) error {
+	if scer.db == nil {
+		return lib.ErrorLog("database not initialized")
+	}
+
+	// note: the event map contains string values - parse them safely - the event interface could change
+
+	newOracle, _ := event["newOracle"].(string)
+
+	params := sqlc.CreateOracleUpdatedEventParams{
+		Net:             net,
+		SmartContractID: contractId,
+		TimestampNano:   timestampNano,
+		TxHash:          txHash,
+		Hostname:        hostname,
+		Md5Uniq:         md5uniq,
+		// args:
+		NewOracleAddress: newOracle,
+	}
+
+	q := sqlc.New(scer.db)
+	_, err := q.CreateOracleUpdatedEvent(context.Background(), params)
+	if err != nil {
+		return lib.ErrorLog("EventOracleUpdated failed", "error", err, "txId", txHash, "newOracle", newOracle)
+	}
+
+	lib.Info("EventOracleUpdated", "txId", txHash, "newOracle", newOracle)
 	return nil
 }
 
@@ -83,7 +198,7 @@ func (scer *SmartContractEventRepository) CreatePositionTokensPurchasedEvent(net
 	primarySecondaryStr, _ := event["primarySecondary"].(string)
 	primarySecondary := strings.ToLower(primarySecondaryStr) == "true"
 
-	params := sqlc.CreatePositionTokensPurchasedParams{
+	params := sqlc.CreatePositionTokensPurchasedEventParams{
 		Net:             net,
 		SmartContractID: contractId,
 		TimestampNano:   timestampNano,
@@ -99,7 +214,7 @@ func (scer *SmartContractEventRepository) CreatePositionTokensPurchasedEvent(net
 	}
 
 	q := sqlc.New(scer.db)
-	_, err = q.CreatePositionTokensPurchased(context.Background(), params)
+	_, err = q.CreatePositionTokensPurchasedEvent(context.Background(), params)
 	if err != nil {
 		return lib.ErrorLog("EventPositionTokensPurchased failed", "error", err, "txId", txHash, "marketId", marketID, "buyer", buyer, "collateralUsdFloat64", collateralUsdFloat64, "qtyScaledFloat64", qtyScaledFloat64, "primarySecondary", primarySecondary)
 	}
@@ -109,28 +224,23 @@ func (scer *SmartContractEventRepository) CreatePositionTokensPurchasedEvent(net
 }
 
 /*
-Solidity: event MarketResolved(uint128 marketId, bool outcome);
+Solidity: event RakeUpdated(uint256 newRakePercentScaled100);
 */
-func (scer *SmartContractEventRepository) CreateMarketResolvedEvent(net string, contractId string, timestampNano time.Time, txHash string, hostname string, md5uniq string, event map[string]interface{}) error {
+func (scer *SmartContractEventRepository) CreateRakeUpdatedEvent(net string, contractId string, timestampNano time.Time, txHash string, hostname string, md5uniq string, event map[string]interface{}) error {
 	if scer.db == nil {
 		return lib.ErrorLog("database not initialized")
 	}
 
 	// note: the event map contains string values - parse them safely - the event interface could change
 
-	marketIdBigInt, ok := new(big.Int).SetString(fmt.Sprintf("%v", event["marketId"]), 10)
-	if !ok {
-		return lib.ErrorLog("failed to parse marketId from event", "event", event)
-	}
-	marketID, err := lib.Bigint_to_uuid7(marketIdBigInt)
-	if err != nil {
-		return lib.ErrorLog("failed to convert marketId to UUID7", "event", event)
-	}
+	newRakePercentScaled100Str, _ := event["newRakePercentScaled100"].(string)
+	// newRakePercentScaled100Big, ok := new(big.Int).SetString(newRakePercentScaled100Str, 10)
+	// if !ok {
+	// 	return lib.ErrorLog("failed to parse newRakePercentScaled100 from event", "event", event)
+	// }
+	// newRakePercentScaled100Float64, _ := newRakePercentScaled100Big.Float64()
 
-	outcomeStr, _ := event["outcome"].(string)
-	outcome := strings.ToLower(outcomeStr) == "true"
-
-	params := sqlc.CreateMarketResolvedParams{
+	params := sqlc.CreateRakeUpdatedEventParams{
 		Net:             net,
 		SmartContractID: contractId,
 		TimestampNano:   timestampNano,
@@ -138,17 +248,49 @@ func (scer *SmartContractEventRepository) CreateMarketResolvedEvent(net string, 
 		Hostname:        hostname,
 		Md5Uniq:         md5uniq,
 		// args:
-		MarketID: marketID,
-		Outcome:  outcome,
+		NewRakePercentScaled100: newRakePercentScaled100Str, // yes, sql NUMERIC is a string to avoid precision loss
 	}
 
 	q := sqlc.New(scer.db)
-	_, err = q.CreateMarketResolved(context.Background(), params)
+	_, err := q.CreateRakeUpdatedEvent(context.Background(), params)
 	if err != nil {
-		return lib.ErrorLog("EventMarketResolved failed", "error", err, "txId", txHash, "marketId", marketID, "outcome", outcome)
+		return lib.ErrorLog("EventRakeUpdated failed", "error", err, "txId", txHash, "newRakePercentScaled100Str", newRakePercentScaled100Str)
 	}
 
-	lib.Info("EventMarketResolved", "txId", txHash, "marketId", marketID, "outcome", outcome)
+	lib.Info("EventRakeUpdated", "txId", txHash, "newRakePercentScaled100Str", newRakePercentScaled100Str)
+	return nil
+}
+
+/*
+Solidity: event TokenAssociated(address indexed token);
+*/
+func (scer *SmartContractEventRepository) CreateTokenAssociatedEvent(net string, contractId string, timestampNano time.Time, txHash string, hostname string, md5uniq string, event map[string]interface{}) error {
+	if scer.db == nil {
+		return lib.ErrorLog("database not initialized")
+	}
+
+	// note: the event map contains string values - parse them safely - the event interface could change
+
+	token, _ := event["token"].(string)
+
+	params := sqlc.CreateTokenAssociatedEventParams{
+		Net:             net,
+		SmartContractID: contractId,
+		TimestampNano:   timestampNano,
+		TxHash:          txHash,
+		Hostname:        hostname,
+		Md5Uniq:         md5uniq,
+		// args:
+		Token: token,
+	}
+
+	q := sqlc.New(scer.db)
+	_, err := q.CreateTokenAssociatedEvent(context.Background(), params)
+	if err != nil {
+		return lib.ErrorLog("EventTokenAssociated failed", "error", err, "txId", txHash, "token", token)
+	}
+
+	lib.Info("EventTokenAssociated", "txId", txHash, "token", token)
 	return nil
 }
 
@@ -178,7 +320,7 @@ func (scer *SmartContractEventRepository) CreateWinningsRedeemedEvent(net string
 	}
 	amountFloat64, _ := amountBig.Float64()
 
-	params := sqlc.CreateWinningsRedeemedParams{
+	params := sqlc.CreateWinningsRedeemedEventParams{
 		Net:             net,
 		SmartContractID: contractId,
 		TimestampNano:   timestampNano,
@@ -192,7 +334,7 @@ func (scer *SmartContractEventRepository) CreateWinningsRedeemedEvent(net string
 	}
 
 	q := sqlc.New(scer.db)
-	_, err = q.CreateWinningsRedeemed(context.Background(), params)
+	_, err = q.CreateWinningsRedeemedEvent(context.Background(), params)
 	if err != nil {
 		return nil, nil, lib.ErrorLog("EventWinningsRedeemed failed", "error", err, "txId", txHash, "marketIDuuidStr", marketIDuuidStr, "winner", winner, "amountFloat64", amountFloat64)
 	}
@@ -200,16 +342,6 @@ func (scer *SmartContractEventRepository) CreateWinningsRedeemedEvent(net string
 	lib.Info("EventWinningsRedeemed", "txId", txHash, "marketIDuuidStr", marketIDuuidStr, "winner", winner, "amountFloat64", amountFloat64)
 
 	return &marketIDuuidStr, &winner, nil
-}
-
-/*
-Solidity: event TokenAssociated(address indexed token);
-*/
-func (scer *SmartContractEventRepository) CreateTokenAssociatedEvent(net string, contractId string, timestampNano time.Time, txHash string, hostname string, md5uniq string, event map[string]interface{}) error {
-	// TODO
-	// note: the event map contains string values - parse them safely - the event interface could change
-
-	return nil
 }
 
 func (scer *SmartContractEventRepository) GetMarketResolvedEventByMarketId(marketId string) (*sqlc.EventMarketResolved, error) {

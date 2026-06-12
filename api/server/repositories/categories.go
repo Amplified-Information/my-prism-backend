@@ -147,3 +147,27 @@ func (categoriesRepository *CategoriesRepository) SetCategoriesForMarket(marketI
 
 	return categoryIds, nil
 }
+
+func (categoriesRepository *CategoriesRepository) GetCategoryIdsByMarketId(marketId string) ([]int32, error) {
+	if categoriesRepository.db == nil {
+		return nil, lib.ErrorLog("database not initialized")
+	}
+
+	marketUUID, err := uuid.Parse(marketId)
+	if err != nil {
+		return nil, lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
+	}
+
+	q := sqlc.New(categoriesRepository.db)
+	categories, err := q.GetCategoriesForMarket(context.Background(), marketUUID)
+	if err != nil {
+		return nil, lib.ErrorLog("GetCategoryIdsByMarketId failed", "error", err, "marketId", marketId)
+	}
+
+	var categoryIds []int32
+	for _, category := range categories {
+		categoryIds = append(categoryIds, category.ID)
+	}
+
+	return categoryIds, nil
+}
