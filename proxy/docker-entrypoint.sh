@@ -3,7 +3,8 @@ set -e
 
 REQUIRED_VARS="ENVOY_HOST_CLOB ENVOY_HOST_API ENVOY_HOST_WEB ENVOY_HOST_WEB_ADMIN ENVOY_HOST_WEB_LP"
 for VAR in $REQUIRED_VARS; do
-  if [ -z "$(eval echo \"\${$VAR}\")" ]; then
+  eval "VAR_IS_SET=\${$VAR+x}"
+  if [ -z "$VAR_IS_SET" ]; then
     echo "Error: $VAR environment variable is not set."
     exit 1
   fi

@@ -22,6 +22,7 @@ contract PrismTest is Test {
         prism = new PrismTestHelper(address(usdc));
         require(usdc.transfer(user1, 100_000e6), "Transfer to user1 failed");
         require(usdc.transfer(user2, 100_000e6), "Transfer to user2 failed");
+        usdc.approve(address(prism), type(uint256).max);
         vm.prank(user1); usdc.approve(address(prism), type(uint256).max);
         vm.prank(user2); usdc.approve(address(prism), type(uint256).max);
     }
@@ -52,10 +53,9 @@ contract PrismTest is Test {
     function testCreateNewMarket() public {
         uint128 marketId = 1;
         string memory statement = "Will ETH > $5k?";
-        vm.prank(user1);
         uint256 allowance = prism.createNewMarket(marketId, statement);
-        // The returned allowance is the user's allowance after the fee is transferred, which is type(uint256).max - fee
-        assertEq(allowance, usdc.allowance(user1, address(prism)));
+        // Returned allowance tracks the owner's allowance after transferFrom in createNewMarket.
+        assertEq(allowance, usdc.allowance(owner, address(prism)));
         assertEq(prism.statements(marketId), statement);
         assertEq(prism.resolutionTimes(marketId), 0);
         assertEq(prism.totalCollateralUsd(marketId), 0);
@@ -63,9 +63,7 @@ contract PrismTest is Test {
     function testCreateNewMarketFailsIfExists() public {
         uint128 marketId = 2;
         string memory statement = "Will BTC > $100k?";
-        vm.prank(user1);
         prism.createNewMarket(marketId, statement);
-        vm.prank(user1);
         vm.expectRevert();
         prism.createNewMarket(marketId, statement);
     }
@@ -82,7 +80,6 @@ contract PrismTest is Test {
     function posColToksOnBehalfAtomic() public {
         uint128 marketId = 3;
         string memory statement = "Will SOL > $500?";
-        vm.prank(user1);
         prism.createNewMarket(marketId, statement);
         // This will revert due to signature and precompile checks, but onlyOwner is enforced
         vm.prank(user1);
@@ -94,7 +91,6 @@ contract PrismTest is Test {
     function testResolveMarketOnlyOracle() public {
         uint128 marketId = 4;
         string memory statement = "Will ADA > $10?";
-        vm.prank(user1);
         prism.createNewMarket(marketId, statement);
         // Only owner/oracle can resolve
         vm.prank(user1);
@@ -142,7 +138,6 @@ contract PrismTest is Test {
     }
 
     function _createAndFundMarket(uint128 marketId) internal {
-        vm.prank(user1);
         prism.createNewMarket(marketId, "Test market");
     }
 
@@ -422,7 +417,6 @@ contract PrismTest is Test {
 
     function testSetOracleTransfersResolvePrivilege() public {
         uint128 marketId = 16;
-        vm.prank(user1);
         prism.createNewMarket(marketId, "Oracle role market");
 
         prism.setOracle(user1);
@@ -440,7 +434,6 @@ contract PrismTest is Test {
     // --- redeem with rake ---
 
     function _setupResolvedMarket(uint128 marketId, bool yesWins, address winner, uint256 qty) internal {
-        vm.prank(user1);
         prism.createNewMarket(marketId, "Rake test market");
         prism.setTokensForTest(marketId, winner, yesWins ? qty : 0, yesWins ? 0 : qty);
         usdc.transfer(address(prism), qty);
@@ -530,7 +523,6 @@ contract PrismTest is Test {
 
     function testRedeemNotResolvedReverts() public {
         uint128 marketId = 24;
-        vm.prank(user1);
         prism.createNewMarket(marketId, "Unresolved market");
         prism.setTokensForTest(marketId, user1, 100e6, 0);
 
@@ -541,7 +533,6 @@ contract PrismTest is Test {
 
     function testRedeemNoWinningTokensReverts() public {
         uint128 marketId = 25;
-        vm.prank(user1);
         prism.createNewMarket(marketId, "Empty balance market");
         usdc.transfer(address(prism), 10e6);
         prism.setTotalCollateralForTest(marketId, 10e6);
@@ -569,7 +560,6 @@ contract PrismTest is Test {
         uint128 marketId = 30;
         uint256 collateral = 25e6;
 
-        vm.prank(user1);
         prism.createNewMarket(marketId, "Claim collateral market");
         usdc.transfer(address(prism), collateral);
         prism.setTotalCollateralForTest(marketId, collateral);
@@ -590,7 +580,6 @@ contract PrismTest is Test {
         uint128 marketId = 31;
         uint256 collateral = 10e6;
 
-        vm.prank(user1);
         prism.createNewMarket(marketId, "Too early market");
         usdc.transfer(address(prism), collateral);
         prism.setTotalCollateralForTest(marketId, collateral);
@@ -605,7 +594,6 @@ contract PrismTest is Test {
 
     function testClaimCollateralAfterOneYearNotResolvedReverts() public {
         uint128 marketId = 32;
-        vm.prank(user1);
         prism.createNewMarket(marketId, "Unresolved claim market");
 
         vm.expectRevert("Not resolved yet");
@@ -614,7 +602,6 @@ contract PrismTest is Test {
 
     function testClaimCollateralAfterOneYearNoCollateralReverts() public {
         uint128 marketId = 33;
-        vm.prank(user1);
         prism.createNewMarket(marketId, "No collateral market");
         prism.resolveMarket(marketId, true);
 
@@ -629,7 +616,6 @@ contract PrismTest is Test {
         uint128 marketId = 34;
         uint256 collateral = 10e6;
 
-        vm.prank(user1);
         prism.createNewMarket(marketId, "Non-owner claim market");
         usdc.transfer(address(prism), collateral);
         prism.setTotalCollateralForTest(marketId, collateral);

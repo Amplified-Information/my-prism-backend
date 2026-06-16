@@ -6,6 +6,8 @@ import (
 	"api/server/lib"
 	repositories "api/server/repositories"
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -72,7 +74,11 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 
 		market, err := ps.marketsRepository.GetMarketById(userPosition.MarketID.String(), false /* don't include suspended or paused markets*/)
 		if err != nil {
-			lib.Log(lib.LOG_WARN, "skipping market %s: failed to get market: %v", userPosition.MarketID.String(), err)
+			if errors.Is(err, sql.ErrNoRows) {
+				lib.Log(lib.LOG_DEBUG, "skipping market %s: market not found", userPosition.MarketID.String())
+			} else {
+				lib.Log(lib.LOG_WARN, "skipping market %s: failed to get market: %v", userPosition.MarketID.String(), err)
+			}
 			continue // skip to next userPosition
 		}
 
@@ -85,11 +91,6 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 			redeemedAt = eventWinningsRedeemed.CreatedAt.Time.String()
 		}
 
-		costBasisYes, costBasisNo, err := ps.positionsRepository.GetCostBasisForUser(userPosition.MarketID, userPosition.EvmAddress)
-		if err != nil {
-			lib.Log(lib.LOG_WARN, "MarketID=%s: failed to get cost basis for user %s: %v", userPosition.MarketID.String(), userPosition.EvmAddress, err)
-		}
-
 		position := &pb_api.Position{
 			MarketId:   userPosition.MarketID.String(),
 			EvmAddress: userPosition.EvmAddress,
@@ -99,14 +100,44 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 			CreatedAt:  userPosition.CreatedAt.Format(time.RFC3339),
 		}
 
+		var avgPriceYesUsd *float64
+		var avgPriceNoUsd *float64
+		var costBasisYesUsd *float64
+		var costBasisNoUsd *float64
+		var costBasisAsOf *string
+
+		if userPosition.NYes > 0 {
+			avgYes := userPosition.CostBasisPriceYesUsd
+			costYes := float64(userPosition.NYes) * avgYes
+			avgPriceYesUsd = &avgYes
+			costBasisYesUsd = &costYes
+		}
+		if userPosition.NNo > 0 {
+			avgNo := userPosition.CostBasisPriceNoUsd
+			costNo := float64(userPosition.NNo) * avgNo
+			avgPriceNoUsd = &avgNo
+			costBasisNoUsd = &costNo
+		}
+		if !userPosition.UpdatedAt.IsZero() {
+			ts := userPosition.UpdatedAt.UTC().Format(time.RFC3339)
+			costBasisAsOf = &ts
+		}
+
+		realized := userPosition.RealizedPnlUsd
+		realizedPnlUsd := &realized
+
 		elem := &pb_api.PositionInfo{
-			Position:     position,
-			PriceUsd:     priceUsd,
-			IsPaused:     market.IsPaused,
-			ResolvedAt:   market.ResolvedAt.Time.String(),
-			RedeemedAt:   redeemedAt,
-			CostBasisYes: costBasisYes,
-			CostBasisNo:  costBasisNo,
+			Position:        position,
+			PriceUsd:        priceUsd,
+			IsPaused:        market.IsPaused,
+			ResolvedAt:      market.ResolvedAt.Time.String(),
+			RedeemedAt:      redeemedAt,
+			AvgPriceYesUsd:  avgPriceYesUsd,
+			AvgPriceNoUsd:   avgPriceNoUsd,
+			CostBasisYesUsd: costBasisYesUsd,
+			CostBasisNoUsd:  costBasisNoUsd,
+			CostBasisAsOf:   costBasisAsOf,
+			RealizedPnlUsd:  realizedPnlUsd,
 		}
 
 		response.Positions[userPosition.MarketID.String()] = elem

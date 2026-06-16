@@ -213,8 +213,14 @@ impl ClobPublic for ClobService {
         match snapshot {
             Ok(snapshot) => Ok(Response::new(snapshot)),
             Err(e) => {
-                log::error!("Failed to get book snapshot: marketId={} {}", inner.market_id, e);
-                Err(Status::internal(e.to_string()))
+                let message = e.to_string();
+                if message == "Market not found" || message.starts_with("Market not found ") {
+                    log::debug!("Book snapshot requested for missing marketId={}", inner.market_id);
+                    Err(Status::not_found(message))
+                } else {
+                    log::error!("Failed to get book snapshot: marketId={} {}", inner.market_id, message);
+                    Err(Status::internal(message))
+                }
             }
         }
     }
@@ -234,11 +240,19 @@ impl ClobPublic for ClobService {
                 let snapshot = order_book_service.get_book(&inner.market_id, inner.depth as usize).await;
 
                 let result = snapshot.map_err(|e| {
-                     log::error!("Failed to get book snapshot: marketId={} {}", inner.market_id, e);
-                    Status::internal(e.to_string())
+                    let message = e.to_string();
+                    if message == "Market not found" || message.starts_with("Market not found ") {
+                        log::debug!("Book stream requested for missing marketId={}", inner.market_id);
+                        Status::not_found(message)
+                    } else {
+                        log::error!("Failed to get book snapshot: marketId={} {}", inner.market_id, message);
+                        Status::internal(message)
+                    }
                 });
 
-                if tx.send(result).await.is_err() {
+                let should_stop = result.as_ref().is_err_and(|status| status.code() == tonic::Code::NotFound);
+
+                if tx.send(result).await.is_err() || should_stop {
                     break;
                 }
 

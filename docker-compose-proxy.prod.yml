@@ -1,5 +1,5 @@
 services:
   proxy:
-    image: ghcr.io/prismmarketlabs/proxy:0.1.36
+    image: ghcr.io/prismmarketlabs/proxy:0.1.38
   modsec:
     image: ghcr.io/prismmarketlabs/modsec:0.0.3

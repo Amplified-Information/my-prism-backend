@@ -156,7 +156,7 @@ func (s *server) TriggerRecreateClob(ctx context.Context, req *pb_api.Empty) (*p
 }
 
 func (s *server) CancelPredictionIntent(ctx context.Context, req *pb_api.CancelOrderRequest) (*pb_api.StdResponse, error) {
-	cancelResp, err := s.predictionIntentsService.CancelPredictionIntent(req.MarketId, req.TxId)
+	cancelResp, err := s.predictionIntentsService.CancelPredictionIntent(req.Net, req.MarketId, req.TxId, req.AccountId, req.Sig, req.PublicKey, req.KeyType)
 	return cancelResp, err
 }
 

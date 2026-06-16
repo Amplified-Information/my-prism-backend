@@ -158,13 +158,20 @@ message Position {
 }
 
 message PositionInfo {
-  Position position = 1         [json_name = "position"];
-  float price_usd = 2           [json_name = "priceUsd"];
-  bool is_paused = 3            [json_name = "isPaused"];
-  string resolved_at = 4        [json_name = "resolvedAt"];
-  string redeemed_at = 5        [json_name = "redeemedAt"];
-  double cost_basis_yes = 6      [json_name = "costBasisYes"];
-  double cost_basis_no = 7       [json_name = "costBasisNo"];
+  Position position = 1                     [json_name = "position"];
+  float price_usd = 2                       [json_name = "priceUsd"];
+  bool is_paused = 3                        [json_name = "isPaused"];
+  string resolved_at = 4                    [json_name = "resolvedAt"];
+  string redeemed_at = 5                    [json_name = "redeemedAt"];
+
+  // Cost basis
+  // P&L fields are optional so the API can distinguish "not yet backfilled" from a legitimate zero value.
+  optional double avg_price_yes_usd = 6     [json_name = "avgPriceYesUsd"];   // weighted-avg entry, YES
+  optional double avg_price_no_usd = 7      [json_name = "avgPriceNoUsd"];    // weighted-avg entry, NO
+  optional double cost_basis_yes_usd = 8    [json_name = "costBasisYesUsd"];  // = qtyYes * avgPriceYes + unallocated fees
+  optional double cost_basis_no_usd = 9     [json_name = "costBasisNoUsd"];   // = qtyNo * avgPriceNo + unallocated fees
+  optional double realized_pnl_usd = 10     [json_name = "realizedPnlUsd"];   // lifetime, both sides combined for this market
+  optional string cost_basis_as_of = 11     [json_name = "costBasisAsOf"];    // RFC3339 timestamp of the last fill applied
 }
 
 message PrismPoints {
@@ -257,6 +264,12 @@ message CreateCommentRequest {
 message CancelOrderRequest {
   string market_id = 1      [json_name = "marketId",  (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
   string tx_id = 2          [json_name = "txId",      (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
+  // fields needed for sig verification:
+  string net = 3            [json_name = "net",       (validate.rules).string = {in: ["mainnet", "testnet", "previewnet"]} /* Hedera network */];
+  string account_id = 4     [json_name = "accountId", (validate.rules).string = {pattern: "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$"} /* Hedera account ID (no leading zeros) */];
+  string sig = 5            [json_name = "sig",       (validate.rules).string = {pattern: "^[A-Za-z0-9+/]{20,100}={0,2}$"} /* base64-encoded signature (URL-safe base64 without padding, min 20 chars, max 100 chars) */];
+  string public_key = 6     [json_name = "publicKey", (validate.rules).string = {pattern: "^(04|03|02)[0-9a-fA-F]{32,256}$"} /* uncompressed (04...) or compressed (02... or 03...) public key (ed25519, ecdsa, etc.) in hex format */];
+  uint32 key_type = 7       [json_name = "keyType",   (validate.rules).uint32 = {in: [1, 2]} /* 1 = ed25519, 2 = ecdsa_secp256k1 */];
 }
 
 

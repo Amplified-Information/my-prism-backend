@@ -155,7 +155,7 @@ func (cs *CronKickOutUnfundedService) validateAndKickoutPrimaryOrders(primaryOrd
 		lib.Log(lib.LOG_INFO, "[primary] sumTotalOfAllPrimaryIntents: %f", sumTotalOfAllPrimaryIntents)
 
 		if sumTotalOfAllPrimaryIntents > usdcBalance {
-			_, err := cs.predictionIntentsService.CancelPredictionIntent(market.MarketID.String(), pi.TxID.String())
+			_, err := cs.predictionIntentsService.CancelPredictionIntentNoSigCheck(market.MarketID.String(), pi.TxID.String())
 			if err != nil {
 				lib.Log(lib.LOG_ERROR, "Failed to cancel primary prediction intent txId %s for market ID %s and account ID %s: %v", pi.TxID.String(), market.MarketID, accountIdStr, err)
 				continue
@@ -204,7 +204,7 @@ func (cs *CronKickOutUnfundedService) validateAndKickoutSecondaryOrders(secondar
 	if sumYesRequired > yesTokens {
 		for _, pi := range secondaryOrders {
 			if pi.PriceUsd < 0 {
-				_, err := cs.predictionIntentsService.CancelPredictionIntent(market.MarketID.String(), pi.TxID.String())
+				_, err := cs.predictionIntentsService.CancelPredictionIntentNoSigCheck(market.MarketID.String(), pi.TxID.String())
 				if err != nil {
 					lib.Log(lib.LOG_ERROR, "Failed to cancel secondary YES prediction intent txId %s: %v", pi.TxID.String(), err)
 					continue
@@ -222,7 +222,7 @@ func (cs *CronKickOutUnfundedService) validateAndKickoutSecondaryOrders(secondar
 	if sumNoRequired > noTokens {
 		for _, pi := range secondaryOrders {
 			if pi.PriceUsd > 0 {
-				_, err := cs.predictionIntentsService.CancelPredictionIntent(market.MarketID.String(), pi.TxID.String())
+				_, err := cs.predictionIntentsService.CancelPredictionIntentNoSigCheck(market.MarketID.String(), pi.TxID.String())
 				if err != nil {
 					lib.Log(lib.LOG_ERROR, "Failed to cancel secondary NO prediction intent txId %s: %v", pi.TxID.String(), err)
 					continue

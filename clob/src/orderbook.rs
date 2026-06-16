@@ -85,7 +85,7 @@ impl OrderBookService {
 
         let order_books: tokio::sync::RwLockReadGuard<'_, HashMap<String, Arc<RwLock<OrderBook>>>> = self.order_books.read().await;
         // let poly_id = net.to_string() + ":" + market_id;   // <hederaNet>:<UUID>
-        if let Some(order_book) = order_books.get(&market_id.to_string()) {
+        if let Some(order_book) = order_books.get(&market_id.to_lowercase()) {
             let book = order_book.read().await;
             Ok(book.snapshot(depth))
         } else {

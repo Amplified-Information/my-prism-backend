@@ -1,6 +1,6 @@
 services:
   api:
-    image: ghcr.io/prismmarketlabs/api:0.6.1
+    image: ghcr.io/prismmarketlabs/api:0.6.5
     restart: always
     ports:
       - "8888:8888"
@@ -68,7 +68,7 @@ services:
       SMTP_PWORD: ${SMTP_PWORD}
       JWT_SECRET: ${JWT_SECRET}
   clob:
-    image: ghcr.io/prismmarketlabs/clob:0.3.6
+    image: ghcr.io/prismmarketlabs/clob:0.3.7
     restart: always
     depends_on:
       - api
@@ -88,7 +88,7 @@ services:
       NATS_HOST: ${NATS_HOST}
       NATS_PORT: ${NATS_PORT}
   web:
-    image: ghcr.io/prismmarketlabs/web:0.7.31
+    image: ghcr.io/prismmarketlabs/web:0.7.37
     restart: always
     ports:
       - "5173:80"
@@ -103,7 +103,7 @@ services:
       HTPASSWD: ${HTPASSWD}
       ROBOTS_TAG_VALUE: ${ROBOTS_TAG_VALUE}
   web.admin:
-    image: ghcr.io/prismmarketlabs/web.admin:0.1.20
+    image: ghcr.io/prismmarketlabs/web.admin:0.1.22
     restart: always
     ports:
       - "8080:80"

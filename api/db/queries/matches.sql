@@ -37,7 +37,7 @@ FROM matches m
 JOIN prediction_intents pi1 ON m.tx_id1 = pi1.tx_id
 JOIN prediction_intents pi2 ON m.tx_id2 = pi2.tx_id
 JOIN markets mk ON m.market_id = mk.market_id
-WHERE mk.resolved_at IS NULL AND mk.is_suspended IS FALSE AND mk.is_paused IS FALSE AND mk.closes_at > CURRENT_TIMESTAMP
+WHERE mk.resolved_at IS NULL AND mk.deleted_at IS NULL AND mk.is_suspended IS FALSE AND mk.is_paused IS FALSE AND mk.closes_at > CURRENT_TIMESTAMP
 AND m.created_at >= $1 AND m.created_at <= $2;
 
 

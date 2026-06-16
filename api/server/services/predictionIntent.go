@@ -347,11 +347,65 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PrismPre
 	return fmt.Sprintf("Processed input for user %s", req.AccountId), nil
 }
 
-func (pis *PredictionIntentsService) CancelPredictionIntent(marketId string, txId string) (*pb_api.StdResponse, error) {
+func (pis *PredictionIntentsService) CancelPredictionIntent(net string, marketId string, txId string, accountIdStr string, sig string, publicKeyStr string, keyType uint32) (*pb_api.StdResponse, error) {
 	// guards
 
-	// OK
+	// net is validated by protobuf
 
+	// marketId must be a valid UUIDv7
+	_, err := uuid.Parse(marketId)
+	if err != nil {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "invalid marketId uuid: %v", err)
+	}
+
+	// txId must be a valid UUIDv7
+	_, err = uuid.Parse(txId)
+	if err != nil {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "invalid txId uuid: %v", err)
+	}
+
+	// accountId must be a valid Hedera account ID
+	accountId, err := hiero.AccountIDFromString(accountIdStr)
+	if err != nil {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "invalid accountId format: %v", err)
+	}
+
+	// First look up the Hedera accountId against the mirror node
+	publicKeyLookedUp, keyTypeLookedUp, err := lib.GetPublicKey(accountId, net)
+	if err != nil {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get public key: %v", err)
+	}
+	lib.Log(lib.LOG_INFO, "Mirror node response for account %s on network %s: %s", accountId, net, publicKeyLookedUp.String())
+
+	// keyType sent from the front-end (no 0x prefix) must match the keyType looked up on the mirror node
+	if !lib.IsValidKeyType(keyType) {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "keyType mismatch: expected %d, got %d", keyTypeLookedUp, keyType)
+	}
+
+	// public key sent from the front-end (no 0x prefix) must match the public key looked up on the mirror node
+	publicKey, err := hiero.PublicKeyFromString(publicKeyStr)
+	if err != nil {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to parse public key from string: %v", err)
+	}
+	if publicKeyLookedUp.String() != publicKey.String() || publicKey.String() == "" {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "public key mismatch: expected %s, got %s", publicKeyLookedUp.String(), publicKey.String())
+	}
+
+	// now validate the signature is correct:
+	// sig = sign(txId, privateKey)
+	// isValidSig = verify(publicKey, txId, sig)
+	isValidSig, err := lib.VerifySig(&publicKey, txId, sig)
+	if err != nil {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to verify signature: %v", err)
+	}
+	if !isValidSig {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "invalid signature for account %s", accountIdStr)
+	}
+
+	return pis.CancelPredictionIntentNoSigCheck(marketId, txId)
+}
+
+func (pis *PredictionIntentsService) CancelPredictionIntentNoSigCheck(marketId string, txId string) (*pb_api.StdResponse, error) {
 	// 1. Mark the position as cancelled in the database
 	// - prediction_intents: set the cancelled_at timestamp
 	// 2. Remove the order from the CLOB

@@ -1,56 +1,40 @@
 # smart contract
 
-## contract parameters
-
-collateral token - USDC, USDC[hts], HBAR, etc.
-
-position tokens - ERC20-style or hts native
-
-single oracle vs multiple oracles - simple shard tokens (ERC-20) or gnosis conditional token
-
-etc.
-
-## Comparison Table
-
-| Collateral token  | Yes/No share token | Comments |
-|-------------------|--------------------|--------------------|
-| USDC      | ERC20-style  | Simplest |
-| USDC[hts] | ERC20-style  | USDC[hts] has lower liquidity |
-| USDC      | hts.FUNGIBLE | high performance. token association UX issues. Can take advantage of hts "royalty" feature... |
-| USDC[hts] | hts.FUNGIBLE | high performance. token association UX issues. Can take advantage of hts "royalty" feature... |
-| USDC      | hts.NFT      | high performance. token association UX issues. Can take advantage of hts "royalty" feature... |
-| USDC[hts] | hts.NFT      | high performance. token association UX issues. Can take advantage of hts "royalty" feature... |
-
-If we're happy for the user to perform an additional step (first time user), we could use an hts.NFT (infinite supply). Put the question on the NFT.
+The Prism smart contract for on-chain settlement of user prediction intents (`PrismPredictionIntent`).
 
 ## Quickstart
 
-`nvm use v24`
+`nvm use v24` (<https://github.com/nvm-sh/nvm>)
 
-`cd contracts`
+`npm install --g solc` # make `solc` globally available
 
 `npm i` # install openzepplin and gnosis deps
 
-`npm install --g solc`
+`cd contracts`
 
-`solc PredictionMarket.sol --bin`
+`solc Prism.sol --bin`
 
 May need (optimizations and intermediate representation enabled):
 
-`solc PredictionMarket.sol --with-ir --optimize --bin`
+`solc Prism.sol --with-ir --optimize --bin`
 
 or...
 
-`cd scs/scripts`
-`./0_compile.sh Prism`
-
-To compile the test contract (Test.sol), run:
-
-`./0_compile.sh Test`
+```bash
+cd scs/scripts
+./0_compile.sh Prism
+```
 
 **Deploy contract:**
 
-Be sure to set the PREVIEWNET_HEDERA_OPERATOR_KEY, TESTNET_HEDERA_OPERATOR_KEY and MAINNET_HEDERA_OPERATOR_KEY in `../shared/.secrets`
+Be sure to set the following private keys:
+
+```bash
+PREVIEWNET_HEDERA_OPERATOR_KEY
+TESTNET_HEDERA_OPERATOR_KEY MAINNET_HEDERA_OPERATOR_KEY 
+```
+
+or, just do: 
 
 ```bash
 source ./loadEnv.sh local
@@ -67,22 +51,6 @@ Follow the output instructions...
 
 `export <net>_SMART_CONTRACT_ID=0.0.7387199`
 
-To deploy the test contract, run:
-
-```bash
-ts-node 0_deploy.ts Test
-```
-
-You can run the tests in:
-
-`cd scs/scripts/tests`
-
-`ts-node test.ts`
-
-`ts-node prism.ts`
-
-etc.
-
 ```bash
 export SMART_CONTRACT_ID=...
 ```
@@ -92,18 +60,22 @@ export SMART_CONTRACT_ID=...
 ```bash
 cd scripts
 
+source ../loadEnv.sh local
+
 # PREVIEWNET_USDC_ADDRESS=0.0.296
 # TESTNET_USDC_ADDRESS=0.0.429274
 # MAINNET_USDC_ADDRESS=0.0.456858
 
 # associate a token (USD Coin - 0.0.429274) with the smart contract:
-ts-node 1_associateToken.ts $SMART_CONTRACT_ID 0.0.429274
+ts-node 1_associateToken.ts
 
 # call getUserTokens (readonly):
 ts-node 2_getUserTokens.ts $SMART_CONTRACT_ID 0.0.3728074
 
 # send USDC to a smart contract:
 ts-node 3_buy.ts $SMART_CONTRACT_ID 112233 33442
+
+etc.
 ```
 
 
@@ -128,9 +100,30 @@ cd foundry
 # now init with:
 forge init
 
+cd src
+ln -s ../../Prism.sol .
+forge install OpenZeppelin/openzeppelin-contracts
+forge install dapphub/ds-test
+forge install foundry-rs/forge-std
+```
 
-##
-# Now tidy up so can check in code:
+```bash
+# You can also run the tests in:
+
+`cd scs/scripts/tests`
+
+`ts-node test.ts`
+
+`ts-node prism.ts`
+
+# etc.
+```
+
+## Add smart contract testing to github Actions
+
+```bash
+# tidy foundry up so can check in code:
+cd foundry
 rm -rf .git
 rm -rf .github
 mkdir old
@@ -140,10 +133,6 @@ mv .gitmodules ./old/.gitmodules.old
 git rm --cached scs/foundry
 rm -rf .git/modules/scs/foundry
 git commit -am "Remove scs/foundry submodule reference"
-
-
-
-
 
 
 # add a smart contract pipeline to:
@@ -188,3 +177,26 @@ remappings = [
   'forge-std/=lib/forge-std/src/'
 ]
 ```
+
+## contract parameters
+
+collateral token - USDC, USDC[hts], HBAR, etc.
+
+position tokens - ERC20-style or hts native
+
+single oracle vs multiple oracles - simple shard tokens (ERC-20) or gnosis conditional token
+
+etc.
+
+## Comparison Table
+
+| Collateral token  | Yes/No share token | Comments |
+|-------------------|--------------------|--------------------|
+| USDC      | ERC20-style  | Simplest |
+| USDC[hts] | ERC20-style  | USDC[hts] has lower liquidity |
+| USDC      | hts.FUNGIBLE | high performance. token association UX issues. Can take advantage of hts "royalty" feature... |
+| USDC[hts] | hts.FUNGIBLE | high performance. token association UX issues. Can take advantage of hts "royalty" feature... |
+| USDC      | hts.NFT      | high performance. token association UX issues. Can take advantage of hts "royalty" feature... |
+| USDC[hts] | hts.NFT      | high performance. token association UX issues. Can take advantage of hts "royalty" feature... |
+
+If we're happy for the user to perform an additional step (first time user), we could use an hts.NFT (infinite supply). Put the question on the NFT.

@@ -5,13 +5,29 @@
 -- @param evm_address TEXT
 -- @param n_yes BIGINT
 -- @param n_no BIGINT
--- @param price_usd DOUBLE PRECISION (not a column - used to derive cost basis fields; positive = YES side, negative = NO side)
--- using sqlc's named parameter syntax @price_usd instead of $5 — this gives the Go param a meaningful name (PriceUsd) without needing a matching column
-INSERT INTO positions (market_id, evm_address, n_yes, n_no, cost_basis_price_yes_usd, cost_basis_price_no_usd, updated_at)
+-- @param price_usd DOUBLE PRECISION (fill price for the event; sign ignored for accounting, abs(price) is used)
+-- Upsert is balance-delta based: EXCLUDED.n_yes/n_no are post-event balances.
+-- Any delta is treated as buy (>0) or sell (<0) at abs(price_usd), with weighted-average
+-- cost basis and realized PnL accumulated in this row.
+INSERT INTO positions (
+  market_id,
+  evm_address,
+  n_yes,
+  n_no,
+  cost_basis_price_yes_usd,
+  cost_basis_price_no_usd,
+  cost_accum_yes_usd,
+  cost_accum_no_usd,
+  realized_pnl_usd,
+  updated_at
+)
 VALUES (
   $1, $2, $3, $4,
-  CASE WHEN @price_usd::double precision > 0 THEN ABS(@price_usd::double precision) ELSE 0.0 END,
-  CASE WHEN @price_usd::double precision < 0 THEN ABS(@price_usd::double precision) ELSE 0.0 END,
+  CASE WHEN $3 > 0 THEN ABS(@price_usd::double precision) ELSE 0.0 END,
+  CASE WHEN $4 > 0 THEN ABS(@price_usd::double precision) ELSE 0.0 END,
+  CASE WHEN $3 > 0 THEN ($3::double precision * ABS(@price_usd::double precision)) ELSE 0.0 END,
+  CASE WHEN $4 > 0 THEN ($4::double precision * ABS(@price_usd::double precision)) ELSE 0.0 END,
+  0.0,
   CURRENT_TIMESTAMP
 )
 ON CONFLICT (market_id, evm_address)
@@ -20,32 +36,88 @@ DO UPDATE SET
   n_no = EXCLUDED.n_no,
   updated_at = CURRENT_TIMESTAMP,
 
-  -- cost basis price calculation logic:
-  -- price_usd > 0 means YES side, price_usd < 0 means NO side
-  -- calculate weighted average cost basis against the relevant token count
+  -- YES side cost accumulator
+  cost_accum_yes_usd = CASE
+    WHEN EXCLUDED.n_yes > positions.n_yes THEN
+      positions.cost_accum_yes_usd + (EXCLUDED.n_yes - positions.n_yes)::double precision * ABS(@price_usd::double precision)
+    WHEN EXCLUDED.n_yes < positions.n_yes AND positions.n_yes > 0 THEN
+      GREATEST(
+        positions.cost_accum_yes_usd
+          - ((positions.cost_accum_yes_usd / positions.n_yes::double precision)
+            * (positions.n_yes - EXCLUDED.n_yes)::double precision),
+        0.0
+      )
+    ELSE positions.cost_accum_yes_usd
+  END,
 
+  -- NO side cost accumulator
+  cost_accum_no_usd = CASE
+    WHEN EXCLUDED.n_no > positions.n_no THEN
+      positions.cost_accum_no_usd + (EXCLUDED.n_no - positions.n_no)::double precision * ABS(@price_usd::double precision)
+    WHEN EXCLUDED.n_no < positions.n_no AND positions.n_no > 0 THEN
+      GREATEST(
+        positions.cost_accum_no_usd
+          - ((positions.cost_accum_no_usd / positions.n_no::double precision)
+            * (positions.n_no - EXCLUDED.n_no)::double precision),
+        0.0
+      )
+    ELSE positions.cost_accum_no_usd
+  END,
+
+  -- Realized PnL increments only when shares are removed.
+  realized_pnl_usd = positions.realized_pnl_usd
+    + CASE
+        WHEN EXCLUDED.n_yes < positions.n_yes AND positions.n_yes > 0 THEN
+          ((positions.n_yes - EXCLUDED.n_yes)::double precision * ABS(@price_usd::double precision))
+          - ((positions.cost_accum_yes_usd / positions.n_yes::double precision)
+             * (positions.n_yes - EXCLUDED.n_yes)::double precision)
+        ELSE 0.0
+      END
+    + CASE
+        WHEN EXCLUDED.n_no < positions.n_no AND positions.n_no > 0 THEN
+          ((positions.n_no - EXCLUDED.n_no)::double precision * ABS(@price_usd::double precision))
+          - ((positions.cost_accum_no_usd / positions.n_no::double precision)
+             * (positions.n_no - EXCLUDED.n_no)::double precision)
+        ELSE 0.0
+      END,
+
+  -- Weighted-average prices are derived from accumulators after update.
   cost_basis_price_yes_usd = CASE
-    -- YES side: positive price, new YES tokens added
-    WHEN @price_usd::double precision > 0 AND EXCLUDED.n_yes > positions.n_yes THEN
-      -- example:
-      -- If you owned 100 YES at $0.50 and buy 50 more at $0.60:
-      -- (100 × 0.50 + 50 × 0.60) / 150 = 80 / 150 = $0.533 per token
-      (positions.n_yes::FLOAT * COALESCE(positions.cost_basis_price_yes_usd, ABS(@price_usd::double precision))
-        + (EXCLUDED.n_yes - positions.n_yes)::FLOAT * ABS(@price_usd::double precision))
-      / EXCLUDED.n_yes::FLOAT
-    ELSE positions.cost_basis_price_yes_usd
+    WHEN EXCLUDED.n_yes > 0 THEN
+      (
+        CASE
+          WHEN EXCLUDED.n_yes > positions.n_yes THEN
+            positions.cost_accum_yes_usd + (EXCLUDED.n_yes - positions.n_yes)::double precision * ABS(@price_usd::double precision)
+          WHEN EXCLUDED.n_yes < positions.n_yes AND positions.n_yes > 0 THEN
+            GREATEST(
+              positions.cost_accum_yes_usd
+                - ((positions.cost_accum_yes_usd / positions.n_yes::double precision)
+                  * (positions.n_yes - EXCLUDED.n_yes)::double precision),
+              0.0
+            )
+          ELSE positions.cost_accum_yes_usd
+        END
+      ) / EXCLUDED.n_yes::double precision
+    ELSE 0.0
   END,
 
   cost_basis_price_no_usd = CASE
-    -- NO side: negative price, new NO tokens added
-    WHEN @price_usd::double precision < 0 AND EXCLUDED.n_no > positions.n_no THEN
-      -- example:
-      -- If you owned 100 NO at $0.80 and buy 80 more at $0.85:
-      -- (100 × 0.80 + 80 × 0.85) / 180 = 148 / 180 = $0.822 per token
-      (positions.n_no::FLOAT * COALESCE(positions.cost_basis_price_no_usd, ABS(@price_usd::double precision))
-        + (EXCLUDED.n_no - positions.n_no)::FLOAT * ABS(@price_usd::double precision))
-      / EXCLUDED.n_no::FLOAT
-    ELSE positions.cost_basis_price_no_usd
+    WHEN EXCLUDED.n_no > 0 THEN
+      (
+        CASE
+          WHEN EXCLUDED.n_no > positions.n_no THEN
+            positions.cost_accum_no_usd + (EXCLUDED.n_no - positions.n_no)::double precision * ABS(@price_usd::double precision)
+          WHEN EXCLUDED.n_no < positions.n_no AND positions.n_no > 0 THEN
+            GREATEST(
+              positions.cost_accum_no_usd
+                - ((positions.cost_accum_no_usd / positions.n_no::double precision)
+                  * (positions.n_no - EXCLUDED.n_no)::double precision),
+              0.0
+            )
+          ELSE positions.cost_accum_no_usd
+        END
+      ) / EXCLUDED.n_no::double precision
+    ELSE 0.0
   END
 RETURNING *;
 
@@ -63,6 +135,9 @@ SELECT
   evm_address,
   n_yes,
   n_no,
+  cost_basis_price_yes_usd,
+  cost_basis_price_no_usd,
+  realized_pnl_usd,
   updated_at,
   created_at
 FROM positions
@@ -74,6 +149,9 @@ SELECT
   evm_address,
   n_yes,
   n_no,
+  cost_basis_price_yes_usd,
+  cost_basis_price_no_usd,
+  realized_pnl_usd,
   updated_at,
   created_at
 FROM positions
