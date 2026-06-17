@@ -391,6 +391,26 @@ func (pis *PredictionIntentsService) CancelPredictionIntent(net string, marketId
 		return nil, lib.LogAndError(lib.LOG_ERROR, "public key mismatch: expected %s, got %s", publicKeyLookedUp.String(), publicKey.String())
 	}
 
+	// verify that this accountId owns the predictionIntent with this txId and marketId
+	predictionIntent, err := pis.predictionIntentsRepository.GetPredictionIntentByTxId(txId)
+	if err != nil {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get prediction intent by txId %s: %v", txId, err)
+	}
+	if predictionIntent == nil {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "no prediction intent found for txId %s", txId)
+	}
+	if predictionIntent.AccountID != accountIdStr {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "accountId %s does not own prediction intent with txId %s (owned by accountId %s)", accountIdStr, txId, predictionIntent.AccountID)
+	}
+	if predictionIntent.MarketID.String() != marketId {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "marketId %s does not match prediction intent with txId %s (marketId is %s)", marketId, txId, predictionIntent.MarketID.String())
+	}
+
+	// check that the order is still open (not already cancelled or filled)
+	if predictionIntent.CancelledAt.Valid {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "prediction intent with txId %s is already cancelled at %s", txId, predictionIntent.CancelledAt.Time.String())
+	}
+
 	// now validate the signature is correct:
 	// sig = sign(txId, privateKey)
 	// isValidSig = verify(publicKey, txId, sig)

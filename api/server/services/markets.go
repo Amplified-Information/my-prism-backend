@@ -443,6 +443,12 @@ func (ms *MarketsService) ResolveMarket(marketId string, outcome int32) (bool, e
 		return false, lib.LogAndError(lib.LOG_ERROR, "failed to award Prism points for unknown reasons")
 	}
 
+	// set 5 - log an event on HCS:
+	err = ms.hederaService.LogMarketResolvedEvent(market.Net, marketId, outcome)
+	if err != nil {
+		return false, lib.LogAndError(lib.LOG_ERROR, "failed to log market resolved event on HCS: %v", err)
+	}
+
 	return true, nil
 }
 

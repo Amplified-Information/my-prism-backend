@@ -524,6 +524,12 @@ func (hs *HederaService) PublishHCSmessage(net string, message string) (string, 
 	return tx.TransactionID.String(), nil
 }
 
+func (hs *HederaService) LogMarketResolvedEvent(net string, marketId string, outcome int32) error {
+	message := fmt.Sprintf("Market resolved: %s, Outcome: %d", marketId, outcome)
+	_, err := hs.PublishHCSmessage(net, message)
+	return err
+}
+
 func (hs *HederaService) SendHTStokens(networkSelected hiero.LedgerID, tokenId hiero.TokenID, recipientAccountId hiero.AccountID, nTokens float64) (string, error) {
 	txHash := ""
 

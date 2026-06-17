@@ -319,3 +319,22 @@ func (pir *PredictionIntentsRepository) GetTotalValueUsdForMarketId(marketId str
 
 	return totalValueUsd, nil
 }
+
+func (pir *PredictionIntentsRepository) GetPredictionIntentByTxId(txId string) (*sqlc.PredictionIntent, error) {
+	if pir.db == nil {
+		return nil, lib.ErrorLog("database not initialized")
+	}
+
+	txUUID, err := uuid.Parse(txId)
+	if err != nil {
+		return nil, lib.ErrorLog("invalid txId uuid", "error", err, "txId", txId)
+	}
+
+	q := sqlc.New(pir.db)
+	predictionIntent, err := q.GetPredictionIntentByTxId(context.Background(), txUUID)
+	if err != nil {
+		return nil, lib.ErrorLog("GetPredictionIntentByTxId failed", "error", err, "txId", txId)
+	}
+
+	return &predictionIntent, nil
+}

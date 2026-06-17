@@ -11,6 +11,11 @@ RETURNING *;
 
 -- READ
 
+-- name: GetPredictionIntentByTxId :one
+SELECT *
+FROM prediction_intents
+WHERE tx_id = $1;
+
 -- name: GetAllOpenPredictionIntentsByMarketId :many
 SELECT *
 FROM prediction_intents

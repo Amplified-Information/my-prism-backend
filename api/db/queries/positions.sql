@@ -23,10 +23,10 @@ INSERT INTO positions (
 )
 VALUES (
   $1, $2, $3, $4,
-  CASE WHEN $3 > 0 THEN ABS(@price_usd::double precision) ELSE 0.0 END,
-  CASE WHEN $4 > 0 THEN ABS(@price_usd::double precision) ELSE 0.0 END,
-  CASE WHEN $3 > 0 THEN ($3::double precision * ABS(@price_usd::double precision)) ELSE 0.0 END,
-  CASE WHEN $4 > 0 THEN ($4::double precision * ABS(@price_usd::double precision)) ELSE 0.0 END,
+  CASE WHEN $3::bigint > 0 THEN ABS(@price_usd::double precision) ELSE 0.0 END,
+  CASE WHEN $4::bigint > 0 THEN ABS(@price_usd::double precision) ELSE 0.0 END,
+  CASE WHEN $3::bigint > 0 THEN ($3::bigint::double precision * ABS(@price_usd::double precision)) ELSE 0.0 END,
+  CASE WHEN $4::bigint > 0 THEN ($4::bigint::double precision * ABS(@price_usd::double precision)) ELSE 0.0 END,
   0.0,
   CURRENT_TIMESTAMP
 )
