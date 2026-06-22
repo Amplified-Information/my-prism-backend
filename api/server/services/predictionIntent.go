@@ -347,7 +347,7 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PrismPre
 	return fmt.Sprintf("Processed input for user %s", req.AccountId), nil
 }
 
-func (pis *PredictionIntentsService) CancelPredictionIntent(net string, marketId string, txId string, accountIdStr string, sig string, publicKeyStr string, keyType uint32) (*pb_api.StdResponse, error) {
+func (pis *PredictionIntentsService) CancelPredictionIntent(net string, marketId string, txId string, accountIdStr string, sigBase64 string, publicKeyStr string, keyType uint32) (*pb_api.StdResponse, error) {
 	// guards
 
 	// net is validated by protobuf
@@ -414,7 +414,7 @@ func (pis *PredictionIntentsService) CancelPredictionIntent(net string, marketId
 	// now validate the signature is correct:
 	// sig = sign(txId, privateKey)
 	// isValidSig = verify(publicKey, txId, sig)
-	isValidSig, err := lib.VerifySig(&publicKey, txId, sig)
+	isValidSig, err := lib.VerifySig(&publicKey, txId, sigBase64)
 	if err != nil {
 		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to verify signature: %v", err)
 	}

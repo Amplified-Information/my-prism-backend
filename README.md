@@ -704,6 +704,18 @@ on:
 
 `git submodule update --remote -- web`
 
+discard those submodule pointer drifts by checking each submodule back to the superproject’s recorded commit, then re-run status to confirm a clean tree:
+
+`git submodule update --checkout -- web web.admin web.lp && git status --short && git submodule status`
+
+Maybe this will work if things get out of sync (origin/main still points to the old missing submodule SHAs; the fix is staged locally but not committed/pushed. Commit those three gitlink updates and pushing to main so Actions can fetch valid refs):
+
+```bash
+git diff --cached --submodule=log -- web web.admin web.lp && git commit -m "Fix submodule refs for CI checkout" && git push origin main
+
+git status --short && git rev-parse --short HEAD && git ls-tree HEAD web web.admin web.lp
+```
+
 ## Smart contract matching logic
 
 It is critical to the correct execution of the Prism smart contract that a user's `PrismPredictionIntentRequest` is presented to the smart contract in the required format.

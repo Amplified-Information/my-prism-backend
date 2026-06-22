@@ -815,12 +815,15 @@ func main() {
 
 	// Start a HTTP health check server on port 8889
 	go func() {
-		http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		// Use a dedicated mux so debug handlers (e.g. pprof) are never exposed
+		// on this public-facing health listener via the default mux.
+		healthMux := http.NewServeMux()
+		healthMux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(200)
 			w.Write([]byte("200"))
 		})
 		lib.Log(lib.LOG_INFO, "HTTP health endpoint running on %s:%s/health", os.Getenv("API_SELF_HOST"), os.Getenv("API_SELF_PORT_HEALTH"))
-		if err := http.ListenAndServe(fmt.Sprintf("%s:%s", os.Getenv("API_SELF_HOST"), os.Getenv("API_SELF_PORT_HEALTH")), nil); err != nil {
+		if err := http.ListenAndServe(fmt.Sprintf("%s:%s", os.Getenv("API_SELF_HOST"), os.Getenv("API_SELF_PORT_HEALTH")), healthMux); err != nil {
 			fatal("Failed to start HTTP health endpoint: %v", err)
 		}
 	}()

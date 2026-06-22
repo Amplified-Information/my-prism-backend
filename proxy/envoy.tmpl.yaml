@@ -93,6 +93,7 @@ static_resources:
                   # service routes
                   - name: service_routes
                     # add security headers to all responses
+                    response_headers_to_remove: ["server", "x-powered-by"]
                     response_headers_to_add:
                       # - header:
                       #     key: "Content-Security-Policy"
@@ -149,6 +150,12 @@ static_resources:
                         route:
                           cluster: health_service
                           timeout: 0s
+                        typed_per_filter_config:
+                          # Health is same-origin infra traffic - do not emit browser CORS response headers here.
+                          envoy.filters.http.cors:
+                            "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.CorsPolicy
+                            filter_enabled:
+                              default_value: { numerator: 0, denominator: HUNDRED }
                       ###
                       # Route gRPC{-Web} requests (identified by path. Previously identified by content-type: application/grpc{-web})
                       ###

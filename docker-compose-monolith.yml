@@ -1,6 +1,6 @@
 services:
   api:
-    image: ghcr.io/prismmarketlabs/api:0.6.6
+    image: ghcr.io/prismmarketlabs/api:0.6.8
     restart: always
     ports:
       - "8888:8888"
@@ -88,7 +88,7 @@ services:
       NATS_HOST: ${NATS_HOST}
       NATS_PORT: ${NATS_PORT}
   web:
-    image: ghcr.io/prismmarketlabs/web:0.7.39
+    image: ghcr.io/prismmarketlabs/web:0.7.41
     restart: always
     ports:
       - "5173:80"
@@ -103,7 +103,7 @@ services:
       HTPASSWD: ${HTPASSWD}
       ROBOTS_TAG_VALUE: ${ROBOTS_TAG_VALUE}
   web.admin:
-    image: ghcr.io/prismmarketlabs/web.admin:0.1.22
+    image: ghcr.io/prismmarketlabs/web.admin:0.1.23
     restart: always
     ports:
       - "8080:80"
@@ -117,7 +117,7 @@ services:
       WEB_ADMIN_HTUSER: ${WEB_ADMIN_HTUSER}
       WEB_ADMIN_HTPASSWD: ${WEB_ADMIN_HTPASSWD}
   web.lp:
-    image: ghcr.io/prismmarketlabs/web.lp:0.4.6
+    image: ghcr.io/prismmarketlabs/web.lp:0.4.8
     restart: always
     ports:
       - "8081:80"

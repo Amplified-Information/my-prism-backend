@@ -311,6 +311,8 @@ resource "aws_lb_listener" "alb_listener_443" {
   load_balancer_arn = aws_lb.alb_$ENV.arn
   port              = 443
   protocol          = "HTTPS"
+  # Suppress ALB `Server: awselb/2.0` response header.
+  routing_http_response_server_enabled = false
 
   ssl_policy        = "ELBSecurityPolicy-2016-08"
   certificate_arn   = module.shared.ssl_cert_arn_wildcard
@@ -333,6 +335,8 @@ resource "aws_lb_listener" "alb_listener_80" {
   load_balancer_arn = aws_lb.alb_$ENV.arn
   port              = 80
   protocol          = "HTTP"
+  # Suppress ALB `Server: awselb/2.0` response header.
+  routing_http_response_server_enabled = false
 
   default_action {
     type = "redirect"
