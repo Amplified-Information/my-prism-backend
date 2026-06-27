@@ -429,7 +429,7 @@ contract Prism {
   // utility functions
   /////
 
-   /**
+  /**
   An internal-only function which takes a base64-encoded message has and prefixes it with the Hedera Signed Message header.
   N.B. the length of the base64-encoded keccak256 hash is always 44 characters.
   @param messageHashBase64 The base64 message to be prefixed.
