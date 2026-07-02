@@ -7,6 +7,60 @@ import { Prism } from "../src/Prism.sol";
 import { PrismTestHelper } from "./PrismTestHelper.sol";
 import { MockERC20 } from "./MockERC20.sol";
 
+contract MockConfigurableERC20 {
+    string public name;
+    string public symbol;
+    uint8 public decimals;
+    uint256 public totalSupply;
+
+    mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
+
+    // 0 = normal, 1 = fail first transfer() call, 2 = fail second transfer() call
+    uint8 public failMode;
+    uint256 public transferCalls;
+
+    constructor(string memory _name, string memory _symbol, uint8 _decimals, uint256 initialSupply) {
+        name = _name;
+        symbol = _symbol;
+        decimals = _decimals;
+        totalSupply = initialSupply;
+        balanceOf[msg.sender] = initialSupply;
+    }
+
+    function setFailMode(uint8 mode) external {
+        failMode = mode;
+        transferCalls = 0;
+    }
+
+    function approve(address spender, uint256 amount) external returns (bool) {
+        allowance[msg.sender][spender] = amount;
+        return true;
+    }
+
+    function transfer(address to, uint256 amount) external returns (bool) {
+        transferCalls += 1;
+        if (failMode == 1 && transferCalls == 1) return false;
+        if (failMode == 2 && transferCalls == 2) return false;
+
+        require(balanceOf[msg.sender] >= amount, "ERC20: insufficient balance");
+        balanceOf[msg.sender] -= amount;
+        balanceOf[to] += amount;
+        return true;
+    }
+
+    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
+        uint256 allowed = allowance[from][msg.sender];
+        require(allowed >= amount, "ERC20: insufficient allowance");
+        require(balanceOf[from] >= amount, "ERC20: insufficient balance");
+
+        allowance[from][msg.sender] = allowed - amount;
+        balanceOf[from] -= amount;
+        balanceOf[to] += amount;
+        return true;
+    }
+}
+
 
 contract PrismTest is Test {
     MockERC20 usdc;
@@ -348,6 +402,49 @@ contract PrismTest is Test {
         );
     }
 
+    // Settlement invariant: lower collateral and lower qty must match.
+    function testSettlementInvariantCollateralQtyMismatchReverts() public {
+        uint128 marketId = 17;
+        _createAndFundMarket(marketId);
+        _mockHAS();
+
+        // lower(collateral)=49e6, lower(qty)=50e6 -> invariant violation
+        vm.expectRevert("Collateral/qty mismatch");
+        prism.posColToksOnBehalfAtomic(
+            marketId, user1, user2,
+            49e6, 60e6,
+            50e6, 70e6,
+            13, 14,
+            hex"", hex"",
+            false, false
+        );
+    }
+
+    // Settlement invariant positive case: lower collateral equals lower qty.
+    function testSettlementInvariantCollateralQtyMatchPasses() public {
+        uint128 marketId = 18;
+        _createAndFundMarket(marketId);
+        _mockHAS();
+
+        // lower(collateral)=50e6 and lower(qty)=50e6 -> invariant satisfied
+        prism.posColToksOnBehalfAtomic(
+            marketId, user1, user2,
+            50e6, 60e6,
+            50e6, 70e6,
+            15, 16,
+            hex"", hex"",
+            false, false
+        );
+
+        (uint256 yesUser1, uint256 noUser1) = prism.getUserTokens(marketId, user1);
+        (uint256 yesUser2, uint256 noUser2) = prism.getUserTokens(marketId, user2);
+        assertEq(yesUser1, 50e6, "user1 YES tokens after matched buy");
+        assertEq(noUser1, 0, "user1 NO tokens after matched buy");
+        assertEq(yesUser2, 0, "user2 YES tokens after matched buy");
+        assertEq(noUser2, 50e6, "user2 NO tokens after matched buy");
+        assertEq(prism.getTotalCollateral(marketId), 100e6, "total collateral tracks matched amount on both legs");
+    }
+
     // --- setRakeScaled100 ---
 
     function testSetRakeScaled100() public {
@@ -541,6 +638,84 @@ contract PrismTest is Test {
         vm.prank(user1);
         vm.expectRevert("No winning tokens");
         prism.redeem(marketId);
+    }
+
+    function testRedeemInsufficientMarketCollateralReverts() public {
+        uint128 marketId = 26;
+        uint256 qty = 100e6;
+
+        prism.createNewMarket(marketId, "Under-collateralized market");
+        prism.setTokensForTest(marketId, user1, qty, 0);
+        usdc.transfer(address(prism), qty);
+        prism.setTotalCollateralForTest(marketId, qty - 1);
+        prism.resolveMarket(marketId, true);
+
+        vm.prank(user1);
+        vm.expectRevert("Insufficient market collateral");
+        prism.redeem(marketId);
+    }
+
+    function testRedeemCollateralAccountingMismatchReverts() public {
+        uint128 marketId = 27;
+        uint256 qty = 100e6;
+
+        prism.createNewMarket(marketId, "Accounting mismatch market");
+        prism.setTokensForTest(marketId, user1, qty, 0);
+        usdc.transfer(address(prism), qty);
+        prism.setTotalCollateralForTest(marketId, qty + 1);
+        prism.resolveMarket(marketId, true);
+
+        vm.prank(user1);
+        vm.expectRevert("Collateral accounting mismatch");
+        prism.redeem(marketId);
+    }
+
+    function testRedeemRakeTransferFailedReverts() public {
+        MockConfigurableERC20 token = new MockConfigurableERC20("USD Coin", "USDC", 6, initialSupply);
+        PrismTestHelper localPrism = new PrismTestHelper(address(token));
+
+        require(token.transfer(user1, 100_000e6), "Transfer to user1 failed");
+        token.approve(address(localPrism), type(uint256).max);
+        vm.prank(user1); token.approve(address(localPrism), type(uint256).max);
+
+        uint128 marketId = 29;
+        uint256 qty = 100e6;
+
+        localPrism.createNewMarket(marketId, "Rake transfer failure market");
+        localPrism.setTokensForTest(marketId, user1, qty, 0);
+        require(token.transfer(address(localPrism), qty), "Fund local prism failed");
+        localPrism.setTotalCollateralForTest(marketId, qty);
+        localPrism.resolveMarket(marketId, true);
+
+        token.setFailMode(1); // fail first transfer call in redeem: owner rake transfer
+
+        vm.prank(user1);
+        vm.expectRevert("Rake transfer failed");
+        localPrism.redeem(marketId);
+    }
+
+    function testRedeemCollateralTransferFailedReverts() public {
+        MockConfigurableERC20 token = new MockConfigurableERC20("USD Coin", "USDC", 6, initialSupply);
+        PrismTestHelper localPrism = new PrismTestHelper(address(token));
+
+        require(token.transfer(user1, 100_000e6), "Transfer to user1 failed");
+        token.approve(address(localPrism), type(uint256).max);
+        vm.prank(user1); token.approve(address(localPrism), type(uint256).max);
+
+        uint128 marketId = 35;
+        uint256 qty = 100e6;
+
+        localPrism.createNewMarket(marketId, "Payout transfer failure market");
+        localPrism.setTokensForTest(marketId, user1, qty, 0);
+        require(token.transfer(address(localPrism), qty), "Fund local prism failed");
+        localPrism.setTotalCollateralForTest(marketId, qty);
+        localPrism.resolveMarket(marketId, true);
+
+        token.setFailMode(2); // first transfer succeeds (rake), second fails (winner payout)
+
+        vm.prank(user1);
+        vm.expectRevert("Collateral transfer failed");
+        localPrism.redeem(marketId);
     }
 
     function testRedeemInvalidMarketOutcomeReverts() public {

@@ -82,9 +82,9 @@ contract Prism {
   function createNewMarket(uint128 marketId, string memory _statement) public onlyOwner returns (uint256 allowance) {
     require(keccak256(abi.encodePacked(statements[marketId])) == keccak256(abi.encodePacked("")), "Market already exists");
     
-    // transfer the market creation fee from the owner to the contract
+    // transfer the market creation fee directly to owner so market collateral remains isolated
     // msg.sender must provide an allowance for this amount of USDC or this entire function call will fail
-    require(collateralToken.transferFrom(msg.sender, address(this), marketCreationFeeUsdc), "Transfer failed");
+      require(collateralToken.transferFrom(msg.sender, owner, marketCreationFeeUsdc), "Transfer failed");
     
     statements[marketId] = _statement;
     resolutionTimes[marketId] = 0;
@@ -150,6 +150,10 @@ contract Prism {
     } else {
       qty_lower = qtyScaledSlot1;
     }
+
+    // Apply an invariant here
+    // Enforce 1:1 settlement units between collateral and position token quantity.
+    require(collateralUsdAbsScaled_lower == qty_lower, "Collateral/qty mismatch");
 
     // On-chain signature verification mirrors payload assembly in API/web:
     // buySell byte is slot-position-based (slot0=0xf0, slot1=0xf1) because the
@@ -270,10 +274,14 @@ contract Prism {
     // Prevent underflow panic and provide a clear reason if market accounting is insolvent.
     require(totalCollateralUsd[marketId] >= grossWinnings, "Insufficient market collateral");
 
+    // Ensure the real token balance can support payout, not just internal accounting.
+    uint256 contractBalance = collateralToken.balanceOf(address(this));
+    require(contractBalance >= totalCollateralUsd[marketId], "Collateral accounting mismatch");
+
     require(collateralToken.transfer(owner, rakeAmount), "Rake transfer failed");
     
     // Transfer (remaining, after rake) collateral 1:1
-    require(collateralToken.transfer(winner, payoutAmount), "Transfer failed");
+    require(collateralToken.transfer(winner, payoutAmount), "Collateral transfer failed");
 
     // Clear balances
     if (yesTokens[marketId][winner] > 0 ) yesTokens[marketId][winner] = 0;

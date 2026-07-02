@@ -10,11 +10,15 @@ source ../loadEnv.sh local
 cd scripts
 ts-node 0_deploy.ts Prism
 */
-import { Client, ContractCreateFlow, ContractId } from '@hashgraph/sdk'
+import { Client, ContractCreateFlow, ContractId, Hbar } from '@hashgraph/sdk'
 import { ethers } from 'ethers'
 import * as fs from 'fs'
 import { initHederaClient } from './lib/hedera.ts'
 import { __dirname } from './lib/utils.ts'
+
+
+const DEPLOY_GAS = 15_000_000
+const DEPLOY_MAX_TX_FEE_HBAR = 50
 
 
 
@@ -68,7 +72,7 @@ async function deployContract(client: Client) {
     /////
     // Step 1: Deploy the smart contract
     /////
-    console.log(`Deploying smart contract ${smartContractBinaryFn.split('/').pop()} on "${networkSelected.toString}"...`)
+    console.log(`Deploying smart contract ${smartContractBinaryFn.split('/').pop()} on "${networkSelected}"...`)
     
     // Encode the constructor parameters
     const constructorParams = getConstructorParams()
@@ -79,11 +83,17 @@ async function deployContract(client: Client) {
     // Combine bytecode and constructor parameters
     const bytecodeWithParams = contractBytecode + constructorParams.slice(2) // Remove "0x" from params
 
+    // ContractCreateFlow does chunked file appends under the hood; raise the default
+    // tx fee limit on the client so those child txs do not fail with INSUFFICIENT_TX_FEE.
+    client.setDefaultMaxTransactionFee(new Hbar(DEPLOY_MAX_TX_FEE_HBAR))
+
     // Create the contract creation flow transaction
     const contractCreateTx = new ContractCreateFlow()
-        .setGas(15_000_000)
+      .setGas(DEPLOY_GAS)
         .setBytecode(bytecodeWithParams)
         // .setAdminKey(client.operatorPublicKey!) // N.B. NO!! naive way to associate external tokens!
+
+    console.log(`Deployment config: gas=${DEPLOY_GAS}, maxTxFee=${DEPLOY_MAX_TX_FEE_HBAR} HBAR`)
 
     // Sign and execute the transaction
     const contractResponse = await contractCreateTx.execute(client)
