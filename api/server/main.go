@@ -181,15 +181,6 @@ func (s *server) VerifyChallenge(ctx context.Context, req *pb_api.VerifyChalleng
 	if isValid {
 		lib.Log(lib.LOG_INFO, "Challenge verified successfully for accountId: %s on network: %s", req.ChallengeRequest.AccountId, req.ChallengeRequest.Network)
 
-		// N.B. generate a new challenge for the next authentication attempt to prevent replay attacks (even if the current attempt is successful, we want to invalidate the current challenge so it can't be reused):
-		_, err := s.authService.UpdateChallenge(req.ChallengeRequest.AccountId, req.ChallengeRequest.Network)
-		if err != nil {
-			return &pb_api.StdResponse{
-				ErrorCode: 1,
-				Message:   "Error updating challenge",
-			}, err
-		}
-
 		// look up the user's roles on the database:
 		userRoles, err := s.authService.GetRoles(ctx, req.ChallengeRequest.AccountId, req.ChallengeRequest.Network)
 		if err != nil {

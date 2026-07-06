@@ -82,9 +82,12 @@ contract Prism {
   function createNewMarket(uint128 marketId, string memory _statement) public onlyOwner returns (uint256 allowance) {
     require(keccak256(abi.encodePacked(statements[marketId])) == keccak256(abi.encodePacked("")), "Market already exists");
     
-    // transfer the market creation fee directly to owner so market collateral remains isolated
-    // msg.sender must provide an allowance for this amount of USDC or this entire function call will fail
-      require(collateralToken.transferFrom(msg.sender, owner, marketCreationFeeUsdc), "Transfer failed");
+    // Two steps process: Pull the fee into the contract first, then forward it to the owner.
+    // Hedera rejects owner-to-owner self transfers, so we avoid a direct
+    // msg.sender -> owner transfer here even when the owner is the caller
+    // eventually, can remove onlyOwner guard and allow any user to create a market, but for now, only the owner can create markets.
+    require(collateralToken.transferFrom(msg.sender, address(this), marketCreationFeeUsdc), "Transfer failed");
+    require(collateralToken.transfer(owner, marketCreationFeeUsdc), "Fee transfer failed");
     
     statements[marketId] = _statement;
     resolutionTimes[marketId] = 0;

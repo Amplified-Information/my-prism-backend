@@ -33,17 +33,12 @@ func (as *AuthService) GetChallenge(accountId string, network string) (int64, er
 		return 0, lib.LogAndError(lib.LOG_ERROR, "failed to get user challenge: %v", err)
 	}
 
-	// TODO - no, only do this after an authentication attempt (successful or not) to prevent DoS attacks where an attacker could flood the server with GetChallenge requests
-	// and update the challenge to a new random value for the next authentication attempt:
-	// isOK, err := as.UpdateChallenge(accountId, network)
-	// if err != nil || !isOK {
-	// 	return 0, lib.LogAndError(lib.LOG_ERROR, "failed to update challenge: %v", err)
-	// }
+	// UpdateChallenge only do this after an authentication attempt (successful or not) to prevent DoS attacks where an attacker could flood the server with GetChallenge requests
 
 	return challenge, nil
 }
 
-func (as *AuthService) UpdateChallenge(accountId string, network string) (bool, error) {
+func (as *AuthService) UpdateChallenge(accountId hiero.AccountID, network string) (bool, error) {
 	// Generate a high entropy random int64 challenge
 	challengeBytes := make([]byte, 8)
 	_, err := rand.Read(challengeBytes)
@@ -52,7 +47,7 @@ func (as *AuthService) UpdateChallenge(accountId string, network string) (bool, 
 	}
 	challenge := int64(binary.BigEndian.Uint64(challengeBytes))
 
-	updated, err := as.userRoleRepository.UpdateUserChallenge(accountId, network, challenge)
+	updated, err := as.userRoleRepository.UpdateUserChallenge(accountId.String(), network, challenge)
 	if err != nil {
 		return false, lib.LogAndError(lib.LOG_ERROR, "failed to update user challenge: %v", err)
 	}
@@ -78,6 +73,18 @@ func (as *AuthService) VerifyChallenge(walletIdStr string, network string, sigBa
 	}
 	payloadHex := fmt.Sprintf("%x", payload)
 
+	// it's not enough to just verify the signature on its own...
+	// must also verify that the payload contains the correct challenge for this walletId and network
+	challenge, err := as.GetChallenge(walletIdStr, network)
+	if err != nil {
+		return false, lib.LogAndError(lib.LOG_ERROR, "failed to get challenge: %v", err)
+	}
+
+	// check that the payload exactly matches the correct challenge
+	if payload != fmt.Sprintf("%d", challenge) {
+		return false, lib.LogAndError(lib.LOG_ERROR, "payload does not exactly match the correct challenge: %d", challenge)
+	}
+
 	// ensure sigBase64 is of type base64
 	// protobuf enforces this
 
@@ -94,6 +101,13 @@ func (as *AuthService) VerifyChallenge(walletIdStr string, network string, sigBa
 	// only return true if the signature is valid
 	if isOK {
 		lib.Log(lib.LOG_INFO, "sig OK - walletId: %s, network: %s", walletIdStr, network)
+
+		// don't forget to update the challenge after a successful verification to prevent replay attacks// and update the challenge to a new random value for the next authentication attempt:
+		isOK, err := as.UpdateChallenge(walletId, network)
+		if err != nil || !isOK {
+			return false, lib.LogAndError(lib.LOG_ERROR, "failed to update challenge: %v", err)
+		}
+
 		return true, nil
 	}
 
