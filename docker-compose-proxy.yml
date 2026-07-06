@@ -1,6 +1,6 @@
 services:
   proxy:
-    image: ghcr.io/prismmarketlabs/proxy:0.1.39
+    image: ghcr.io/prismmarketlabs/proxy:0.1.40
     restart: always
     ports:
       - "9901:9901"
@@ -18,7 +18,7 @@ services:
       ENVOY_HOST_WEB_ADMIN: ${ENVOY_HOST_WEB_ADMIN}
       ENVOY_HOST_WEB_LP: ${ENVOY_HOST_WEB_LP}
   modsec:
-    image: ghcr.io/prismmarketlabs/modsec:0.0.3
+    image: ghcr.io/prismmarketlabs/modsec:0.0.4
     restart: unless-stopped
     ports:
       - "8090:8080"

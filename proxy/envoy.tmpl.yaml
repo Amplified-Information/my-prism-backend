@@ -67,7 +67,7 @@ static_resources:
                     filter_enforced:
                       default_value: { numerator: 100, denominator: HUNDRED } # 100% of requests are enforced by default
                     response_headers_to_add:
-                      - append: false
+                      - append_action: OVERWRITE_IF_EXISTS_OR_ADD
                         header:
                           key: "x-rate-limit" # mark all requests that have undergone rate limiting
                           value: "global"
@@ -102,23 +102,23 @@ static_resources:
                       - header:
                           key: "X-Frame-Options"
                           value: "DENY"
-                        append: false
+                        append_action: OVERWRITE_IF_EXISTS_OR_ADD
                       - header:
                           key: "X-Content-Type-Options"
                           value: "nosniff"
-                        append: false
+                        append_action: OVERWRITE_IF_EXISTS_OR_ADD
                       - header:
                           key: "Strict-Transport-Security"
                           value: "max-age=63072000; includeSubDomains; preload"
-                        append: false
+                        append_action: OVERWRITE_IF_EXISTS_OR_ADD
                       - header:
                           key: "Referrer-Policy"
                           value: "strict-origin-when-cross-origin"
-                        append: false
+                        append_action: OVERWRITE_IF_EXISTS_OR_ADD
                       - header:
                           key: "Permissions-Policy"
                           value: "geolocation=(), microphone=()"
-                        append: false
+                        append_action: OVERWRITE_IF_EXISTS_OR_ADD
                     
                     domains: ["*"] # ["dev.prism.market", "uat.prism.market", "prism.market", etc.]
                     typed_per_filter_config:
@@ -206,7 +206,7 @@ static_resources:
                             filter_enforced:
                               default_value: { numerator: 100, denominator: HUNDRED }
                             response_headers_to_add:
-                              - append: false
+                              - append_action: OVERWRITE_IF_EXISTS_OR_ADD
                                 header:
                                   key: x-rate-limit
                                   value: prism-route
