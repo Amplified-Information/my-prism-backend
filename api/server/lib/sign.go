@@ -243,6 +243,9 @@ func VerifySig(publicKey *hiero.PublicKey, payloadHex string, sigBase64 string) 
 	}
 
 	payload, err := Hex2utf8(payloadHex)
+	if err != nil {
+		return false, ErrorLog("failed to decode payload hex", "error", err, "payloadHex", payloadHex)
+	}
 	keccak := Keccak256([]byte(payload))
 	Debug("keccak calculated on back-end", "keccakHex", fmt.Sprintf("%x", keccak))
 

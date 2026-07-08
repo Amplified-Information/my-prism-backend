@@ -92,10 +92,10 @@ func (as *AuthService) VerifyChallenge(walletIdStr string, network string, sigBa
 
 	isOK, err := lib.VerifySig(publicKey, payloadHex, sigBase64)
 	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "failed to verify signature: %v", err)
+		return false, lib.LogAndError(lib.LOG_ERROR, "failed to verify signature (publicKey=%s, payloadHex=%s, sigBase64=%s). Error: %v", publicKey, payloadHex, sigBase64, err)
 	}
 	if !isOK {
-		return false, lib.LogAndError(lib.LOG_ERROR, "invalid signature")
+		return false, lib.LogAndError(lib.LOG_ERROR, "invalid signature (publicKey=%s, payloadHex=%s, sigBase64=%s)", publicKey, payloadHex, sigBase64)
 	}
 
 	// only return true if the signature is valid

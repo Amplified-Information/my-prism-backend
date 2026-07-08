@@ -414,7 +414,7 @@ func (pis *PredictionIntentsService) CancelPredictionIntent(net string, marketId
 	// now validate the signature is correct:
 	// sig = sign(txId, privateKey)
 	// isValidSig = verify(publicKey, txId, sig)
-	isValidSig, err := lib.VerifySig(&publicKey, txId, sigBase64)
+	isValidSig, err := lib.VerifySig(&publicKey, lib.Utf82hex(txId), sigBase64)
 	if err != nil {
 		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to verify signature: %v", err)
 	}
