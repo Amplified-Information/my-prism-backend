@@ -40,7 +40,14 @@ JOIN markets mk ON m.market_id = mk.market_id
 WHERE mk.resolved_at IS NULL AND mk.deleted_at IS NULL AND mk.is_suspended IS FALSE AND mk.is_paused IS FALSE AND mk.closes_at > CURRENT_TIMESTAMP
 AND m.created_at >= $1 AND m.created_at <= $2;
 
-
+-- name: GetTxHashesByTxId :many
+SELECT tx_hash,
+	   CASE
+		   WHEN tx_id1 = $1 THEN qty1
+		   WHEN tx_id2 = $1 THEN qty2
+	   END AS qty
+FROM matches
+WHERE tx_id1 = $1 OR tx_id2 = $1;
 
 
 

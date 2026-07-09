@@ -21,6 +21,7 @@ service ApiServicePublic {
   rpc GetComments(GetCommentsRequest) returns (GetCommentsResponse);
   rpc GetUserPortfolio(UserPortfolioRequest) returns (UserPortfolioResponse);
   rpc CancelPredictionIntent(CancelOrderRequest) returns (StdResponse);
+  rpc GetTxHashes(TxIdRequest) returns (TxIdHashesResponse);
 
   // authenticated endpoints
   rpc CreateMarket(CreateMarketRequest) returns (CreateMarketResponse);
@@ -71,6 +72,10 @@ message LimitOffsetRequest {
 message MarketIdRequest {
   string market_id = 1 [json_name = "marketId",     (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
   optional string lang = 2;
+}
+
+message TxIdRequest {
+  string tx_id = 1 [json_name = "txId",     (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
 }
 
 /////
@@ -148,6 +153,10 @@ message PredictionIntents {
   repeated PredictionIntentResponse prediction_intents = 1   [json_name = "openPredictionIntents"];
 }
 
+message MatchedIntents {
+  repeated PredictionIntentResponse matched_prediction_intents = 1   [json_name = "matchedPredictionIntents"];
+}
+
 message Position {
   string market_id = 1        [json_name = "marketId"];
   string evm_address = 2      [json_name = "evmAddress"];
@@ -182,8 +191,9 @@ message PrismPoints {
 message UserPortfolioResponse {
   map<string, PositionInfo> positions = 1                      [json_name = "positions"];
   map<string, PredictionIntents> open_prediction_intents = 2   [json_name = "openPredictionIntents"];
-  repeated PrismPoints prism_points = 3                        [json_name = "prismPoints"];
-  uint64 prism_token_balance = 4                               [json_name = "prismTokenBalance"];
+  map<string, MatchedIntents> matched_prediction_intents = 3   [json_name = "matchedPredictionIntents"];
+  repeated PrismPoints prism_points = 4                        [json_name = "prismPoints"];
+  uint64 prism_token_balance = 5                               [json_name = "prismTokenBalance"];
 }
 
 message MarketResponse {
@@ -379,6 +389,14 @@ message CategoryResponse {
 
 message CategoryIdRequest {
   int32 category_id = 1    [json_name = "categoryId"];
+}
+
+message TxHash {
+  string tx_hash = 1  [json_name = "txHash"];
+  double qty = 2      [json_name = "qty"];
+}
+message TxIdHashesResponse {
+  repeated TxHash tx_hashes = 1 [json_name = "txHashes"];
 }
 
 /////

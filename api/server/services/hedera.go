@@ -165,15 +165,21 @@ func (hs *HederaService) BuyOrSellPositionTokens(sideYes *pb_clob.CreateOrderReq
 		return false, lib.LogAndError(lib.LOG_ERROR, "failed to scale collateralUsdAbsNo: %v", err)
 	}
 
-	qtyScaledYesBig, err := lib.FloatToBigIntScaledDecimals(sideYes.QtyOrig, int(usdcDecimals))
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "failed to calculate qtyScaledYesBig: %v", err)
-	}
+	// OLD - before the invariant...
+	// qtyScaledYesBig, err := lib.FloatToBigIntScaledDecimals(sideYes.QtyOrig, int(usdcDecimals))
+	// if err != nil {
+	// 	return false, lib.LogAndError(lib.LOG_ERROR, "failed to calculate qtyScaledYesBig: %v", err)
+	// }
 
-	qtyScaledNoBig, err := lib.FloatToBigIntScaledDecimals(sideNo.QtyOrig, int(usdcDecimals))
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "failed to calculate qtyScaledNoBig: %v", err)
-	}
+	// qtyScaledNoBig, err := lib.FloatToBigIntScaledDecimals(sideNo.QtyOrig, int(usdcDecimals))
+	// if err != nil {
+	// 	return false, lib.LogAndError(lib.LOG_ERROR, "failed to calculate qtyScaledNoBig: %v", err)
+	// }
+
+	// Contract invariant requires 1:1 settlement units between collateral and qty.
+	// Pass qtyScaled in collateral units (USDC-scaled), not raw share qty.
+	qtyScaledYesBig := new(big.Int).Set(collateralUsdAbsScaledYes)
+	qtyScaledNoBig := new(big.Int).Set(collateralUsdAbsScaledNo)
 
 	// priceUsdAbsScaledYesBig, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideYes.PriceUsd), int(usdcDecimals))
 	// if err != nil {
@@ -265,6 +271,29 @@ func (hs *HederaService) BuyOrSellPositionTokens(sideYes *pb_clob.CreateOrderReq
 	sigObjNo, err := lib.BuildSignatureMap(publicKeyNo, sigNo, lib.HederaKeyType(sideNo.KeyType))
 	lib.Log(lib.LOG_INFO, "sigYes (keyType=%d) (hex): %x", sideYes.KeyType, sigYes)
 	lib.Log(lib.LOG_INFO, "sigNo (keyType=%d) (hex): %x", sideNo.KeyType, sigNo)
+
+	// NEW - Defensive pre-submit check for contract invariant in partial matches.
+	settlementCollateralLower := new(big.Int).Set(collateralUsdAbsScaledYes)
+	if collateralUsdAbsScaledNo.Cmp(settlementCollateralLower) < 0 {
+		settlementCollateralLower = new(big.Int).Set(collateralUsdAbsScaledNo)
+	}
+	settlementQtyLower := new(big.Int).Set(qtyScaledYesBig)
+	if qtyScaledNoBig.Cmp(settlementQtyLower) < 0 {
+		settlementQtyLower = new(big.Int).Set(qtyScaledNoBig)
+	}
+	invariantHolds := settlementCollateralLower.Cmp(settlementQtyLower) == 0
+	lib.Log(lib.LOG_INFO,
+		"Pre-submit invariant check (marketId=%s): collateral_lower=%s qty_lower=%s collateral_slot0=%s collateral_slot1=%s qty_slot0=%s qty_slot1=%s holds=%t",
+		sideYes.MarketId,
+		settlementCollateralLower.String(),
+		settlementQtyLower.String(),
+		collateralUsdAbsScaledYes.String(),
+		collateralUsdAbsScaledNo.String(),
+		qtyScaledYesBig.String(),
+		qtyScaledNoBig.String(),
+		invariantHolds,
+	)
+	// End Invariant check
 
 	/////
 	// submit to the smart contract :)

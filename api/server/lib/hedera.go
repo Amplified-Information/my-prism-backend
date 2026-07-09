@@ -200,10 +200,11 @@ func GetTokenBalance(networkSelected hiero.LedgerID, tokenId hiero.TokenID, acco
 		return 0, LogAndError(LOG_ERROR, "failed to parse response: %v", err)
 	}
 
-	// Find the token balance for the specified usdcAddress
+	// Mirror can return an empty balances array when the account has never held this token.
 	var balance int64
 	if len(result.Balances) == 0 {
-		return 0, LogAndError(LOG_ERROR, "no balances found for account %s and token %s", accountId.String(), tokenId.String())
+		// return 0, LogAndError(LOG_ERROR, "no balances found for account %s and token %s", accountId.String(), tokenId.String())
+		return 0, nil // Return a valid zero balance to avoid surfacing noisy errors upstream.
 	}
 	balance = result.Balances[0].Balance
 

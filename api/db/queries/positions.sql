@@ -131,31 +131,36 @@ RETURNING *;
 
 -- name: GetUserPositions :many
 SELECT
-  market_id,
-  evm_address,
-  n_yes,
-  n_no,
-  cost_basis_price_yes_usd,
-  cost_basis_price_no_usd,
-  realized_pnl_usd,
-  updated_at,
-  created_at
-FROM positions
-WHERE evm_address = $1;
+  p.market_id,
+  p.evm_address,
+  p.n_yes,
+  p.n_no,
+  p.cost_basis_price_yes_usd,
+  p.cost_basis_price_no_usd,
+  p.realized_pnl_usd,
+  p.updated_at,
+  p.created_at
+FROM positions p
+JOIN markets m ON p.market_id = m.market_id
+WHERE p.evm_address = $1
+  AND m.deleted_at IS NULL; -- exclude soft-deleted markets
 
 -- name: GetUserPositionsByMarketId :many
 SELECT
-  market_id,
-  evm_address,
-  n_yes,
-  n_no,
-  cost_basis_price_yes_usd,
-  cost_basis_price_no_usd,
-  realized_pnl_usd,
-  updated_at,
-  created_at
-FROM positions
-WHERE evm_address = $1 AND market_id = $2;
+  p.market_id,
+  p.evm_address,
+  p.n_yes,
+  p.n_no,
+  p.cost_basis_price_yes_usd,
+  p.cost_basis_price_no_usd,
+  p.realized_pnl_usd,
+  p.updated_at,
+  p.created_at
+FROM positions p
+JOIN markets m ON p.market_id = m.market_id
+WHERE p.evm_address = $1
+  AND p.market_id = $2
+  AND m.deleted_at IS NULL; -- exclude soft-deleted markets
 
 
 -- name: GetNumActiveTradersLast30days :one
@@ -165,6 +170,7 @@ WHERE updated_at >= NOW() - INTERVAL '30 days';
 
 
 -- name: GetAllPositions :many
+-- admin authenticated query to get all positions, ordered by updated_at descending, with pagination
 SELECT *
 FROM positions
 ORDER BY updated_at DESC
@@ -177,14 +183,17 @@ FROM positions
 JOIN markets ON positions.market_id = markets.market_id
 WHERE positions.market_id = $1
   AND positions.points_awarded_at IS NULL
+  AND markets.deleted_at IS NULL
   AND markets.resolved_at IS NULL 
   AND markets.is_suspended = FALSE 
   AND markets.is_paused = FALSE;
 
 -- name: GetCostBasisForUserOnMarket :one
-SELECT cost_basis_price_yes_usd, cost_basis_price_no_usd
-FROM positions
-WHERE market_id = $1 AND evm_address = $2;
+SELECT p.cost_basis_price_yes_usd, p.cost_basis_price_no_usd
+FROM positions p
+JOIN markets m ON p.market_id = m.market_id
+WHERE p.market_id = $1 AND p.evm_address = $2
+  AND m.deleted_at IS NULL;
 
 
 

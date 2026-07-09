@@ -17,35 +17,57 @@ FROM prediction_intents
 WHERE tx_id = $1;
 
 -- name: GetAllOpenPredictionIntentsByMarketId :many
-SELECT *
-FROM prediction_intents
-WHERE market_id = $1 
-AND cancelled_at IS NULL AND fully_matched_at IS NULL AND evicted_at IS NULL;
+SELECT pi.*
+FROM prediction_intents pi
+JOIN markets m ON pi.market_id = m.market_id
+WHERE pi.market_id = $1
+AND pi.cancelled_at IS NULL AND pi.fully_matched_at IS NULL AND pi.evicted_at IS NULL
+AND m.deleted_at IS NULL;
 
 -- name: GetAllOpenPredictionIntentsByMarketIdAndAccountId :many
-SELECT *
-FROM prediction_intents
-WHERE market_id = $1 AND account_id = $2 
-AND cancelled_at IS NULL AND fully_matched_at IS NULL AND evicted_at IS NULL
+SELECT pi.*
+FROM prediction_intents pi
+JOIN markets m ON pi.market_id = m.market_id
+WHERE pi.market_id = $1 AND pi.account_id = $2
+AND pi.cancelled_at IS NULL AND pi.fully_matched_at IS NULL AND pi.evicted_at IS NULL
+AND m.deleted_at IS NULL
 ORDER BY account_id;
 
 -- name: GetAllAccountIdsForMarketId :many
-SELECT DISTINCT account_id
-FROM prediction_intents
-WHERE market_id = $1 
-AND cancelled_at IS NULL AND fully_matched_at IS NULL AND evicted_at IS NULL;
+SELECT DISTINCT pi.account_id
+FROM prediction_intents pi
+JOIN markets m ON pi.market_id = m.market_id
+WHERE pi.market_id = $1
+AND pi.cancelled_at IS NULL AND pi.fully_matched_at IS NULL AND pi.evicted_at IS NULL
+AND m.deleted_at IS NULL;
 
 -- name: GetAllOpenPredictionIntentsByEvmAddress :many
-SELECT *
-FROM prediction_intents
-WHERE evmaddress = $1 
-AND cancelled_at IS NULL AND fully_matched_at IS NULL AND evicted_at IS NULL;
+SELECT pi.*
+FROM prediction_intents pi
+JOIN markets m ON pi.market_id = m.market_id
+WHERE pi.evmaddress = $1
+	AND pi.cancelled_at IS NULL
+	AND pi.fully_matched_at IS NULL
+	AND pi.evicted_at IS NULL
+	AND m.deleted_at IS NULL;
+
+-- name: GetAllMatchedPredictionIntentsByEvmAddress :many
+SELECT pi.*
+FROM prediction_intents pi
+JOIN markets m ON pi.market_id = m.market_id
+JOIN matches ma ON (pi.tx_id = ma.tx_id1 OR pi.tx_id = ma.tx_id2)
+WHERE pi.evmaddress = $1
+	AND pi.cancelled_at IS NULL
+	AND pi.evicted_at IS NULL
+	AND m.deleted_at IS NULL;
 
 
 -- name: GetAllPredictionIntents :many
-SELECT *
-FROM prediction_intents
-ORDER BY generated_at DESC
+SELECT pi.*
+FROM prediction_intents pi
+JOIN markets m ON pi.market_id = m.market_id
+WHERE m.deleted_at IS NULL
+ORDER BY pi.generated_at DESC
 LIMIT $1 OFFSET $2;
 
 
@@ -55,9 +77,11 @@ FROM prediction_intents
 WHERE tx_id = $1;
 
 -- name: GetTotalValueUsdForMarketId :one
-SELECT COALESCE(SUM(price_usd * qty), 0)::double precision AS total_value_usd
-FROM prediction_intents
-WHERE market_id = $1;
+SELECT COALESCE(SUM(pi.price_usd * pi.qty), 0)::double precision AS total_value_usd
+FROM prediction_intents pi
+JOIN markets m ON pi.market_id = m.market_id
+WHERE pi.market_id = $1
+AND m.deleted_at IS NULL;
 
 
 

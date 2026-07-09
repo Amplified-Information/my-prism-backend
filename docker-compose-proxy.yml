@@ -18,7 +18,7 @@ services:
       ENVOY_HOST_WEB_ADMIN: ${ENVOY_HOST_WEB_ADMIN}
       ENVOY_HOST_WEB_LP: ${ENVOY_HOST_WEB_LP}
   modsec:
-    image: ghcr.io/prismmarketlabs/modsec:0.0.4
+    image: ghcr.io/prismmarketlabs/modsec:0.0.5
     restart: unless-stopped
     ports:
       - "8090:8080"

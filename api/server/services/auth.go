@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -18,6 +19,26 @@ import (
 
 type AuthService struct {
 	userRoleRepository *repositories.UserRoleRepository
+}
+
+func metadataKeys(md metadata.MD) []string {
+	keys := make([]string, 0, len(md))
+	for k := range md {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func maskTokenForLog(token string) string {
+	trimmed := strings.TrimSpace(token)
+	if trimmed == "" {
+		return "<empty>"
+	}
+	if len(trimmed) <= 18 {
+		return trimmed
+	}
+	return trimmed[:12] + "..." + trimmed[len(trimmed)-6:]
 }
 
 func (a *AuthService) Init(d *repositories.UserRoleRepository) error {
@@ -117,7 +138,7 @@ func (as *AuthService) VerifyChallenge(walletIdStr string, network string, sigBa
 func (as *AuthService) HasRole(ctx context.Context, role lib.RolesType) bool {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		lib.Log(lib.LOG_ERROR, "HasRole: no metadata in context")
+		lib.Log(lib.LOG_INFO, "HasRole: no metadata in context; treating as anonymous. Checked for role: %s", role)
 		return false
 	} else {
 		authHeaders := md.Get("authorization")
@@ -130,7 +151,15 @@ func (as *AuthService) HasRole(ctx context.Context, role lib.RolesType) bool {
 			if len(parts) == 2 && parts[0] == "Bearer" {
 				tokenString = parts[1]
 			} else {
-				lib.Log(lib.LOG_ERROR, "invalid authorization header format")
+				lib.Log(
+					lib.LOG_ERROR,
+					"invalid authorization header format: role=%s raw_header=%q raw_header_masked=%s parts=%d metadata_keys=%v",
+					role,
+					token,
+					maskTokenForLog(token),
+					len(parts),
+					metadataKeys(md),
+				)
 				return false
 			}
 
@@ -143,7 +172,15 @@ func (as *AuthService) HasRole(ctx context.Context, role lib.RolesType) bool {
 				return []byte(os.Getenv("JWT_SECRET")), nil
 			})
 			if err != nil || !tok.Valid {
-				lib.Log(lib.LOG_ERROR, "invalid JWT token: %v", err)
+				lib.Log(
+					lib.LOG_WARN,
+					"invalid JWT token: role=%s err=%v token_masked=%s token_len=%d metadata_keys=%v",
+					role,
+					err,
+					maskTokenForLog(tokenString),
+					len(tokenString),
+					metadataKeys(md),
+				)
 				return false
 			}
 
@@ -151,37 +188,84 @@ func (as *AuthService) HasRole(ctx context.Context, role lib.RolesType) bool {
 			lib.Log(lib.LOG_INFO, "JWT claims: %+v", claims)
 			exp, ok := claims["exp"].(float64)
 			if !ok {
-				lib.Log(lib.LOG_ERROR, "invalid exp claim in JWT token")
+				lib.Log(lib.LOG_ERROR, "invalid exp claim in JWT token: role=%s exp_type=%T exp_value=%v claims=%+v", role, claims["exp"], claims["exp"], claims)
 				return false
 			}
 
 			now := float64(time.Now().Unix())
 			if exp < now {
-				lib.Log(lib.LOG_ERROR, "JWT token has expired")
+				lib.Log(lib.LOG_ERROR, "JWT token has expired: role=%s exp=%v now=%v claims=%+v", role, exp, now, claims)
 				return false
 			}
 
 			// 4. Check if the required role is in the user's roles
 			rolesClaim, ok := claims["roles"].([]interface{})
 			if !ok {
-				lib.Log(lib.LOG_ERROR, "invalid roles claim in JWT token")
+				lib.Log(lib.LOG_ERROR, "invalid roles claim in JWT token: role=%s roles_type=%T roles_value=%v claims=%+v", role, claims["roles"], claims["roles"], claims)
 				return false
 			}
 
+			tokenHasRole := false
 			for _, r := range rolesClaim {
 				if roleStr, ok := r.(string); ok && roleStr == string(role) {
-					return true
+					tokenHasRole = true
+					break
 				}
 			}
-			lib.Log(lib.LOG_ERROR, "required role %s not found in user's roles", role)
+			if !tokenHasRole {
+				lib.Log(lib.LOG_WARN, "required role %s not found in token roles: available_roles=%v accountId=%v network=%v", role, rolesClaim, claims["accountId"], claims["network"])
+				return false
+			}
 
 			// 5. Let's also check the database for the user's role (e.g. revoked tokens won't work)
-			// TODO - may not be needed - sig check sufficient
-			// as.userRoleRepository.Get(claims["sub"].(string), claims["network"].(string))
+			// sig check may not be sufficient on its own?
+			// Can I remove the db check completely? (stateless auth)
+			if as.userRoleRepository == nil {
+				lib.Log(lib.LOG_ERROR, "HasRole: userRoleRepository is nil; cannot verify DB role accountId=%v network=%v required_role=%s", claims["accountId"], claims["network"], role)
+				return false
+			}
 
-			lib.Log(lib.LOG_INFO, "User logged in OK %s", claims["accountId"].(string))
-			return true
+			accountIdClaim, ok := claims["accountId"].(string)
+			if !ok || strings.TrimSpace(accountIdClaim) == "" {
+				lib.Log(lib.LOG_ERROR, "invalid accountId claim in JWT token: required_role=%s accountId_type=%T accountId_value=%v claims=%+v", role, claims["accountId"], claims["accountId"], claims)
+				return false
+			}
+
+			networksToCheck := []string{}
+			networkClaim, ok := claims["network"].(string)
+			networkClaim = strings.ToLower(strings.TrimSpace(networkClaim))
+			if ok && networkClaim != "" && lib.IsValidNetwork(networkClaim) {
+				networksToCheck = append(networksToCheck, networkClaim)
+			} else {
+				// Backward-compatible path for legacy JWTs that omit network.
+				// TODO - remove this fallback completely - network should be included in the JWT for all future tokens.
+				// For now, we will check all networks if the network claim is missing or invalid.
+				networksToCheck = append(networksToCheck, string(lib.TESTNET), string(lib.MAINNET), string(lib.PREVIEWNET))
+				lib.Log(lib.LOG_WARN, "JWT missing/invalid network claim; falling back to DB role lookup across all networks: required_role=%s accountId=%s network_type=%T network_value=%v", role, accountIdClaim, claims["network"], claims["network"])
+			}
+
+			for _, net := range networksToCheck {
+				dbRoles, err := as.userRoleRepository.GetRolesByUserAndNetwork(accountIdClaim, net)
+				if err != nil {
+					lib.Log(lib.LOG_WARN, "DB role lookup failed for one network: accountId=%s network=%s required_role=%s err=%v", accountIdClaim, net, role, err)
+					continue
+				}
+
+				for _, dbRole := range dbRoles {
+					if dbRole == string(role) {
+						/////
+						// Authorized
+						/////
+						return true
+					}
+				}
+			}
+			lib.Log(lib.LOG_WARN, "required role %s not found in DB roles: accountId=%s checked_networks=%v", role, accountIdClaim, networksToCheck)
+
+			return false
 		}
+
+		// lib.Log(lib.LOG_ERROR, "HasRole: missing authorization header for required role=%s metadata_keys=%v", role, metadataKeys(md))
 	}
 
 	return false

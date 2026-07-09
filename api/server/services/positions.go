@@ -59,12 +59,14 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 	}
 
 	response := &pb_api.UserPortfolioResponse{
-		Positions:             make(map[string]*pb_api.PositionInfo),
-		OpenPredictionIntents: make(map[string]*pb_api.PredictionIntents),
-		PrismPoints:           []*pb_api.PrismPoints{},
-		PrismTokenBalance:     uint64(0),
+		Positions:                make(map[string]*pb_api.PositionInfo),
+		OpenPredictionIntents:    make(map[string]*pb_api.PredictionIntents),
+		MatchedPredictionIntents: make(map[string]*pb_api.MatchedIntents),
+		PrismPoints:              []*pb_api.PrismPoints{},
+		PrismTokenBalance:        uint64(0),
 	}
 
+	// Positions
 	for _, userPosition := range userPositions {
 		priceUsd, err := ps.priceService.GetLatestPriceByMarket(userPosition.MarketID.String())
 		if err != nil {
@@ -143,6 +145,7 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 		response.Positions[userPosition.MarketID.String()] = elem
 	}
 
+	// OpenPredictionIntents
 	// now construct the open orderbookPositions by retrieving all open orders from prediction_intents:
 	// response.OrderbookPositions = make(map[string]*pb_api.Position) // REMOVE this line, already initialized above as map[string][]*pb_api.Position
 	predictionIntents, err := ps.predictionIntentsRepository.GetAllOpenPredictionIntentsByEvmAddress(req.EvmAddress)
@@ -167,6 +170,30 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 		response.OpenPredictionIntents[pi.MarketID.String()].PredictionIntents = append(response.OpenPredictionIntents[pi.MarketID.String()].PredictionIntents, orderbookPosition)
 	}
 
+	// MatchedPredictionIntents
+	matchedPredictionIntents, err := ps.predictionIntentsRepository.GetAllMatchedPredictionIntentsByEvmAddress(req.EvmAddress)
+	if err != nil {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get matched prediction intents for account with evm address %s: %v", req.EvmAddress, err)
+	}
+	// loop through each predictionIntents and add to OrderbookPositions
+	for _, pi := range matchedPredictionIntents {
+		matchedPosition := &pb_api.PredictionIntentResponse{
+			TxId:             pi.TxID.String(),
+			Net:              pi.Net,
+			MarketId:         pi.MarketID.String(),
+			GeneratedAt:      pi.GeneratedAt.String(),
+			AccountId:        pi.AccountID,
+			PriceUsd:         pi.PriceUsd,
+			Qty:              pi.Qty,
+			PrimarySecondary: pi.PrimarySecondary,
+		}
+		if _, ok := response.MatchedPredictionIntents[pi.MarketID.String()]; !ok {
+			response.MatchedPredictionIntents[pi.MarketID.String()] = &pb_api.MatchedIntents{}
+		}
+		response.MatchedPredictionIntents[pi.MarketID.String()].MatchedPredictionIntents = append(response.MatchedPredictionIntents[pi.MarketID.String()].MatchedPredictionIntents, matchedPosition)
+	}
+
+	// PrismPoints, PrismTokenBalance
 	// retrieve this user's prism balance:
 	// Perhaps this should be done from the front-end?
 	// validate that the network sent is valid

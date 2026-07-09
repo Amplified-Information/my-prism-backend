@@ -115,6 +115,10 @@ fi
 # Reduce the CPU [INPUT] interval from 1s to 60s (reduce log verbosity)
 sudo sed -i 's/\(^\s*interval_sec\s\+\)1/\160/I' /etc/fluent-bit/fluent-bit.conf
 
+# if disk space reaches 90%, send an alert (fluent-bit)
+# TODO
+# docker system prune -a
+
 ###
 # S3 stream: stream fluent-bit logs to an S3 bucket called $FLUENTBIT_S3_BUCKET:
 ###

@@ -284,6 +284,20 @@ func (pir *PredictionIntentsRepository) GetAllOpenPredictionIntentsByEvmAddress(
 	return predictionIntents, nil
 }
 
+func (pir *PredictionIntentsRepository) GetAllMatchedPredictionIntentsByEvmAddress(evmAddress string) ([]sqlc.PredictionIntent, error) {
+	if pir.db == nil {
+		return nil, lib.ErrorLog("database not initialized")
+	}
+
+	q := sqlc.New(pir.db)
+	predictionIntents, err := q.GetAllMatchedPredictionIntentsByEvmAddress(context.Background(), evmAddress)
+	if err != nil {
+		return nil, lib.ErrorLog("GetAllMatchedPredictionIntentsByEvmAddress failed", "error", err, "evmAddress", evmAddress)
+	}
+
+	return predictionIntents, nil
+}
+
 func (pir *PredictionIntentsRepository) GetAllPredictionIntents(limit int, offset int) ([]sqlc.PredictionIntent, error) {
 	if pir.db == nil {
 		return nil, lib.ErrorLog("database not initialized")
@@ -337,4 +351,23 @@ func (pir *PredictionIntentsRepository) GetPredictionIntentByTxId(txId string) (
 	}
 
 	return &predictionIntent, nil
+}
+
+func (pir *PredictionIntentsRepository) GetTxHashes(txId string) ([]sqlc.GetTxHashesByTxIdRow, error) {
+	if pir.db == nil {
+		return nil, lib.ErrorLog("database not initialized")
+	}
+
+	txUUID, err := uuid.Parse(txId)
+	if err != nil {
+		return nil, lib.ErrorLog("invalid txId uuid", "error", err, "txId", txId)
+	}
+
+	q := sqlc.New(pir.db)
+	txHashes, err := q.GetTxHashesByTxId(context.Background(), txUUID)
+	if err != nil {
+		return nil, lib.ErrorLog("GetTxHashesByTxId failed", "error", err, "txId", txId)
+	}
+
+	return txHashes, nil
 }

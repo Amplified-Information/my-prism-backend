@@ -344,7 +344,7 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PrismPre
 		return "", lib.LogAndError(lib.LOG_ERROR, "database error: failed to save order request: %v", err)
 	}
 
-	return fmt.Sprintf("Processed input for user %s", req.AccountId), nil
+	return fmt.Sprintf("txId submitted to CLOB for matching %s", req.TxId), nil
 }
 
 func (pis *PredictionIntentsService) CancelPredictionIntent(net string, marketId string, txId string, accountIdStr string, sigBase64 string, publicKeyStr string, keyType uint32) (*pb_api.StdResponse, error) {
@@ -564,4 +564,23 @@ func (pis *PredictionIntentsService) getAvailableLiquidityUsdForMarket(priceUsd 
 	}
 
 	return qty, nil
+}
+
+func (pis *PredictionIntentsService) GetTxHashes(txId string) (*pb_api.TxIdHashesResponse, error) {
+	txHashes, err := pis.predictionIntentsRepository.GetTxHashes(txId)
+	if err != nil {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get tx hashes by txId: %v", err)
+	}
+
+	_txHashes := make([]*pb_api.TxHash, len(txHashes))
+	for i, txHash := range txHashes {
+		_txHashes[i] = &pb_api.TxHash{
+			TxHash: txHash.TxHash,
+			Qty:    txHash.Qty.(float64),
+		}
+	}
+
+	return &pb_api.TxIdHashesResponse{
+		TxHashes: _txHashes,
+	}, nil
 }

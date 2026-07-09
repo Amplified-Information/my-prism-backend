@@ -160,6 +160,11 @@ func (s *server) CancelPredictionIntent(ctx context.Context, req *pb_api.CancelO
 	return cancelResp, err
 }
 
+func (s *server) GetTxHashes(ctx context.Context, req *pb_api.TxIdRequest) (*pb_api.TxIdHashesResponse, error) {
+	txHashResp, err := s.predictionIntentsService.GetTxHashes(req.TxId)
+	return txHashResp, err
+}
+
 func (s *server) GetChallenge(ctx context.Context, req *pb_api.ChallengeRequest) (*pb_api.StdResponse, error) {
 	challengesResp, err := s.authService.GetChallenge(req.AccountId, req.Network)
 	return &pb_api.StdResponse{
@@ -194,6 +199,7 @@ func (s *server) VerifyChallenge(ctx context.Context, req *pb_api.VerifyChalleng
 		claims := map[string]interface{}{
 			"accountId": req.ChallengeRequest.AccountId,
 			"roles":     userRoles,
+			"network":   req.ChallengeRequest.Network,
 		}
 		jwtToken, err := lib.GenerateJWT(os.Getenv("JWT_SECRET"), claims)
 		if err != nil {

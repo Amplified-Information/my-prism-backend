@@ -117,6 +117,8 @@ Note: if you are unsure what parameters to send (`-d`), check the .proto file.
 
 ```bash
 
+# watch out for rule 949110 on modsec (request could be blocked)
+
 easyrpc c -w --tls -a dev.prism.market:443 -d '{"marketId":"019be174-5df0-761e-ac62-f65602d7e16a","limit":100,"offset":0}' -i ./proto -p api.proto api.ApiServicePublic.GetComments
 
 TO=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
