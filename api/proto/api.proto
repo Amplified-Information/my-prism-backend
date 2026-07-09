@@ -282,6 +282,14 @@ message CancelOrderRequest {
   uint32 key_type = 7       [json_name = "keyType",   (validate.rules).uint32 = {in: [1, 2]} /* 1 = ed25519, 2 = ecdsa_secp256k1 */];
 }
 
+message TxHash {
+  string tx_hash = 1  [json_name = "txHash"];
+  double qty = 2      [json_name = "qty"];
+}
+message TxIdHashesResponse {
+  repeated TxHash tx_hashes = 1 [json_name = "txHashes"];
+}
+
 
 /////
 // ApiServicePublic - authenticated endpoints
@@ -389,14 +397,6 @@ message CategoryResponse {
 
 message CategoryIdRequest {
   int32 category_id = 1    [json_name = "categoryId"];
-}
-
-message TxHash {
-  string tx_hash = 1  [json_name = "txHash"];
-  double qty = 2      [json_name = "qty"];
-}
-message TxIdHashesResponse {
-  repeated TxHash tx_hashes = 1 [json_name = "txHashes"];
 }
 
 /////

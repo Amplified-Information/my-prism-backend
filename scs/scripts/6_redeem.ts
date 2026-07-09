@@ -1,23 +1,18 @@
 import {
   ContractExecuteTransaction,
   ContractFunctionParameters,
-  ContractId,
+  ContractId
 } from '@hashgraph/sdk'
 import { initHederaClient } from './lib/hedera.ts'
-import { networkSelected, operatorAccountId, operatorKeyType } from './constants.ts'
-import { uuid7_to_uint128 } from './utils.ts';
+import { uuid7_to_uint128 } from './lib/utils.ts'
 
-const [ client, _ ] = initHederaClient(
-  networkSelected,
-  operatorAccountId,
-  operatorKeyType
-)
+const [ client ] = initHederaClient()
 
 const main = async () => {
-  // CLI args: contractId, userAccountEvmAddress
+  // CLI args: contractId, marketId_uuid7
   const [contractId, marketId_uuid7] = process.argv.slice(2)
   if (!contractId || !marketId_uuid7) {
-    console.error(`Usage: ts-node redeem.ts <contractId> <marketId_uuid7>\t\t(note: current operator account id = ${operatorAccountId})`)
+    console.error('Usage: ts-node redeem.ts <contractId> <marketId_uuid7>')
     process.exit(1)
   }
   const marketIdBigInt = uuid7_to_uint128(marketId_uuid7)

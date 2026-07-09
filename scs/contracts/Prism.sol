@@ -40,6 +40,8 @@ contract Prism {
   mapping(uint128 => uint8) public outcomes; // 0 = NO wins, 1 = YES wins, 2 = EmergClose5050
   mapping(uint128 => uint256) public resolutionTimes;
   mapping(uint128 => uint256) public totalCollateralUsd;
+  mapping(uint128 => uint256) public totalYesTokensOutstanding;
+  mapping(uint128 => uint256) public totalNoTokensOutstanding;
   
   mapping(uint128 => mapping(address => uint256)) public yesTokens;
   mapping(uint128 => mapping(address => uint256)) public noTokens;
@@ -92,6 +94,8 @@ contract Prism {
     statements[marketId] = _statement;
     resolutionTimes[marketId] = 0;
     totalCollateralUsd[marketId] = 0;
+    totalYesTokensOutstanding[marketId] = 0;
+    totalNoTokensOutstanding[marketId] = 0;
 
     return collateralToken.allowance(msg.sender, address(this));
   }
@@ -197,12 +201,14 @@ contract Prism {
       // positive+secondary => SELL NO
       require(noTokens[marketId][signerSlot0] >= qty_lower, "Insufficient NO tokens");
       noTokens[marketId][signerSlot0] -= qty_lower;
+      totalNoTokensOutstanding[marketId] -= qty_lower;
       require(collateralToken.transfer(signerSlot0, collateralUsdAbsScaled_lower), "Transfer to NO seller failed");
       totalCollateralUsd[marketId] -= collateralUsdAbsScaled_lower;
     } else {
       // positive+primary => BUY YES
       require(collateralToken.transferFrom(signerSlot0, address(this), collateralUsdAbsScaled_lower), "Transfer from YES buyer failed");
       yesTokens[marketId][signerSlot0] += qty_lower; // 1:1 mapping of collateral qty to position tokens
+      totalYesTokensOutstanding[marketId] += qty_lower;
       totalCollateralUsd[marketId] += collateralUsdAbsScaled_lower;
     }
 
@@ -211,12 +217,14 @@ contract Prism {
       // negative+secondary => SELL YES
       require(yesTokens[marketId][signerSlot1] >= qty_lower, "Insufficient YES tokens");
       yesTokens[marketId][signerSlot1] -= qty_lower;
+      totalYesTokensOutstanding[marketId] -= qty_lower;
       require(collateralToken.transfer(signerSlot1, collateralUsdAbsScaled_lower), "Transfer to YES seller failed");
       totalCollateralUsd[marketId] -= collateralUsdAbsScaled_lower;
     } else {
       // negative+primary => BUY NO
       require(collateralToken.transferFrom(signerSlot1, address(this), collateralUsdAbsScaled_lower), "Transfer from NO buyer failed");
       noTokens[marketId][signerSlot1] += qty_lower; // 1:1 mapping of collateral qty to position tokens
+      totalNoTokensOutstanding[marketId] += qty_lower;
       totalCollateralUsd[marketId] += collateralUsdAbsScaled_lower;
     }
 
@@ -249,7 +257,10 @@ contract Prism {
   }
 
   /**
-  An internal-only function for redeeming winnings for a specific user on a specific marketId
+  An internal-only function for redeeming winnings for a specific user on a specific marketId.
+  Resolved winners receive their pro-rata share of the market's remaining collateral based on
+  their winning token balance. As claims are processed, both the remaining pot and the remaining
+  winning-token supply are reduced so the market drains to zero once all winners redeem.
   @param marketId The ID of the market for which the user wants to redeem their winnings
   @param winner The address of the user whose winnings are being redeemed
   @return amountUSDC The amount of collateral (in USDC) redeemed by the user
@@ -257,25 +268,38 @@ contract Prism {
   function redeemInternal(uint128 marketId, address winner) internal returns (uint256 amountUSDC) {
     require(resolutionTimes[marketId] > 0, "Not resolved yet");
 
-    uint256 grossWinnings;
+    uint256 yesBalance = yesTokens[marketId][winner];
+    uint256 noBalance = noTokens[marketId][winner];
+    uint256 claimUnits;
+    uint256 totalClaimUnits;
     if (outcomes[marketId] == 1) { // YES outcome
-      grossWinnings = yesTokens[marketId][winner];
+      claimUnits = yesBalance;
+      totalClaimUnits = totalYesTokensOutstanding[marketId];
     } else if (outcomes[marketId] == 0) { // NO outcome
-      grossWinnings = noTokens[marketId][winner];
-    } else if (outcomes[marketId] == 2) { // EmergClose5050 outcome - split collateral 50/50 to YES and NO holders
-      grossWinnings = (yesTokens[marketId][winner] + noTokens[marketId][winner]) / 2;
+      claimUnits = noBalance;
+      totalClaimUnits = totalNoTokensOutstanding[marketId];
+    } else if (outcomes[marketId] == 2) { // EmergClose5050 outcome - all outstanding position tokens share the remaining market pot.
+      claimUnits = yesBalance + noBalance;
+      totalClaimUnits = totalYesTokensOutstanding[marketId] + totalNoTokensOutstanding[marketId];
     } else {
       revert("Invalid market outcome");
     }
 
-    require(grossWinnings > 0, "No winning tokens");
+    require(claimUnits > 0, "No winning tokens");
+    require(totalClaimUnits >= claimUnits, "Winning supply mismatch");
+    require(totalCollateralUsd[marketId] > 0, "No market collateral");
+
+    uint256 grossWinnings;
+    if (claimUnits == totalClaimUnits) {
+      grossWinnings = totalCollateralUsd[marketId];
+    } else {
+      grossWinnings = (totalCollateralUsd[marketId] * claimUnits) / totalClaimUnits;
+    }
+    require(grossWinnings > 0, "No claimable collateral");
 
     // send the rake
     uint256 rakeAmount = (grossWinnings * rakePercentScaled100) / 10000;
     uint256 payoutAmount = grossWinnings - rakeAmount;
-
-    // Prevent underflow panic and provide a clear reason if market accounting is insolvent.
-    require(totalCollateralUsd[marketId] >= grossWinnings, "Insufficient market collateral");
 
     // Ensure the real token balance can support payout, not just internal accounting.
     uint256 contractBalance = collateralToken.balanceOf(address(this));
@@ -286,11 +310,17 @@ contract Prism {
     // Transfer (remaining, after rake) collateral 1:1
     require(collateralToken.transfer(winner, payoutAmount), "Collateral transfer failed");
 
-    // Clear balances
-    if (yesTokens[marketId][winner] > 0 ) yesTokens[marketId][winner] = 0;
-    if (noTokens[marketId][winner] > 0 ) noTokens[marketId][winner] = 0;
+    // Clear balances and reduce outstanding position-token supply.
+    if (yesBalance > 0) {
+      totalYesTokensOutstanding[marketId] -= yesBalance;
+      yesTokens[marketId][winner] = 0;
+    }
+    if (noBalance > 0) {
+      totalNoTokensOutstanding[marketId] -= noBalance;
+      noTokens[marketId][winner] = 0;
+    }
 
-    // don't forget to reduce totalCollateral (including rake)
+    // Reduce the remaining market pot by the claimant's gross share so the final winner drains the market.
     totalCollateralUsd[marketId] -= grossWinnings;
     
     emit WinningsRedeemed(marketId, winner, payoutAmount /* excluding rake */);
@@ -299,6 +329,9 @@ contract Prism {
   }
 
   /**
+  Sweep any residual market collateral to the owner after the post-resolution waiting period.
+  Under normal winner redemption flow, totalCollateralUsd should reach zero before this path is needed.
+  This function exists as a recovery path for abandoned or otherwise unclaimed markets.
   */
   function claimCollateralAfterOneYear(uint128 marketId) external onlyOwner {
     require(resolutionTimes[marketId] > 0, "Not resolved yet");

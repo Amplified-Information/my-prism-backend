@@ -3,6 +3,7 @@
 # this script prints out all submitted orders and matched orders
 # foreach accountId (.env file), this script prints detail on the open orders (unmatched) and active positions (matched), including dollar amount, number of YES, number of NO and qty
 # GetUserPortfolio is specified in ../proto/api.proto
+# If a marketId is resolved, this script also creates a file called "./out/resolve_{marketid}" with all matched orders for that market.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 API_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -135,7 +136,7 @@ get_market_state() {
 }
 
 preload_markets_cache() {
-  local limit=500
+  local limit=100
   local offset=0
   local pages=0
 
@@ -245,10 +246,35 @@ for i in "${!account_ids[@]}"; do
     payload=$(printf '{"evmAddress":"%s","net":"%s","marketId":"%s"}' "$evm_address" "$network" "$marketId")
   fi
 
-  # Call the GetUserPortfolio RPC for the current account
+  # Call GetUserPortfolio with retries to tolerate transient edge/network EOFs.
   echo "Calling GetUserPortfolio for account: $account_id"
-  if ! easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d "$payload" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetUserPortfolio > "$OUT_DIR/portfolio_${account_id}.json"; then
-    echo "Error: failed to fetch portfolio for account $account_id."
+  portfolio_tmp_file="$OUT_DIR/portfolio_${account_id}.json.tmp"
+  portfolio_out_file="$OUT_DIR/portfolio_${account_id}.json"
+  max_attempts=3
+  attempt=1
+  portfolio_ok=0
+  while (( attempt <= max_attempts )); do
+    err_file="$OUT_DIR/portfolio_${account_id}.err"
+    if easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d "$payload" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetUserPortfolio > "$portfolio_tmp_file" 2>"$err_file"; then
+      if [[ -s "$portfolio_tmp_file" ]] && jq -e . "$portfolio_tmp_file" >/dev/null 2>&1; then
+        mv "$portfolio_tmp_file" "$portfolio_out_file"
+        portfolio_ok=1
+        rm -f "$err_file"
+        break
+      fi
+      echo "Warning: GetUserPortfolio returned invalid/empty JSON for $account_id (attempt $attempt/$max_attempts)."
+    else
+      echo "Warning: GetUserPortfolio RPC failed for $account_id (attempt $attempt/$max_attempts):"
+      cat "$err_file"
+    fi
+
+    rm -f "$portfolio_tmp_file"
+    attempt=$((attempt + 1))
+  done
+
+  if [[ $portfolio_ok -ne 1 ]]; then
+    echo "Error: failed to fetch portfolio for account $account_id after $max_attempts attempts."
+    rm -f "$portfolio_tmp_file"
     continue
   fi
   echo "Saved $OUT_DIR/portfolio_${account_id}.json"
@@ -390,79 +416,55 @@ fi
 
 
 # For every matched order, print a table with:
-# account_id, market_id, tx_id, tx_hash, qty, price_usd, side, primary_secondary.
+# If the market is resolved, also create a file called "./out/resolve_{marketid}"
+# timestamp, account_id, market_id, tx_id, tx_hash, qty, price_usd, side, primary_secondary.
 echo -e "-------------------------------------------\n"
 printf '\nMatched Orders\n'
-printf '%-15s %-36s %-15s %-36s %-66s %12s %10s %-6s %-10s\n' "AccountID" "MarketID" "IsResolved" "TxID (can be duplicate)" "TxHash" "Qty" "PriceUSD" "Side" "Prim/Sec"
-printf '%-15s %-36s %-15s %-36s %-66s %12s %10s %-6s %-10s\n' "----------" "---------" "---------" "-----" "-------" "---" "--------" "----" "--------"
-
-# Build tx_id metadata from prediction intents so we can render account/price/side fields.
-declare -A tx_account_map
-declare -A tx_price_map
-declare -A tx_primary_secondary_map
-intents_fetch_failed=0
-intents_rows_total=0
-intent_lookup_limit=500
-intent_lookup_offset=0
-intent_lookup_pages=0
-while :; do
-  intents_json=$(easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d "{\"limit\":$intent_lookup_limit,\"offset\":$intent_lookup_offset}" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetAllPredictionIntents 2>/dev/null)
-  if [[ $? -ne 0 || -z "$intents_json" ]]; then
-    intents_fetch_failed=1
-    break
-  fi
-
-  intents_in_page=$(printf '%s\n' "$intents_json" | jq -r '(.predictionIntents // []) | length')
-  intents_rows_total=$((intents_rows_total + intents_in_page))
-  if [[ "$intents_in_page" == "0" ]]; then
-    break
-  fi
-
-  while IFS=$'\t' read -r itx iacct iprice ips; do
-    [[ -z "$itx" ]] && continue
-    tx_account_map[$itx]="$iacct"
-    tx_price_map[$itx]="$iprice"
-    tx_primary_secondary_map[$itx]="$ips"
-  done < <(printf '%s\n' "$intents_json" | jq -r '.predictionIntents[]? | [.txId, .accountId, .priceUsd, .primarySecondary] | @tsv')
-
-  if (( intents_in_page < intent_lookup_limit )); then
-    break
-  fi
-
-  intent_lookup_offset=$((intent_lookup_offset + intent_lookup_limit))
-  intent_lookup_pages=$((intent_lookup_pages + 1))
-  if (( intent_lookup_pages >= 40 )); then
-    break
-  fi
-done
-
-declare -A loaded_account_set
-for i in "${!account_ids[@]}"; do
-  loaded_account_set["${account_ids[$i]}"]=1
-done
+printf '%-20s %-15s %-36s %-15s %-36s %-40s %12s %10s %-6s %-10s\n' "TimestampUTC" "AccountID" "MarketID" "IsResolved" "TxID (can be duplicate)" "TxHash" "Qty" "PriceUSD" "Side" "Prim/Sec"
+printf '%-20s %-15s %-36s %-15s %-36s %-40s %12s %10s %-6s %-10s\n' "------------" "----------" "---------" "---------" "-----" "-------" "---" "--------" "----" "--------"
 
 declare -A tx_hashes_json_cache
-matches_fetch_failed=0
-matches_rows_total=0
-match_lookup_limit=500
-match_lookup_offset=0
-match_lookup_pages=0
+declare -A matched_market_set
+declare -A resolve_file_initialized
 matched_rows=0
-while :; do
-  matches_json=$(easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d "{\"limit\":$match_lookup_limit,\"offset\":$match_lookup_offset}" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetAllMatches 2>/dev/null)
-  if [[ $? -ne 0 || -z "$matches_json" ]]; then
-    matches_fetch_failed=1
-    break
+matched_intents_total=0
+selected_market_intents_total=0
+for i in "${!account_ids[@]}"; do
+  account_id="${account_ids[$i]}"
+  portfolio_file="$OUT_DIR/portfolio_${account_id}.json"
+
+  # Some API paths may scope matchedPredictionIntents when marketId is provided.
+  # To avoid dropping matched rows, fetch an unfiltered snapshot for matched section.
+  if [[ -n "$marketId" ]]; then
+    evm_address=$(resolve_evm_address "$account_id")
+    if [[ -n "$evm_address" ]]; then
+      matched_payload=$(printf '{"evmAddress":"%s","net":"%s"}' "$evm_address" "$network")
+      matched_tmp_file="$OUT_DIR/portfolio_matched_${account_id}.json.tmp"
+      matched_out_file="$OUT_DIR/portfolio_matched_${account_id}.json"
+      if easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d "$matched_payload" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetUserPortfolio > "$matched_tmp_file" 2>/dev/null; then
+        if [[ -s "$matched_tmp_file" ]] && jq -e . "$matched_tmp_file" >/dev/null 2>&1; then
+          mv "$matched_tmp_file" "$matched_out_file"
+          portfolio_file="$matched_out_file"
+        else
+          rm -f "$matched_tmp_file"
+        fi
+      else
+        rm -f "$matched_tmp_file"
+      fi
+    fi
   fi
 
-  rows_in_page=$(printf '%s\n' "$matches_json" | jq -r '(.matches // []) | length')
-  matches_rows_total=$((matches_rows_total + rows_in_page))
-  if [[ "$rows_in_page" == "0" ]]; then
-    break
+  if [[ ! -f "$portfolio_file" ]]; then
+    continue
   fi
 
-  while IFS=$'\t' read -r row_market_id tx1 qty1 tx2 qty2; do
-    [[ -z "$row_market_id" ]] && continue
+  while IFS=$'\t' read -r row_market_id tx_id raw_price primary_secondary fallback_qty generated_at; do
+    [[ -z "$row_market_id" || -z "$tx_id" ]] && continue
+    matched_intents_total=$((matched_intents_total + 1))
+    matched_market_set[$row_market_id]=1
+    if [[ -n "$marketId" && "$row_market_id" == "$marketId" ]]; then
+      selected_market_intents_total=$((selected_market_intents_total + 1))
+    fi
     if [[ -n "$marketId" && "$row_market_id" != "$marketId" ]]; then
       continue
     fi
@@ -473,49 +475,55 @@ while :; do
       row_resolved_marker="R"
     fi
 
-    for leg in 1 2; do
-      if [[ "$leg" == "1" ]]; then
-        tx_id="$tx1"
-        fallback_qty="$qty1"
-      else
-        tx_id="$tx2"
-        fallback_qty="$qty2"
-      fi
-      [[ -z "$tx_id" ]] && continue
+    resolve_file="$OUT_DIR/resolve_${row_market_id}"
+    if [[ "$row_resolved_marker" == "R" && -z "${resolve_file_initialized[$row_market_id]:-}" ]]; then
+      : > "$resolve_file"
+      printf '%-20s %-15s %-36s %-15s %-36s %-40s %12s %10s %-6s %-10s\n' "TimestampUTC" "AccountID" "MarketID" "IsResolved" "TxID (can be duplicate)" "TxHash" "Qty" "PriceUSD" "Side" "Prim/Sec" >> "$resolve_file"
+      printf '%-20s %-15s %-36s %-15s %-36s %-40s %12s %10s %-6s %-10s\n' "------------" "----------" "---------" "---------" "-----" "-------" "---" "--------" "----" "--------" >> "$resolve_file"
+      resolve_file_initialized[$row_market_id]=1
+    fi
 
-      account_id="${tx_account_map[$tx_id]}"
-      if [[ -z "$account_id" ]]; then
-        account_id="<unknown>"
-      fi
-      # Keep output scoped to loaded accounts when account is known.
-      if [[ "$account_id" != "<unknown>" && -z "${loaded_account_set[$account_id]}" ]]; then
-        continue
-      fi
+    price_fmt=$(awk -v v="$raw_price" 'BEGIN { printf "%.3f", v + 0 }')
+    side="BUY"
+    if awk -v v="$raw_price" 'BEGIN { exit !(v + 0 < 0) }'; then
+      side="SELL"
+    fi
+    if [[ -z "$primary_secondary" ]]; then
+      primary_secondary="?"
+    fi
 
-      raw_price="${tx_price_map[$tx_id]}"
-      if [[ -z "$raw_price" ]]; then
-        raw_price="0"
+    timestamp_utc=""
+    if [[ -n "$generated_at" ]]; then
+      timestamp_utc=$(date -u -d "$generated_at" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null)
+      if [[ -z "$timestamp_utc" ]]; then
+        timestamp_utc=$(printf '%s' "$generated_at" | sed -E 's/[[:space:]]+\+0000([[:space:]]+\+0000)?$//')
+        timestamp_utc=$(printf '%s' "$timestamp_utc" | sed -E 's/\.([0-9]{1,9})$//')
       fi
-      price_fmt=$(awk -v v="$raw_price" 'BEGIN { printf "%.3f", v + 0 }')
-      side="BUY"
-      if awk -v v="$raw_price" 'BEGIN { exit !(v + 0 < 0) }'; then
-        side="SELL"
-      fi
-      primary_secondary="${tx_primary_secondary_map[$tx_id]}"
-      if [[ -z "$primary_secondary" ]]; then
-        primary_secondary="?"
-      fi
+    fi
 
-      if [[ -z "${tx_hashes_json_cache[$tx_id]}" ]]; then
-        tx_hashes_json_cache[$tx_id]=$(easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d "{\"txId\":\"$tx_id\"}" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetTxHashes 2>/dev/null)
-      fi
-      tx_hashes_json="${tx_hashes_json_cache[$tx_id]}"
+    if [[ -z "${tx_hashes_json_cache[$tx_id]}" ]]; then
+      tx_hashes_json_cache[$tx_id]=$(easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d "{\"txId\":\"$tx_id\"}" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetTxHashes 2>/dev/null)
+    fi
+    tx_hashes_json="${tx_hashes_json_cache[$tx_id]}"
 
-      emitted_hash_row=0
-      while IFS=$'\t' read -r tx_hash matched_qty; do
-        [[ -z "$tx_hash" ]] && continue
-        matched_qty_fmt=$(awk -v v="$matched_qty" 'BEGIN { printf "%.4f", v + 0 }')
-        printf '%-15s %-36s %-15s %-36s %-66s %12s %10s %-6s %-10s\n' \
+    emitted_hash_row=0
+    while IFS=$'\t' read -r tx_hash matched_qty; do
+      [[ -z "$tx_hash" ]] && continue
+      matched_qty_fmt=$(awk -v v="$matched_qty" 'BEGIN { printf "%.4f", v + 0 }')
+      printf '%-20s %-15s %-36s %-15s %-36s %-40s %12s %10s %-6s %-10s\n' \
+        "$timestamp_utc" \
+        "$account_id" \
+        "$row_market_id" \
+        "$row_resolved_marker" \
+        "$tx_id" \
+        "$tx_hash" \
+        "$matched_qty_fmt" \
+        "$price_fmt" \
+        "$side" \
+        "$primary_secondary"
+      if [[ "$row_resolved_marker" == "R" ]]; then
+        printf '%-20s %-15s %-36s %-15s %-36s %-40s %12s %10s %-6s %-10s\n' \
+          "$timestamp_utc" \
           "$account_id" \
           "$row_market_id" \
           "$row_resolved_marker" \
@@ -524,14 +532,28 @@ while :; do
           "$matched_qty_fmt" \
           "$price_fmt" \
           "$side" \
-          "$primary_secondary"
-        matched_rows=$((matched_rows + 1))
-        emitted_hash_row=1
-      done < <(printf '%s\n' "$tx_hashes_json" | jq -r '.txHashes[]? | [.txHash, .qty] | @tsv')
+          "$primary_secondary" >> "$resolve_file"
+      fi
+      matched_rows=$((matched_rows + 1))
+      emitted_hash_row=1
+    done < <(printf '%s\n' "$tx_hashes_json" | jq -r '.txHashes[]? | [.txHash, .qty] | @tsv')
 
-      if [[ $emitted_hash_row -eq 0 ]]; then
-        fallback_qty_fmt=$(awk -v v="$fallback_qty" 'BEGIN { printf "%.4f", v + 0 }')
-        printf '%-15s %-36s %-15s %-36s %-66s %12s %10s %-6s %-10s\n' \
+    if [[ $emitted_hash_row -eq 0 ]]; then
+      fallback_qty_fmt=$(awk -v v="$fallback_qty" 'BEGIN { printf "%.4f", v + 0 }')
+      printf '%-20s %-15s %-36s %-15s %-36s %-66s %12s %10s %-6s %-10s\n' \
+        "$timestamp_utc" \
+        "$account_id" \
+        "$row_market_id" \
+        "$row_resolved_marker" \
+        "$tx_id" \
+        "<no tx hash>" \
+        "$fallback_qty_fmt" \
+        "$price_fmt" \
+        "$side" \
+        "$primary_secondary"
+      if [[ "$row_resolved_marker" == "R" ]]; then
+        printf '%-20s %-15s %-36s %-15s %-36s %-66s %12s %10s %-6s %-10s\n' \
+          "$timestamp_utc" \
           "$account_id" \
           "$row_market_id" \
           "$row_resolved_marker" \
@@ -540,32 +562,40 @@ while :; do
           "$fallback_qty_fmt" \
           "$price_fmt" \
           "$side" \
-          "$primary_secondary"
-        matched_rows=$((matched_rows + 1))
+          "$primary_secondary" >> "$resolve_file"
       fi
-    done
-  done < <(printf '%s\n' "$matches_json" | jq -r '.matches[]? | [.marketId, .txId1, .qty1, .txId2, .qty2] | @tsv')
-
-  if (( rows_in_page < match_lookup_limit )); then
-    break
-  fi
-
-  match_lookup_offset=$((match_lookup_offset + match_lookup_limit))
-  match_lookup_pages=$((match_lookup_pages + 1))
-  if (( match_lookup_pages >= 40 )); then
-    break
-  fi
+      matched_rows=$((matched_rows + 1))
+    fi
+  done < <(jq -r '
+    (.matchedPredictionIntents // {})
+    | to_entries[]?
+    | .key as $marketId
+    | (.value.matchedPredictionIntents // [])[]?
+    | [
+        $marketId,
+        (.txId // ""),
+        (.priceUsd // 0),
+        (.primarySecondary // ""),
+        (.qty // 0),
+        (.generatedAt // "")
+      ]
+    | @tsv
+  ' "$portfolio_file")
 done
 
 if [[ $matched_rows -eq 0 ]]; then
-  printf 'No matched orders found from grpc endpoints for the selected scope.\n'
-  if [[ $matches_fetch_failed -eq 1 ]]; then
-    printf 'Hint: GetAllMatches returned no payload or failed on this endpoint.\n'
-  elif [[ $matches_rows_total -eq 0 ]]; then
-    printf 'Hint: GetAllMatches returned zero matches on this endpoint/network.\n'
-  fi
-
-  if [[ $intents_fetch_failed -eq 1 ]]; then
-    printf 'Hint: GetAllPredictionIntents returned no payload or failed on this endpoint.\n'
+  printf 'No matched orders found from matchedPredictionIntents for the selected scope.\n'
+  if [[ $matched_intents_total -eq 0 ]]; then
+    printf 'Hint: matchedPredictionIntents is empty in GetUserPortfolio responses for the selected scope.\n'
+  else
+    if [[ -n "$marketId" && $selected_market_intents_total -eq 0 ]]; then
+      printf 'Hint: selected marketId %s has no matchedPredictionIntents.\n' "$marketId"
+      available_matched_markets=$(printf '%s\n' "${!matched_market_set[@]}" | sort | tr '\n' ' ')
+      if [[ -n "$available_matched_markets" ]]; then
+        printf 'Matched intents are available for markets: %s\n' "$available_matched_markets"
+      fi
+    else
+      printf 'Hint: matchedPredictionIntents exists, but no rows passed the current market filter.\n'
+    fi
   fi
 fi

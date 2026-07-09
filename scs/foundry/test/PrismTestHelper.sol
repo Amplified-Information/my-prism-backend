@@ -16,6 +16,11 @@ contract PrismTestHelper is Prism {
 
     /// @dev Test-only: directly set position token balances without going through posColToksOnBehalfAtomic.
     function setTokensForTest(uint128 marketId, address user, uint256 yesAmt, uint256 noAmt) external {
+        uint256 previousYes = yesTokens[marketId][user];
+        uint256 previousNo = noTokens[marketId][user];
+
+        totalYesTokensOutstanding[marketId] = totalYesTokensOutstanding[marketId] - previousYes + yesAmt;
+        totalNoTokensOutstanding[marketId] = totalNoTokensOutstanding[marketId] - previousNo + noAmt;
         yesTokens[marketId][user] = yesAmt;
         noTokens[marketId][user]  = noAmt;
     }

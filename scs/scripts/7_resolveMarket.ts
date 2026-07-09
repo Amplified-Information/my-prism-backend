@@ -1,17 +1,12 @@
 import {
   ContractExecuteTransaction,
   ContractFunctionParameters,
-  ContractId,
+  ContractId
 } from '@hashgraph/sdk'
 import { initHederaClient } from './lib/hedera.ts'
-import { networkSelected, operatorAccountId, operatorKeyType } from './constants.ts'
-import { uuid7_to_uint128 } from './utils.ts';
+import { uuid7_to_uint128 } from './lib/utils.ts'
 
-const [ client, _ ] = initHederaClient(
-  networkSelected,
-  operatorAccountId,
-  operatorKeyType
-)
+const [client] = initHederaClient()
 
 const main = async () => {
   // CLI args: contractId, userAccountEvmAddress

@@ -623,6 +623,33 @@ contract PrismTest is Test {
         assertEq(no,  0, "NO tokens cleared");
     }
 
+    function testRedeemYesWinnerGetsFullMatchedPotLessRake() public {
+        uint128 marketId = 36;
+        uint256 qty = 100e6;
+
+        prism.createNewMarket(marketId, "Matched market full-pot payout");
+        prism.setTokensForTest(marketId, user1, qty, 0);
+        prism.setTokensForTest(marketId, user2, 0, qty);
+        usdc.transfer(address(prism), 2 * qty);
+        prism.setTotalCollateralForTest(marketId, 2 * qty);
+        prism.resolveMarket(marketId, true);
+
+        uint256 grossPayout = 2 * qty;
+        uint256 rakeAmount = (grossPayout * 200) / 10000;
+        uint256 expectedPayout = grossPayout - rakeAmount;
+
+        uint256 user1BalBefore = usdc.balanceOf(user1);
+        uint256 ownerBalBefore = usdc.balanceOf(owner);
+
+        vm.prank(user1);
+        uint256 returned = prism.redeem(marketId);
+
+        assertEq(returned, expectedPayout, "winner receives full matched pot less rake");
+        assertEq(usdc.balanceOf(user1), user1BalBefore + expectedPayout, "winner USDC after redeem");
+        assertEq(usdc.balanceOf(owner), ownerBalBefore + rakeAmount, "owner receives rake on full pot");
+        assertEq(prism.getTotalCollateral(marketId), 0, "matched market collateral cleared");
+    }
+
     function testRedeemNoWinnerDefaultRake() public {
         uint128 marketId = 21;
         uint256 qty = 50e6;
@@ -702,7 +729,7 @@ contract PrismTest is Test {
         prism.redeem(marketId);
     }
 
-    function testRedeemInsufficientMarketCollateralReverts() public {
+    function testRedeemUsesTrackedRemainingCollateralWhenBelowWinningSupply() public {
         uint128 marketId = 26;
         uint256 qty = 100e6;
 
@@ -712,9 +739,19 @@ contract PrismTest is Test {
         prism.setTotalCollateralForTest(marketId, qty - 1);
         prism.resolveMarket(marketId, true);
 
+        uint256 grossPayout = qty - 1;
+        uint256 rakeAmount = (grossPayout * 200) / 10000;
+        uint256 expectedPayout = grossPayout - rakeAmount;
+        uint256 user1BalBefore = usdc.balanceOf(user1);
+        uint256 ownerBalBefore = usdc.balanceOf(owner);
+
         vm.prank(user1);
-        vm.expectRevert("Insufficient market collateral");
-        prism.redeem(marketId);
+        uint256 returned = prism.redeem(marketId);
+
+        assertEq(returned, expectedPayout, "redeem uses remaining tracked market collateral");
+        assertEq(usdc.balanceOf(user1), user1BalBefore + expectedPayout, "winner receives tracked remaining collateral less rake");
+        assertEq(usdc.balanceOf(owner), ownerBalBefore + rakeAmount, "owner receives rake on tracked remaining collateral");
+        assertEq(prism.getTotalCollateral(marketId), 0, "tracked market collateral cleared");
     }
 
     function testRedeemCollateralAccountingMismatchReverts() public {
