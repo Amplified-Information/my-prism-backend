@@ -32,7 +32,22 @@ if [[ ! -d "$PROTO_DIR" ]]; then
   exit 1
 fi
 
-read -p "Enter marketId to resolve: " marketId
+env_get() {
+  local key="$1"
+  awk -F '=' -v k="$key" '
+    $1==k {
+      val=substr($0, index($0, "=")+1)
+      sub(/^[[:space:]]+/, "", val)
+      sub(/[[:space:]]+$/, "", val)
+      print val
+      exit
+    }
+  ' "$ENV_FILE"
+}
+
+market_id_default=$(env_get "MARKET_ID")
+read -p "Enter marketId to resolve [${market_id_default}]: " marketId
+marketId=${marketId:-$market_id_default}
 if [[ -z "$marketId" ]]; then
   echo "marketId is required"
   exit 1
@@ -56,8 +71,16 @@ if [[ "$resolveMarketInputUpper" == "NO" ]]; then
   outcome=0
 fi
 
-read -p "Enter base URL [https://testnet.dev.prism.market]: " baseUrl
-baseUrl=${baseUrl:-https://testnet.dev.prism.market}
+net_from_env=$(env_get "NET")
+enviro_from_env=$(env_get "ENVIRO")
+net_from_env=$(printf '%s' "$net_from_env" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+enviro_from_env=$(printf '%s' "$enviro_from_env" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+net_from_env=${net_from_env:-testnet}
+enviro_from_env=${enviro_from_env:-dev}
+base_url_default="https://${net_from_env}.${enviro_from_env}.prism.market"
+
+read -p "Enter base URL [$base_url_default]: " baseUrl
+baseUrl=${baseUrl:-$base_url_default}
 echo "Base URL set to: $baseUrl"
 
 bearer_token=$(grep -E '^(ADMIN_BEARER_TOKEN|AUTH_BEARER_TOKEN|BEARER_TOKEN)=' "$ENV_FILE" | head -n1 | cut -d '=' -f2-)

@@ -24,6 +24,13 @@ FROM matches
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2;
 
+-- name: GetAllMatchesForMarketId :many
+SELECT *
+FROM matches
+WHERE market_id = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
+
 -- -- name: GetTotalValueMatchedUsdInTimePeriod :one
 -- SELECT COALESCE(SUM(m.qty1 * pi1.price_usd + m.qty2 * ABS(pi2.price_usd)), 0)::numeric AS total_volume_usd
 -- FROM matches m

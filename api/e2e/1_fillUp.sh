@@ -85,8 +85,14 @@ env_get() {
 
 
 ### 1
-read -p "Enter the marketId (UUID7): " marketId
-marketId=${marketId}
+marketId_default=$(env_get "MARKET_ID")
+if [[ -n "$marketId_default" ]]; then
+  read -p "Enter the marketId (UUID7) [$marketId_default]: " marketId
+  marketId=${marketId:-$marketId_default}
+else
+  read -p "Enter the marketId (UUID7): " marketId
+  marketId=${marketId}
+fi
 
 orders_file="$OUT_DIR/fillup_orders_${marketId}.tsv"
 orders_latest_file="$OUT_DIR/fillup_orders_latest.tsv"
@@ -100,14 +106,22 @@ fi
 
 
 ### 2
-read -p "Enter the base URL [https://testnet.dev.prism.market]: " baseUrl
-baseUrl=${baseUrl:-https://testnet.dev.prism.market}
+net_from_env=$(env_get "NET")
+enviro_from_env=$(env_get "ENVIRO")
+net_from_env=$(printf '%s' "$net_from_env" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+enviro_from_env=$(printf '%s' "$enviro_from_env" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+net_from_env=${net_from_env:-testnet}
+enviro_from_env=${enviro_from_env:-dev}
+base_url_default="https://${net_from_env}.${enviro_from_env}.prism.market"
+
+read -p "Enter the base URL [$base_url_default]: " baseUrl
+baseUrl=${baseUrl:-$base_url_default}
 echo "Base URL set to: $baseUrl"
 
-network="testnet"
-case "$baseUrl" in
-  *previewnet*) network="previewnet" ;;
-  *mainnet*) network="mainnet" ;;
+network="$net_from_env"
+case "$network" in
+  testnet|previewnet|mainnet) ;;
+  *) network="testnet" ;;
 esac
 
 grpc_addr="${baseUrl#*://}"
@@ -576,8 +590,16 @@ for i in "${!account_ids[@]}"; do
     fi
 
     open_orders=$(printf '%s\n' "$portfolio_json" | jq -r --arg m "$marketId" '(.openPredictionIntents[$m].openPredictionIntents // []) | length')
-    active_positions=$(printf '%s\n' "$portfolio_json" | jq -r '(.positions // {}) | keys | length')
-    printf 'Account %s: open orders=%d, active positions=%d\n' "$account_id" "$open_orders" "$active_positions"
+    matched_orders=$(printf '%s\n' "$portfolio_json" | jq -r --arg m "$marketId" '
+      ((.openPredictionIntents[$m].openPredictionIntents // []) | map(.txId) | map(select(. != null and . != "")) | unique) as $openTxIds
+      | (.matchedPredictionIntents[$m].matchedPredictionIntents // [])
+      | map(.txId)
+      | map(select(. != null and . != ""))
+      | unique
+      | map(select((. as $tx | $openTxIds | index($tx)) | not))
+      | length
+    ')
+    printf 'Account %s: open orders=%d, matched orders=%d\n' "$account_id" "$open_orders" "$matched_orders"
   fi
 done
 
@@ -595,9 +617,6 @@ summary_file="$OUT_DIR/fillup_summary_${marketId}.tsv"
 
 {
   printf 'run_timestamp=%q\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  printf 'marketId=%q\n' "$marketId"
-  printf 'baseUrl=%q\n' "$baseUrl"
-  printf 'network=%q\n' "$network"
   printf 'grpc_addr=%q\n' "$grpc_addr"
   printf 'usdc_decimals=%q\n' "$usdc_decimals"
   printf 'proto_dir=%q\n' "$PROTO_DIR"
@@ -614,8 +633,8 @@ summary_file="$OUT_DIR/fillup_summary_${marketId}.tsv"
   done
 } > "$state_file"
 
-cp "$state_file" "$latest_state_file"
-cp "$orders_file" "$orders_latest_file"
+ln -sfn "$(basename "$state_file")" "$latest_state_file"
+ln -sfn "$(basename "$orders_file")" "$orders_latest_file"
 
 {
   printf 'account_id\tkey_type\torders\tsubmitted_qty\tsubmitted_usd\n'
@@ -630,8 +649,8 @@ cp "$orders_file" "$orders_latest_file"
 } > "$summary_file"
 
 echo "Saved run state: $state_file"
-echo "Updated latest state pointer: $latest_state_file"
+echo "Updated latest state symlink: $latest_state_file -> $(basename "$state_file")"
 echo "Saved order ledger: $orders_file"
-echo "Updated latest order ledger: $orders_latest_file"
+echo "Updated latest order symlink: $orders_latest_file -> $(basename "$orders_file")"
 echo "Saved run summary: $summary_file"
 

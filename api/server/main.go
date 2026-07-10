@@ -165,8 +165,20 @@ func (s *server) GetTxHashes(ctx context.Context, req *pb_api.TxIdRequest) (*pb_
 	return txHashResp, err
 }
 
+func (s *server) GetPredictionIntentMatches(ctx context.Context, req *pb_api.GetMatchesRequest) (*pb_api.MatchesResponse, error) {
+	matchesResp, err := s.matchesService.GetPredictionIntentMatches(req.MarketId, req.Limit, req.Offset)
+	return matchesResp, err
+}
+
 func (s *server) GetChallenge(ctx context.Context, req *pb_api.ChallengeRequest) (*pb_api.StdResponse, error) {
 	challengesResp, err := s.authService.GetChallenge(req.AccountId, req.Network)
+	if err != nil {
+		// Do not leak backend error details (e.g. SQL internals) in grpc status text.
+		return &pb_api.StdResponse{
+			Message:   "Unable to issue challenge",
+			ErrorCode: 1,
+		}, nil
+	}
 	return &pb_api.StdResponse{
 		Message:   fmt.Sprintf("%d", challengesResp),
 		ErrorCode: 0,
@@ -333,7 +345,7 @@ func (s *server) DeleteMarket(ctx context.Context, req *pb_api.MarketIdRequest) 
 		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
 	}
 
-	_, err := s.marketsRepository.SoftDeleteMarket(req.MarketId)
+	err := s.marketsService.SoftDeleteMarket(req.MarketId)
 	if err != nil {
 		return nil, err
 	}

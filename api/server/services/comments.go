@@ -23,8 +23,8 @@ func (c *CommentsService) GetComments(req *pb_api.GetCommentsRequest) (*pb_api.G
 	// guards
 
 	// defaults - optional fields *req.Limit and *req.Offset
-	var limit int32 = 100
-	var offset int32 = 0
+	var limit int32 = lib.LIMIT
+	var offset int32 = lib.OFFSET
 
 	if req.Limit != nil {
 		limit = *req.Limit

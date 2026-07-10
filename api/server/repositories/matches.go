@@ -179,3 +179,26 @@ func (matchesRepository *MatchesRepository) GetAllMatches(ctx context.Context, l
 
 	return matches, nil
 }
+
+func (matchesRepository *MatchesRepository) GetPredictionIntentMatches(ctx context.Context, marketIdStr string, limit int32, offset int32) ([]sqlc.Match, error) {
+	if matchesRepository.db == nil {
+		return nil, lib.ErrorLog("database not initialized")
+	}
+
+	marketId, err := uuid.Parse(marketIdStr)
+	if err != nil {
+		return nil, lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketIdStr)
+	}
+
+	q := sqlc.New(matchesRepository.db)
+	matches, err := q.GetAllMatchesForMarketId(ctx, sqlc.GetAllMatchesForMarketIdParams{
+		MarketID: marketId,
+		Limit:    limit,
+		Offset:   offset,
+	})
+	if err != nil {
+		return nil, lib.ErrorLog("GetPredictionIntentMatches failed", "error", err, "marketId", marketId, "limit", limit, "offset", offset)
+	}
+
+	return matches, nil
+}

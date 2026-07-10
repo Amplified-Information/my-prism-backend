@@ -40,3 +40,6 @@ var SigSchemeDateRanges = [][2]int64{
 	{0, 1763904000},          // v0: 1st Jan 1970 00:00:00 to 22nd Mar 2026 00:00:00
 	{1763904000, 2147483647}, // v1: 22nd Mar 2026 00:00:00 to 19th Jan 2038 03:14:07 (max 32-bit int)
 }
+
+var LIMIT int32 = 100
+var OFFSET int32 = 0

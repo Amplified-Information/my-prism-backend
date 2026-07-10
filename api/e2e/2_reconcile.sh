@@ -13,6 +13,25 @@ API_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROTO_DIR="$API_DIR/proto"
 OUT_DIR="$SCRIPT_DIR/out"
 STATE_FILE_DEFAULT="$OUT_DIR/fillup_state_latest.env"
+ENV_FILE="$SCRIPT_DIR/.env"
+
+if [[ ! -f "$ENV_FILE" ]]; then
+  echo ".env file not found at $ENV_FILE"
+  exit 1
+fi
+
+env_get() {
+  local key="$1"
+  awk -F '=' -v k="$key" '
+    $1==k {
+      val=substr($0, index($0, "=")+1)
+      sub(/^[[:space:]]+/, "", val)
+      sub(/[[:space:]]+$/, "", val)
+      print val
+      exit
+    }
+  ' "$ENV_FILE"
+}
 
 if ! command -v easyrpc &> /dev/null; then
   echo "easyrpc could not be found. Please install it before running this script."
@@ -42,12 +61,23 @@ if [[ ! -f "$state_file" ]]; then
   exit 1
 fi
 
+marketId=$(env_get "MARKET_ID")
+net_from_env=$(env_get "NET")
+enviro_from_env=$(env_get "ENVIRO")
+net_from_env=$(printf '%s' "$net_from_env" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+enviro_from_env=$(printf '%s' "$enviro_from_env" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+net_from_env=${net_from_env:-testnet}
+enviro_from_env=${enviro_from_env:-dev}
+baseUrl="https://${net_from_env}.${enviro_from_env}.prism.market"
+
 source "$state_file"
 
-if [[ -z "$marketId" || -z "$baseUrl" || -z "$network" ]]; then
-  echo "State file is missing required values (marketId/baseUrl/network): $state_file"
+if [[ -z "$marketId" ]]; then
+  echo "MARKET_ID is missing from .env at $ENV_FILE"
   exit 1
 fi
+
+network="$net_from_env"
 
 grpc_addr="${baseUrl#*://}"
 grpc_addr="${grpc_addr%%/}"
@@ -79,9 +109,13 @@ declare -a summary_active_yes_qty
 declare -a summary_active_no_qty
 declare -a portfolio_json_by_index
 declare -a prefetched_open_orders
-declare -a prefetched_active_positions
+declare -a prefetched_matched_orders
 declare -A account_index_by_id
 declare -A run_tx_by_account
+declare -A run_tx_side_by_account
+declare -A run_tx_qty_by_account
+declare -A run_tx_price_by_account
+declare -A tx_hashes_json_cache
 
 ### Functions
 
@@ -123,15 +157,15 @@ fetch_user_portfolio_json() {
 }
 
 print_portfolio_summary_table() {
-  printf '\n%-15s %12s %16s %12s %12s\n' "Account ID" "OpenOrders" "ActivePositions" "YES" "NO"
-  printf '%-15s %12s %16s %12s %12s\n' "----------" "----------" "---------------" "----" "--"
+  printf '\n%-15s %12s %16s %12s %12s\n' "Account ID" "OpenOrders" "MatchedOrders" "YES" "NO"
+  printf '%-15s %12s %16s %12s %12s\n' "----------" "----------" "-------------" "----" "--"
   for i in "${loaded_indices[@]}"; do
     account_id="${account_ids[$i]}"
     [[ -z "$account_id" ]] && continue
     printf '%-15s %12s %16s %12s %12s\n' \
       "$account_id" \
       "${prefetched_open_orders[$i]:-0}" \
-      "${prefetched_active_positions[$i]:-0}" \
+      "${prefetched_matched_orders[$i]:-0}" \
       "${summary_active_yes_qty[$i]:-0}" \
       "${summary_active_no_qty[$i]:-0}"
   done
@@ -172,6 +206,12 @@ build_expected_open_state_from_ledger() {
     fi
 
     [[ "$error_code" != "0" ]] && continue
+
+    if [[ -n "$tx_id" && "$tx_id" != "null" ]]; then
+      run_tx_side_by_account["$idx|$tx_id"]="$side"
+      run_tx_qty_by_account["$idx|$tx_id"]="$qty"
+      run_tx_price_by_account["$idx|$tx_id"]="$price"
+    fi
 
     submitted_order_count[$idx]=$(( ${submitted_order_count[$idx]:-0} + 1 ))
     submitted_qty_raw[$idx]=$(add_float "${submitted_qty_raw[$idx]:-0}" "$qty")
@@ -392,7 +432,15 @@ for i in "${loaded_indices[@]}"; do
 
   portfolio_json_by_index[$i]="$portfolio_json"
   prefetched_open_orders[$i]=$(printf '%s\n' "$portfolio_json" | jq -r --arg m "$marketId" '(.openPredictionIntents[$m].openPredictionIntents // []) | length')
-  prefetched_active_positions[$i]=$(printf '%s\n' "$portfolio_json" | jq -r --arg m "$marketId" 'if (.positions[$m] // null) == null then 0 else 1 end')
+  prefetched_matched_orders[$i]=$(printf '%s\n' "$portfolio_json" | jq -r --arg m "$marketId" '
+    ((.openPredictionIntents[$m].openPredictionIntents // []) | map(.txId) | map(select(. != null and . != "")) | unique) as $openTxIds
+    | (.matchedPredictionIntents[$m].matchedPredictionIntents // [])
+    | map(.txId)
+    | map(select(. != null and . != ""))
+    | unique
+    | map(select((. as $tx | $openTxIds | index($tx)) | not))
+    | length
+  ')
   active_yes_raw=$(printf '%s\n' "$portfolio_json" | jq -r --arg m "$marketId" '.positions[$m].position.yes // "0"')
   active_no_raw=$(printf '%s\n' "$portfolio_json" | jq -r --arg m "$marketId" '.positions[$m].position.no // "0"')
   summary_active_yes_qty[$i]=$(awk -v raw="$active_yes_raw" -v d="$usdc_decimals" 'BEGIN { printf "%.5f", raw / (10 ^ d) }')
@@ -411,8 +459,7 @@ print_portfolio_summary_table
 echo
 echo "Legend:"
 echo "- OpenOrders: current count of open intents on the orderbook for this market/account."
-echo "- ActivePositions: whether this market currently has a position entry for this account (0 or 1 here)."
-echo "- SubmittedOrders (next table): successful intents submitted in this run from the saved ledger."
+echo "- MatchedOrders: distinct submitted txIds that appear matched for this market/account and are no longer still open."
 
 
 
@@ -420,9 +467,11 @@ echo "- SubmittedOrders (next table): successful intents submitted in this run f
 
 
 ### 2. reconcile submitted-vs-open/matched intent conservation against API
-
+echo 
 printf '\nReconciling submitted intents vs API open/matched state (market=%s)...\n' "$marketId"
-printf '%-15s %15s %12s %12s %12s %12s %12s %12s %12s %12s\n' "Account ID" "SubmittedOrders" "ExpBUY" "OpenBUY" "ActYES" "dBUY" "ExpSELL" "OpenSELL" "ActNO" "dCOL"
+echo
+echo "SubmittedOrders: successful intents submitted in this run from the saved ledger of transactions generated by 1_fillUp.sh"
+printf '%-15s %15s %12s %12s %12s %12s %12s %12s %12s %12s\n' "Account ID" "SubmittedOrders" "ExpectedBUY" "OpenBUY" "ActiveYES" "dBUY" "ExpectedSELL" "OpenSELL" "ActiveNO" "dSELL"
 printf '%-15s %15s %12s %12s %12s %12s %12s %12s %12s %12s\n' "----------" "---------------" "------" "-------" "------" "----" "-------" "--------" "-----" "----"
 
 reconcile_failed=0
@@ -440,16 +489,13 @@ for i in "${loaded_indices[@]}"; do
   open_buy_qty="0"
   open_sell_qty="0"
   open_collateral="0"
-  matched_buy_qty_api="0"
-  matched_sell_qty_api="0"
-  matched_collateral_api="0"
-  declare -A open_tx_ids
+  expected_open_buy_qty_api="0"
+  expected_open_sell_qty_api="0"
+  expected_open_collateral_api="0"
 
   while IFS=$'\t' read -r open_tx_id open_price open_qty; do
     [[ -z "$open_tx_id" ]] && continue
     [[ -z "${run_tx_by_account[$i|$open_tx_id]}" ]] && continue
-    open_tx_ids["$open_tx_id"]=1
-
     if (( $(echo "$open_price >= 0" | bc -l) )); then
       open_buy_qty=$(add_float "$open_buy_qty" "$open_qty")
       open_spend=$(awk -v p="$open_price" -v q="$open_qty" 'BEGIN { ap = (p < 0 ? -p : p); s = ap * q; if (s < 0) s = 0; printf "%.6f", s }')
@@ -460,38 +506,38 @@ for i in "${loaded_indices[@]}"; do
     open_collateral=$(add_float "$open_collateral" "$open_spend")
   done < <(printf '%s\n' "$portfolio_json" | jq -r --arg m "$marketId" '.openPredictionIntents[$m].openPredictionIntents[]? | [.txId, .priceUsd, .qty] | @tsv')
 
-  while IFS=$'\t' read -r matched_tx_id matched_price matched_qty; do
-    [[ -z "$matched_tx_id" ]] && continue
-    [[ -z "${run_tx_by_account[$i|$matched_tx_id]}" ]] && continue
+  for tx_key in "${!run_tx_qty_by_account[@]}"; do
+    [[ "$tx_key" != "$i|"* ]] && continue
+    tx_id="${tx_key#${i}|}"
+    tx_side="${run_tx_side_by_account[$tx_key]:-}"
+    tx_qty="${run_tx_qty_by_account[$tx_key]:-0}"
+    tx_price="${run_tx_price_by_account[$tx_key]:-0}"
 
-    # If a tx is still open in this snapshot, matchedPredictionIntents may include
-    # informational rows that are not strict fill deltas. Skip those txIds here so
-    # submitted = matched + open remains stable.
-    if [[ -n "${open_tx_ids[$matched_tx_id]:-}" ]]; then
-      continue
+    if [[ -z "${tx_hashes_json_cache[$tx_id]:-}" ]]; then
+      tx_hashes_json_cache[$tx_id]=$(easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d "{\"txId\":\"$tx_id\"}" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetTxHashes 2>/dev/null || printf '{}')
     fi
 
-    if (( $(echo "$matched_price >= 0" | bc -l) )); then
-      matched_buy_qty_api=$(add_float "$matched_buy_qty_api" "$matched_qty")
-      matched_spend=$(awk -v p="$matched_price" -v q="$matched_qty" 'BEGIN { ap = (p < 0 ? -p : p); s = ap * q; if (s < 0) s = 0; printf "%.6f", s }')
+    tx_matched_qty=$(printf '%s\n' "${tx_hashes_json_cache[$tx_id]}" | jq -r '[.txHashes[]?.qty] | add // 0')
+    tx_matched_capped=$(awk -v m="$tx_matched_qty" -v o="$tx_qty" 'BEGIN { v = m + 0; lim = o + 0; if (lim > 0 && v > lim) v = lim; if (v < 0) v = 0; printf "%.6f", v }')
+    tx_open_rem=$(awk -v o="$tx_qty" -v m="$tx_matched_capped" 'BEGIN { v = (o + 0) - (m + 0); if (v < 0 && v > -0.000001) v = 0; if (v < 0) v = 0; printf "%.6f", v }')
+
+    if [[ "$tx_side" == "BUY" ]]; then
+      expected_open_buy_qty_api=$(add_float "$expected_open_buy_qty_api" "$tx_open_rem")
+      rem_spend=$(awk -v p="$tx_price" -v q="$tx_open_rem" 'BEGIN { ap = (p < 0 ? -p : p); s = ap * q; if (s < 0) s = 0; printf "%.6f", s }')
     else
-      matched_sell_qty_api=$(add_float "$matched_sell_qty_api" "$matched_qty")
-      matched_spend=$(awk -v p="$matched_price" -v q="$matched_qty" 'BEGIN { ap = (p < 0 ? -p : p); s = (1 - ap) * q; if (s < 0) s = 0; printf "%.6f", s }')
+      expected_open_sell_qty_api=$(add_float "$expected_open_sell_qty_api" "$tx_open_rem")
+      rem_spend=$(awk -v p="$tx_price" -v q="$tx_open_rem" 'BEGIN { ap = (p < 0 ? -p : p); s = (1 - ap) * q; if (s < 0) s = 0; printf "%.6f", s }')
     fi
-    matched_collateral_api=$(add_float "$matched_collateral_api" "$matched_spend")
-  done < <(printf '%s\n' "$portfolio_json" | jq -r --arg m "$marketId" '.matchedPredictionIntents[$m].matchedPredictionIntents // [] | unique_by([.txId, .priceUsd, .qty])[] | [.txId, .priceUsd, .qty] | @tsv')
+    expected_open_collateral_api=$(add_float "$expected_open_collateral_api" "$rem_spend")
+  done
 
   active_yes_qty=$(awk -v v="${summary_active_yes_qty[$i]:-0}" 'BEGIN { printf "%.6f", v }')
   active_no_qty=$(awk -v v="${summary_active_no_qty[$i]:-0}" 'BEGIN { printf "%.6f", v }')
 
   submitted_orders="${submitted_order_count[$i]:-0}"
-  submitted_buy_qty="${submitted_buy_qty_raw[$i]:-0}"
-  submitted_sell_qty="${submitted_sell_qty_raw[$i]:-0}"
-  submitted_collateral="${submitted_notional_usd[$i]:-0}"
-
-  expected_buy_qty=$(awk -v s="$submitted_buy_qty" -v m="$matched_buy_qty_api" 'BEGIN { v = s - m; if (v < 0 && v > -0.000001) v = 0; printf "%.6f", v }')
-  expected_sell_qty=$(awk -v s="$submitted_sell_qty" -v m="$matched_sell_qty_api" 'BEGIN { v = s - m; if (v < 0 && v > -0.000001) v = 0; printf "%.6f", v }')
-  expected_collateral=$(awk -v s="$submitted_collateral" -v m="$matched_collateral_api" 'BEGIN { v = s - m; if (v < 0 && v > -0.000001) v = 0; printf "%.6f", v }')
+  expected_buy_qty="$expected_open_buy_qty_api"
+  expected_sell_qty="$expected_open_sell_qty_api"
+  expected_collateral="$expected_open_collateral_api"
 
   delta_buy_qty=$(awk -v s="$expected_buy_qty" -v a="$open_buy_qty" 'BEGIN { printf "%.6f", s - a }')
   delta_sell_qty=$(awk -v s="$expected_sell_qty" -v a="$open_sell_qty" 'BEGIN { printf "%.6f", s - a }')
@@ -521,9 +567,20 @@ done
 
 ### 3. final status
 if [[ $reconcile_failed -ne 0 ]]; then
-  echo "Reconciliation failed. API open intents do not match ledger-derived expected open intents."
+  printf '\033[31m❌\033[0m Reconciliation failed. API open intents do not match ledger-derived expected open intents.\n'
   exit 1
 fi
 
-printf '\033[32m✓\033[0m Reconciliation passed for all accounts (within tolerance %s).\n' "$tolerance_qty"
+echo "Legend:"
+echo "* ExpectedBUY: amount the script believes should still be open after reconciliation: submitted BUY quantity minus BUY quantity already matched on-chain."
+echo "* OpenBUY: what the API currently reports as open BUY quantity in the user portfolio for that market."
+echo "* ActiveYES: whether the user currently has an active YES position for this market (0 or 1)."
+echo "* dBUY: the discrepancy between ExpectedBUY and OpenBUY."
+echo "* ExpectedSELL: amount the script believes should still be open after reconciliation: submitted SELL quantity minus SELL quantity already matched on-chain."
+echo "* OpenSELL: what the API currently reports as open SELL quantity in the user portfolio for that market."
+echo "* ActiveNO: whether the user currently has an active NO position for this market (0 or 1)."
+echo "* dSELL: the discrepancy between ExpectedSELL and OpenSELL."
+echo
+
+printf '\033[32m✅\033[0m Reconciliation passed for all accounts (within tolerance %s).\n' "$tolerance_qty"
 

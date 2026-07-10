@@ -22,6 +22,7 @@ service ApiServicePublic {
   rpc GetUserPortfolio(UserPortfolioRequest) returns (UserPortfolioResponse);
   rpc CancelPredictionIntent(CancelOrderRequest) returns (StdResponse);
   rpc GetTxHashes(TxIdRequest) returns (TxIdHashesResponse);
+  rpc GetPredictionIntentMatches(GetMatchesRequest) returns (MatchesResponse);
 
   // authenticated endpoints
   rpc CreateMarket(CreateMarketRequest) returns (CreateMarketResponse);
@@ -153,8 +154,25 @@ message PredictionIntents {
   repeated PredictionIntentResponse prediction_intents = 1   [json_name = "openPredictionIntents"];
 }
 
+message Match {
+  string market_id = 1       [json_name = "marketId"];
+  string tx_id1 = 2          [json_name = "txId1"];
+  string tx_id2 = 3          [json_name = "txId2"];
+  double price_usd = 5       [json_name = "priceUsd"];
+  double qty1 = 6            [json_name = "qty1"];
+  double qty2 = 7            [json_name = "qty2"];
+  string created_at = 8      [json_name = "matchedAt"];
+  string tx_hash = 9         [json_name = "txHash"];
+}
+
+message GetMatchesRequest {
+  string market_id = 1 [json_name = "marketId",  (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
+  optional int32 limit = 2      [json_name = "limit",     (validate.rules).int32 = {gt: 0, lte: 1000} /* max 1000 matches per request */];
+  optional int32 offset = 3     [json_name = "offset",    (validate.rules).int32 = {gte: 0} /* offset in matches */];
+}
+
 message MatchedIntents {
-  repeated PredictionIntentResponse matched_prediction_intents = 1   [json_name = "matchedPredictionIntents"];
+  repeated Match matched_prediction_intents = 1   [json_name = "matchedPredictionIntents"];
 }
 
 message Position {
@@ -191,9 +209,8 @@ message PrismPoints {
 message UserPortfolioResponse {
   map<string, PositionInfo> positions = 1                      [json_name = "positions"];
   map<string, PredictionIntents> open_prediction_intents = 2   [json_name = "openPredictionIntents"];
-  map<string, MatchedIntents> matched_prediction_intents = 3   [json_name = "matchedPredictionIntents"];
-  repeated PrismPoints prism_points = 4                        [json_name = "prismPoints"];
-  uint64 prism_token_balance = 5                               [json_name = "prismTokenBalance"];
+  repeated PrismPoints prism_points = 3                        [json_name = "prismPoints"];
+  uint64 prism_token_balance = 4                               [json_name = "prismTokenBalance"];
 }
 
 message MarketResponse {
@@ -347,17 +364,6 @@ message PatchMarketRequest {
   optional string alias_no = 10              [json_name = "aliasNo",     (validate.rules).string = {min_len: 1, max_len: 100}];
   optional string hex_color_yes = 11        [json_name = "hexColorYes", (validate.rules).string = {pattern: "^#[A-Fa-f0-9]{6}$"}]; // hex color code, e.g. #RRGGBB
   optional string hex_color_no = 12         [json_name = "hexColorNo",  (validate.rules).string = {pattern: "^#[A-Fa-f0-9]{6}$"}]; // hex color code, e.g. #RRGGBB
-}
-
-message Match {
-  string market_id = 1       [json_name = "marketId"];
-  string tx_id1 = 2          [json_name = "txId1"];
-  string tx_id2 = 3          [json_name = "txId2"];
-  double price_usd = 5       [json_name = "priceUsd"];
-  double qty1 = 6            [json_name = "qty1"];
-  double qty2 = 7            [json_name = "qty2"];
-  string created_at = 8      [json_name = "matchedAt"];
-  string tx_hash = 9         [json_name = "txHash"];
 }
 
 message MatchesResponse {

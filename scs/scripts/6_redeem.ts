@@ -33,6 +33,7 @@ const main = async () => {
     const result = await query.execute(client)
     const record = await result.getRecord(client)
     const receipt = await result.getReceipt(client)
+    console.log(`Transaction ID: ${result.transactionId.toString()}`)
     console.log(`amountUSDC recieved = ${record.contractFunctionResult!.getUint256(0).toString()} (check your hashpack wallet)` )
     console.log('Done. Receipt status: ', receipt.status.toString())
   } catch (err) {

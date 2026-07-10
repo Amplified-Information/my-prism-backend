@@ -49,6 +49,11 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
+if ! command -v curl >/dev/null 2>&1; then
+  echo "curl could not be found. Please install it before running this script."
+  exit 1
+fi
+
 env_get() {
   local key="$1"
   awk -F '=' -v k="$key" '
@@ -106,7 +111,9 @@ format_units_6() {
   fi
 }
 
-read -p "Enter marketId to query: " marketId
+market_id_default=$(env_get "MARKET_ID")
+read -p "Enter marketId to query [${market_id_default}]: " marketId
+marketId=${marketId:-$market_id_default}
 if [[ -z "$marketId" ]]; then
   echo "marketId is required"
   exit 1
@@ -117,8 +124,15 @@ if [[ ! $marketId =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4
   exit 1
 fi
 
-read -p "Enter network [testnet]: " network
-network=${network:-testnet}
+net_from_env=$(env_get "NET")
+enviro_from_env=$(env_get "ENVIRO")
+net_from_env=$(printf '%s' "$net_from_env" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+enviro_from_env=$(printf '%s' "$enviro_from_env" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+net_from_env=${net_from_env:-testnet}
+enviro_from_env=${enviro_from_env:-dev}
+base_url_default="https://${net_from_env}.${enviro_from_env}.prism.market"
+
+network="$net_from_env"
 network_lower=$(printf '%s' "$network" | tr '[:upper:]' '[:lower:]')
 case "$network_lower" in
   testnet|previewnet|mainnet) ;;
@@ -130,8 +144,20 @@ esac
 network="$network_lower"
 network_upper=$(printf '%s' "$network" | tr '[:lower:]' '[:upper:]')
 
-read -p "Enter base URL [https://testnet.dev.prism.market]: " baseUrl
-baseUrl=${baseUrl:-https://testnet.dev.prism.market}
+read -p "Enter base URL [$base_url_default]: " baseUrl
+baseUrl=${baseUrl:-$base_url_default}
+
+mirror_base="https://${network}.mirrornode.hedera.com"
+usdc_var_name="${network_upper}_USDC_ADDRESS"
+usdc_token_id=$(env_get "$usdc_var_name")
+if [[ -z "$usdc_token_id" ]]; then
+  echo "Missing $usdc_var_name in $ENV_FILE"
+  exit 1
+fi
+if [[ ! "$usdc_token_id" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "Invalid USDC token id '$usdc_token_id' for network $network"
+  exit 1
+fi
 
 grpc_addr="${baseUrl#*://}"
 grpc_addr="${grpc_addr%%/}"
@@ -271,7 +297,7 @@ if [[ "$is_suspended" == "true" ]]; then
 fi
 
 if [[ -n "$resolved_at" && "$resolved_at" != "null" ]]; then
-  echo "-> Market is resolved. Resolved at $resolved_at"
+  printf "\033[32m✅\033[0m Market is resolved. Resolved at $resolved_at\n"
 else
   echo "Market is not yet resolved. Cannot claim. Market closes at $closes_at"
   exit 1
@@ -388,8 +414,8 @@ fi
 # Trim trailing zeros for cleaner display while preserving at least one decimal digit.
 total_collateral_scaled=$(printf '%s\n' "$total_collateral_scaled" | sed -E 's/(\.[0-9]*[1-9])0+$/\1/; s/\.0+$/\.0/')
 
-echo "totalCollateral($marketId) raw = $total_collateral"
-echo "totalCollateral($marketId) = \$$total_collateral_scaled"
+echo "current raw totalCollateral($marketId) in the contract = $total_collateral"
+echo "current totalCollateral($marketId) in the contract = \$$total_collateral_scaled"
 if [[ "$total_yes_outstanding" =~ ^[0-9]+$ ]]; then
   echo "totalYesTokensOutstanding($marketId) raw = $total_yes_outstanding"
 fi
@@ -409,7 +435,7 @@ fi
 
 # if total_yes && total_no == 0, then no one can claim anything, so exit early
 if [[ "$total_yes" -eq 0 && "$total_no" -eq 0 ]]; then
-  printf "No YES or NO tokens exist for this market for the %d accountIds. No claims possible.\n" "${#account_ids[@]}"
+  printf "\033[93m⚠️\033[0m No YES or NO tokens exist for this market for the %d accountIds. No claims possible.\n" "${#account_ids[@]}"
   if [[ "$total_collateral" =~ ^[0-9]+$ && "$total_collateral" -gt 0 ]]; then
     echo
     echo "Note: totalCollateral is still non-zero."
@@ -446,7 +472,33 @@ echo "Claiming collateral for each account..."
 # call Solidity: redeem(marketId)
 
 declare -a claim_amounts_raw=()
+declare -a claim_tx_ids=()
 total_received_raw=0
+
+fetch_mirror_usdc_credit_raw() {
+  local tx_id="$1"
+  local account_id="$2"
+  local encoded_tx_id
+  local tx_json
+
+  encoded_tx_id=$(printf '%s' "$tx_id" | sed 's/@/%40/g')
+  tx_json=$(curl -sfL "$mirror_base/api/v1/transactions/$encoded_tx_id") || return 1
+
+  printf '%s\n' "$tx_json" | jq -r \
+    --arg account "$account_id" \
+    --arg token "$usdc_token_id" '
+      [
+        (.transactions // [])[]?
+        | (.token_transfers // [])[]?
+        | select((.account // .account_id // "") == $account)
+        | select((.token_id // "") == $token)
+        | (.amount // 0)
+        | tonumber
+        | select(. > 0)
+      ]
+      | add // 0
+    '
+}
 
 printf '\n%-15s %-10s %-18s %-18s\n' "Account ID" "Status" "Received(raw)" "Received(USD)"
 printf '%-15s %-10s %-18s %-18s\n' "----------" "------" "-------------" "-------------"
@@ -479,10 +531,13 @@ for account_id in "${account_ids[@]}"; do
 
   if [[ -n "$received_raw" && "$receipt_status" == "SUCCESS" ]]; then
     claim_amounts_raw+=("$received_raw")
+    tx_id=$(printf '%s\n' "$redeem_output" | sed -nE 's/^Transaction ID:[[:space:]]*(.+)$/\1/p' | tail -n1)
+    claim_tx_ids+=("$tx_id")
     total_received_raw=$((total_received_raw + received_raw))
     received_usd=$(format_units_6 "$received_raw")
     printf '%-15s %-10s %-18s %-18s\n' "$account_id" "ok" "$received_raw" "\$$received_usd"
   else
+    claim_tx_ids+=("")
     printf '%-15s %-10s %-18s %-18s\n' "$account_id" "fail" "-" "-"
     printf '%s\n' "$redeem_output" | tail -n 3
   fi
@@ -581,16 +636,74 @@ echo "Implied actual delta USD vs $assert_label expectation: \$$actual_rake_usd"
 echo "Received-vs-expected delta raw ($assert_label): $delta_raw"
 
 if [[ "$collateral_delta_raw" -ne 0 ]]; then
-  echo "ALERT: Token accounting mismatch (YES+NO differs from totalCollateral)."
+  printf '\033[31m❌\033[0m ALERT: Token accounting mismatch (YES+NO differs from totalCollateral).\n'
 fi
 
 if (( abs_delta_raw > rounding_tolerance_raw )); then
   echo "ALERT: Payout mismatch exceeds tolerance (|delta|=$abs_delta_raw > $rounding_tolerance_raw)."
+  printf '\033[31m❌\033[0m Claim totals verification failed.\n'
   exit 1
 fi
 
 if (( abs_delta_raw > 0 )); then
-  echo "Warning: payout delta is non-zero but within rounding tolerance (|delta|=$abs_delta_raw)."
+  printf '\033[93m⚠️\033[0m Warning: payout delta is non-zero but within rounding tolerance (|delta|=$abs_delta_raw).\n'
 fi
 
-echo "Claim totals verified."
+echo
+echo "Starting post-check verification against Hedera mirror node..."
+echo "Waiting 3 seconds for mirror node consensus..."
+sleep 3
+
+mirror_check_failed=0
+mirror_checked=0
+mirror_total_raw=0
+
+printf '\nMirror-node USDC transfer check\n'
+printf '%-15s %-24s %-18s %-18s %-8s\n' "Account ID" "TxID" "Expected(raw)" "Mirror(raw)" "Match"
+printf '%-15s %-24s %-18s %-18s %-8s\n' "----------" "----" "-------------" "-----------" "-----"
+
+for i in "${!account_ids[@]}"; do
+  account_id="${account_ids[$i]}"
+  expected_raw="${claim_amounts_raw[$i]:-}"
+  tx_id="${claim_tx_ids[$i]:-}"
+
+  if [[ -z "$expected_raw" || -z "$tx_id" ]]; then
+    printf '%-15s %-24s %-18s %-18s %-8s\n' "$account_id" "-" "-" "-" "skip"
+    continue
+  fi
+
+  mirror_raw=$(fetch_mirror_usdc_credit_raw "$tx_id" "$account_id" || true)
+  if [[ -z "$mirror_raw" || ! "$mirror_raw" =~ ^-?[0-9]+$ ]]; then
+    printf '%-15s %-24s %-18s %-18s %-8s\n' "$account_id" "$tx_id" "$expected_raw" "ERR" "fail"
+    mirror_check_failed=1
+    continue
+  fi
+
+  mirror_checked=$((mirror_checked + 1))
+  mirror_total_raw=$((mirror_total_raw + mirror_raw))
+  if [[ "$mirror_raw" == "$expected_raw" ]]; then
+    printf '%-15s %-24s %-18s %-18s %-8s\n' "$account_id" "$tx_id" "$expected_raw" "$mirror_raw" "yes"
+  else
+    printf '%-15s %-24s %-18s %-18s %-8s\n' "$account_id" "$tx_id" "$expected_raw" "$mirror_raw" "no"
+    mirror_check_failed=1
+  fi
+done
+
+echo
+echo "Mirror check summary"
+echo "USDC token id: $usdc_token_id"
+echo "Accounts checked: $mirror_checked"
+echo "Expected total raw: $total_received_raw"
+echo "Mirror total raw: $mirror_total_raw"
+if [[ "$mirror_total_raw" != "$total_received_raw" ]]; then
+  echo "ALERT: mirror total raw does not match expected total raw."
+  mirror_check_failed=1
+fi
+
+if [[ $mirror_check_failed -ne 0 ]]; then
+  echo "ALERT: mirror-node transfer verification failed."
+  printf '\033[31m❌\033[0m Mirror-node transfer verification failed.\n'
+  exit 1
+fi
+
+printf '\033[32m✅\033[0m Claim totals verified.\n'

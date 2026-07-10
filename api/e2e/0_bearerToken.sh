@@ -53,8 +53,14 @@ if [[ ! -d "$WEB_ADMIN_DIR/node_modules" ]]; then
 	exit 1
 fi
 
-read -p "Enter base URL [https://testnet.dev.prism.market]: " baseUrl
-baseUrl=${baseUrl:-https://testnet.dev.prism.market}
+net_from_env=$(grep -E '^NET=' "$ENV_FILE" | head -n1 | cut -d '=' -f2- | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+enviro_from_env=$(grep -E '^ENVIRO=' "$ENV_FILE" | head -n1 | cut -d '=' -f2- | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+net_from_env=${net_from_env:-testnet}
+enviro_from_env=${enviro_from_env:-dev}
+base_url_default="https://${net_from_env}.${enviro_from_env}.prism.market"
+
+read -p "Enter base URL [$base_url_default]: " baseUrl
+baseUrl=${baseUrl:-$base_url_default}
 echo "Base URL set to: $baseUrl"
 
 network="testnet"
