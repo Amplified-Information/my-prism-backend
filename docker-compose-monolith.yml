@@ -1,6 +1,6 @@
 services:
   api:
-    image: ghcr.io/prismmarketlabs/api:0.6.25
+    image: ghcr.io/prismmarketlabs/api:0.6.26
     restart: always
     ports:
       - "8888:8888"
@@ -103,7 +103,7 @@ services:
       HTPASSWD: ${HTPASSWD}
       ROBOTS_TAG_VALUE: ${ROBOTS_TAG_VALUE}
   web.admin:
-    image: ghcr.io/prismmarketlabs/web.admin:0.2.3
+    image: ghcr.io/prismmarketlabs/web.admin:0.2.4
     restart: always
     ports:
       - "8080:80"

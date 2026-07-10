@@ -99,6 +99,29 @@ resolve_evm_address() {
   printf '%s\n' "$account_json" | sed -n 's/.*"evm_address"[[:space:]]*:[[:space:]]*"0x\{0,1\}\([0-9a-fA-F]\{40\}\)".*/\1/p' | head -n 1 | tr 'A-F' 'a-f'
 }
 
+fetch_user_portfolio_json() {
+  local evm_address="$1"
+  local output=""
+  local status=1
+  local attempt
+  local max_attempts=4
+
+  for ((attempt = 1; attempt <= max_attempts; attempt++)); do
+    output=$(easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d "{\"evmAddress\":\"$evm_address\",\"net\":\"$network\",\"marketId\":\"$marketId\"}" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetUserPortfolio 2>&1)
+    status=$?
+    if [[ $status -eq 0 && -n "$output" ]]; then
+      printf '%s\n' "$output"
+      return 0
+    fi
+    if (( attempt < max_attempts )); then
+      echo "Warning: GetUserPortfolio transient failure for evm=$evm_address (attempt $attempt/$max_attempts, exit=$status). Retrying..." >&2
+    fi
+  done
+
+  printf '%s\n' "$output"
+  return 1
+}
+
 print_portfolio_summary_table() {
   printf '\n%-15s %12s %16s %12s %12s\n' "Account ID" "OpenOrders" "ActivePositions" "YES" "NO"
   printf '%-15s %12s %16s %12s %12s\n' "----------" "----------" "---------------" "----" "--"
@@ -119,7 +142,7 @@ build_expected_open_state_from_ledger() {
   local tolerance="$2"
   local tmp_dir events_file
 
-  for i in ${loaded_indices}; do
+  for i in "${loaded_indices[@]}"; do
     submitted_order_count[$i]=0
     submitted_qty_raw[$i]="0"
     submitted_notional_usd[$i]="0"
@@ -256,7 +279,7 @@ build_expected_open_state_from_ledger() {
     fi
   done < <(sort -t $'\t' -k1,1n "$events_file")
 
-  for i in ${loaded_indices}; do
+  for i in "${loaded_indices[@]}"; do
     expected_open_buy_qty[$i]="0"
     expected_open_sell_qty[$i]="0"
     expected_open_collateral[$i]="0"
@@ -267,9 +290,8 @@ build_expected_open_state_from_ledger() {
     qty_rem="${book_buy_qty[$j]:-0}"
     if (( $(echo "$qty_rem > $local_best_match_tolerance" | bc -l) )); then
       px="${book_buy_price[$j]}"
-      orig_qty="${book_buy_orig_qty[$j]:-$qty_rem}"
-      expected_open_buy_qty[$idx]=$(add_float "${expected_open_buy_qty[$idx]:-0}" "$orig_qty")
-      spend_open=$(awk -v p="$px" -v q="$orig_qty" 'BEGIN { ap = (p < 0 ? -p : p); s = ap * q; if (s < 0) s = 0; printf "%.6f", s }')
+      expected_open_buy_qty[$idx]=$(add_float "${expected_open_buy_qty[$idx]:-0}" "$qty_rem")
+      spend_open=$(awk -v p="$px" -v q="$qty_rem" 'BEGIN { ap = (p < 0 ? -p : p); s = ap * q; if (s < 0) s = 0; printf "%.6f", s }')
       expected_open_collateral[$idx]=$(add_float "${expected_open_collateral[$idx]:-0}" "$spend_open")
     fi
   done
@@ -279,9 +301,8 @@ build_expected_open_state_from_ledger() {
     qty_rem="${book_sell_qty[$j]:-0}"
     if (( $(echo "$qty_rem > $local_best_match_tolerance" | bc -l) )); then
       ap="${book_sell_abs_price[$j]}"
-      orig_qty="${book_sell_orig_qty[$j]:-$qty_rem}"
-      expected_open_sell_qty[$idx]=$(add_float "${expected_open_sell_qty[$idx]:-0}" "$orig_qty")
-      spend_open=$(awk -v ap="$ap" -v q="$orig_qty" 'BEGIN { s = (1 - ap) * q; if (s < 0) s = 0; printf "%.6f", s }')
+      expected_open_sell_qty[$idx]=$(add_float "${expected_open_sell_qty[$idx]:-0}" "$qty_rem")
+      spend_open=$(awk -v ap="$ap" -v q="$qty_rem" 'BEGIN { s = (1 - ap) * q; if (s < 0) s = 0; printf "%.6f", s }')
       expected_open_collateral[$idx]=$(add_float "${expected_open_collateral[$idx]:-0}" "$spend_open")
     fi
   done
@@ -334,21 +355,38 @@ fi
 
 printf '\nFetching latest portfolios (market=%s)...\n' "$marketId"
 prefetch_failed=0
+declare -a prefetch_failed_accounts
 for i in "${loaded_indices[@]}"; do
   account_id="${account_ids[$i]}"
   [[ -z "$account_id" ]] && continue
 
   evm_address=$(resolve_evm_address "$account_id")
   if [[ -z "$evm_address" ]]; then
-    echo "Error: failed to resolve evmAddress for account $account_id."
+    echo "Error: failed to resolve evmAddress for account $account_id via https://${network}.mirrornode.hedera.com."
     prefetch_failed=1
+    prefetch_failed_accounts+=("$account_id")
     continue
   fi
 
-  portfolio_json=$(easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d "{\"evmAddress\":\"$evm_address\",\"net\":\"$network\",\"marketId\":\"$marketId\"}" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetUserPortfolio 2>/dev/null)
-  if [[ $? -ne 0 || -z "$portfolio_json" ]]; then
-    echo "Error: failed to fetch portfolio for account $account_id."
+  portfolio_output=$(fetch_user_portfolio_json "$evm_address")
+  portfolio_status=$?
+  portfolio_json="$portfolio_output"
+  if [[ $portfolio_status -ne 0 || -z "$portfolio_json" ]]; then
+    echo "Error: failed to fetch portfolio for account $account_id (evm=$evm_address, easyrpc exit=$portfolio_status)."
+    if [[ -n "$portfolio_output" ]]; then
+      printf '%s\n' "$portfolio_output" | tail -n 2
+    fi
     prefetch_failed=1
+    prefetch_failed_accounts+=("$account_id")
+    continue
+  fi
+
+  portfolio_error_code=$(printf '%s\n' "$portfolio_json" | jq -r '.errorCode // ""' 2>/dev/null)
+  if [[ -n "$portfolio_error_code" && "$portfolio_error_code" != "0" ]]; then
+    portfolio_message=$(printf '%s\n' "$portfolio_json" | jq -r '.message // ""' 2>/dev/null)
+    echo "Error: failed to fetch portfolio for account $account_id (evm=$evm_address, errorCode=$portfolio_error_code message='$portfolio_message')."
+    prefetch_failed=1
+    prefetch_failed_accounts+=("$account_id")
     continue
   fi
 
@@ -362,7 +400,7 @@ for i in "${loaded_indices[@]}"; do
 done
 
 if [[ $prefetch_failed -ne 0 ]]; then
-  echo "Portfolio prefetch failed for one or more accounts."
+  echo "Portfolio prefetch failed for one or more accounts: ${prefetch_failed_accounts[*]}"
   exit 1
 fi
 printf '\033[32m✓\033[0m Fetched portfolios for all accounts\n'
@@ -370,16 +408,22 @@ printf '\033[32m✓\033[0m Fetched portfolios for all accounts\n'
 ### Portfolio summary table
 print_portfolio_summary_table
 
+echo
+echo "Legend:"
+echo "- OpenOrders: current count of open intents on the orderbook for this market/account."
+echo "- ActivePositions: whether this market currently has a position entry for this account (0 or 1 here)."
+echo "- SubmittedOrders (next table): successful intents submitted in this run from the saved ledger."
 
 
 
 
 
-### 2. reconcile ledger-derived open intents against API
 
-printf '\nReconciling expected open intents from ledger vs API (market=%s)...\n' "$marketId"
-printf '%-15s %7s %12s %12s %12s %12s %12s %12s %12s %12s\n' "Account ID" "Orders" "ExpBUY" "OpenBUY" "ActYES" "dBUY" "ExpSELL" "OpenSELL" "ActNO" "dCOL"
-printf '%-15s %7s %12s %12s %12s %12s %12s %12s %12s %12s\n' "----------" "------" "------" "-------" "------" "----" "-------" "--------" "-----" "----"
+### 2. reconcile submitted-vs-open/matched intent conservation against API
+
+printf '\nReconciling submitted intents vs API open/matched state (market=%s)...\n' "$marketId"
+printf '%-15s %15s %12s %12s %12s %12s %12s %12s %12s %12s\n' "Account ID" "SubmittedOrders" "ExpBUY" "OpenBUY" "ActYES" "dBUY" "ExpSELL" "OpenSELL" "ActNO" "dCOL"
+printf '%-15s %15s %12s %12s %12s %12s %12s %12s %12s %12s\n' "----------" "---------------" "------" "-------" "------" "----" "-------" "--------" "-----" "----"
 
 reconcile_failed=0
 for i in "${loaded_indices[@]}"; do
@@ -396,9 +440,15 @@ for i in "${loaded_indices[@]}"; do
   open_buy_qty="0"
   open_sell_qty="0"
   open_collateral="0"
+  matched_buy_qty_api="0"
+  matched_sell_qty_api="0"
+  matched_collateral_api="0"
+  declare -A open_tx_ids
+
   while IFS=$'\t' read -r open_tx_id open_price open_qty; do
     [[ -z "$open_tx_id" ]] && continue
     [[ -z "${run_tx_by_account[$i|$open_tx_id]}" ]] && continue
+    open_tx_ids["$open_tx_id"]=1
 
     if (( $(echo "$open_price >= 0" | bc -l) )); then
       open_buy_qty=$(add_float "$open_buy_qty" "$open_qty")
@@ -410,13 +460,38 @@ for i in "${loaded_indices[@]}"; do
     open_collateral=$(add_float "$open_collateral" "$open_spend")
   done < <(printf '%s\n' "$portfolio_json" | jq -r --arg m "$marketId" '.openPredictionIntents[$m].openPredictionIntents[]? | [.txId, .priceUsd, .qty] | @tsv')
 
+  while IFS=$'\t' read -r matched_tx_id matched_price matched_qty; do
+    [[ -z "$matched_tx_id" ]] && continue
+    [[ -z "${run_tx_by_account[$i|$matched_tx_id]}" ]] && continue
+
+    # If a tx is still open in this snapshot, matchedPredictionIntents may include
+    # informational rows that are not strict fill deltas. Skip those txIds here so
+    # submitted = matched + open remains stable.
+    if [[ -n "${open_tx_ids[$matched_tx_id]:-}" ]]; then
+      continue
+    fi
+
+    if (( $(echo "$matched_price >= 0" | bc -l) )); then
+      matched_buy_qty_api=$(add_float "$matched_buy_qty_api" "$matched_qty")
+      matched_spend=$(awk -v p="$matched_price" -v q="$matched_qty" 'BEGIN { ap = (p < 0 ? -p : p); s = ap * q; if (s < 0) s = 0; printf "%.6f", s }')
+    else
+      matched_sell_qty_api=$(add_float "$matched_sell_qty_api" "$matched_qty")
+      matched_spend=$(awk -v p="$matched_price" -v q="$matched_qty" 'BEGIN { ap = (p < 0 ? -p : p); s = (1 - ap) * q; if (s < 0) s = 0; printf "%.6f", s }')
+    fi
+    matched_collateral_api=$(add_float "$matched_collateral_api" "$matched_spend")
+  done < <(printf '%s\n' "$portfolio_json" | jq -r --arg m "$marketId" '.matchedPredictionIntents[$m].matchedPredictionIntents // [] | unique_by([.txId, .priceUsd, .qty])[] | [.txId, .priceUsd, .qty] | @tsv')
+
   active_yes_qty=$(awk -v v="${summary_active_yes_qty[$i]:-0}" 'BEGIN { printf "%.6f", v }')
   active_no_qty=$(awk -v v="${summary_active_no_qty[$i]:-0}" 'BEGIN { printf "%.6f", v }')
 
   submitted_orders="${submitted_order_count[$i]:-0}"
-  expected_buy_qty="${expected_open_buy_qty[$i]:-0}"
-  expected_sell_qty="${expected_open_sell_qty[$i]:-0}"
-  expected_collateral="${expected_open_collateral[$i]:-0}"
+  submitted_buy_qty="${submitted_buy_qty_raw[$i]:-0}"
+  submitted_sell_qty="${submitted_sell_qty_raw[$i]:-0}"
+  submitted_collateral="${submitted_notional_usd[$i]:-0}"
+
+  expected_buy_qty=$(awk -v s="$submitted_buy_qty" -v m="$matched_buy_qty_api" 'BEGIN { v = s - m; if (v < 0 && v > -0.000001) v = 0; printf "%.6f", v }')
+  expected_sell_qty=$(awk -v s="$submitted_sell_qty" -v m="$matched_sell_qty_api" 'BEGIN { v = s - m; if (v < 0 && v > -0.000001) v = 0; printf "%.6f", v }')
+  expected_collateral=$(awk -v s="$submitted_collateral" -v m="$matched_collateral_api" 'BEGIN { v = s - m; if (v < 0 && v > -0.000001) v = 0; printf "%.6f", v }')
 
   delta_buy_qty=$(awk -v s="$expected_buy_qty" -v a="$open_buy_qty" 'BEGIN { printf "%.6f", s - a }')
   delta_sell_qty=$(awk -v s="$expected_sell_qty" -v a="$open_sell_qty" 'BEGIN { printf "%.6f", s - a }')
@@ -436,7 +511,7 @@ for i in "${loaded_indices[@]}"; do
   disp_active_no_qty=$(awk -v v="$active_no_qty" 'BEGIN { printf "%.5f", v }')
   disp_delta_collateral=$(awk -v v="$delta_collateral" 'BEGIN { printf "%.5f", v }')
 
-  printf '%-15s %7d %12s %12s %12s %12s %12s %12s %12s %12s\n' "$account_id" "$submitted_orders" "$disp_submitted_buy_qty" "$disp_open_buy_qty" "$disp_active_yes_qty" "$disp_delta_buy_qty" "$disp_submitted_sell_qty" "$disp_open_sell_qty" "$disp_active_no_qty" "$disp_delta_collateral"
+  printf '%-15s %15d %12s %12s %12s %12s %12s %12s %12s %12s\n' "$account_id" "$submitted_orders" "$disp_submitted_buy_qty" "$disp_open_buy_qty" "$disp_active_yes_qty" "$disp_delta_buy_qty" "$disp_submitted_sell_qty" "$disp_open_sell_qty" "$disp_active_no_qty" "$disp_delta_collateral"
 
   if (( $(echo "$abs_delta_collateral > $tolerance_qty" | bc -l) )) || (( $(echo "$max_abs_delta > $tolerance_qty" | bc -l) )); then
     echo "Error: reconciliation mismatch for $account_id (|deltaCol|=$abs_delta_collateral, |deltaBuy|=$abs_delta_buy_qty, |deltaSell|=$abs_delta_sell_qty, tolerance=$tolerance_qty)."

@@ -77,6 +77,57 @@ resolve_evm_address() {
   printf '%s\n' "$account_json" | sed -n 's/.*"evm_address"[[:space:]]*:[[:space:]]*"0x\{0,1\}\([0-9a-fA-F]\{40\}\)".*/\1/p' | head -n 1 | tr 'A-F' 'a-f'
 }
 
+fetch_user_portfolio_to_file() {
+  local account_id="$1"
+  local payload="$2"
+  local out_file="$3"
+  local err_file="$4"
+  local scope_label="$5"
+  local tmp_file="${out_file}.tmp"
+  local max_attempts=6
+  local attempt=1
+  local backoff_seconds=1
+
+  printf 'CLI: easyrpc c'
+  printf ' %q' "${grpc_flags[@]}"
+  if [[ ${#grpc_meta[@]} -gt 0 ]]; then
+    printf ' %q' "${grpc_meta[@]}"
+  fi
+  printf ' -a %q -d %q -i %q -p %q %q\n' \
+    "$grpc_addr" \
+    "$payload" \
+    "$PROTO_DIR" \
+    "api.proto" \
+    "api.ApiServicePublic.GetUserPortfolio"
+
+  while (( attempt <= max_attempts )); do
+    if easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d "$payload" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetUserPortfolio > "$tmp_file" 2>"$err_file"; then
+      if [[ -s "$tmp_file" ]] && jq -e . "$tmp_file" >/dev/null 2>&1; then
+        mv "$tmp_file" "$out_file"
+        rm -f "$err_file"
+        return 0
+      fi
+      echo "Warning: GetUserPortfolio returned invalid/empty JSON for $account_id [$scope_label] (attempt $attempt/$max_attempts)."
+    else
+      echo "Warning: GetUserPortfolio RPC failed for $account_id [$scope_label] (attempt $attempt/$max_attempts):"
+      cat "$err_file"
+    fi
+
+    rm -f "$tmp_file"
+    if (( attempt < max_attempts )); then
+      echo "Retrying $account_id [$scope_label] after ${backoff_seconds}s..."
+      sleep "$backoff_seconds"
+      if (( backoff_seconds < 8 )); then
+        backoff_seconds=$((backoff_seconds * 2))
+      fi
+    fi
+    attempt=$((attempt + 1))
+  done
+
+  rm -f "$tmp_file"
+  return 1
+}
+
 declare -A market_statement_cache
 declare -A market_contract_cache
 declare -A market_state_cache
@@ -248,33 +299,10 @@ for i in "${!account_ids[@]}"; do
 
   # Call GetUserPortfolio with retries to tolerate transient edge/network EOFs.
   echo "Calling GetUserPortfolio for account: $account_id"
-  portfolio_tmp_file="$OUT_DIR/portfolio_${account_id}.json.tmp"
   portfolio_out_file="$OUT_DIR/portfolio_${account_id}.json"
-  max_attempts=3
-  attempt=1
-  portfolio_ok=0
-  while (( attempt <= max_attempts )); do
-    err_file="$OUT_DIR/portfolio_${account_id}.err"
-    if easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d "$payload" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetUserPortfolio > "$portfolio_tmp_file" 2>"$err_file"; then
-      if [[ -s "$portfolio_tmp_file" ]] && jq -e . "$portfolio_tmp_file" >/dev/null 2>&1; then
-        mv "$portfolio_tmp_file" "$portfolio_out_file"
-        portfolio_ok=1
-        rm -f "$err_file"
-        break
-      fi
-      echo "Warning: GetUserPortfolio returned invalid/empty JSON for $account_id (attempt $attempt/$max_attempts)."
-    else
-      echo "Warning: GetUserPortfolio RPC failed for $account_id (attempt $attempt/$max_attempts):"
-      cat "$err_file"
-    fi
-
-    rm -f "$portfolio_tmp_file"
-    attempt=$((attempt + 1))
-  done
-
-  if [[ $portfolio_ok -ne 1 ]]; then
-    echo "Error: failed to fetch portfolio for account $account_id after $max_attempts attempts."
-    rm -f "$portfolio_tmp_file"
+  err_file="$OUT_DIR/portfolio_${account_id}.err"
+  if ! fetch_user_portfolio_to_file "$account_id" "$payload" "$portfolio_out_file" "$err_file" "summary"; then
+    echo "Error: failed to fetch portfolio for account $account_id after repeated attempts."
     continue
   fi
   echo "Saved $OUT_DIR/portfolio_${account_id}.json"
@@ -439,17 +467,10 @@ for i in "${!account_ids[@]}"; do
     evm_address=$(resolve_evm_address "$account_id")
     if [[ -n "$evm_address" ]]; then
       matched_payload=$(printf '{"evmAddress":"%s","net":"%s"}' "$evm_address" "$network")
-      matched_tmp_file="$OUT_DIR/portfolio_matched_${account_id}.json.tmp"
       matched_out_file="$OUT_DIR/portfolio_matched_${account_id}.json"
-      if easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d "$matched_payload" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetUserPortfolio > "$matched_tmp_file" 2>/dev/null; then
-        if [[ -s "$matched_tmp_file" ]] && jq -e . "$matched_tmp_file" >/dev/null 2>&1; then
-          mv "$matched_tmp_file" "$matched_out_file"
-          portfolio_file="$matched_out_file"
-        else
-          rm -f "$matched_tmp_file"
-        fi
-      else
-        rm -f "$matched_tmp_file"
+      matched_err_file="$OUT_DIR/portfolio_matched_${account_id}.err"
+      if fetch_user_portfolio_to_file "$account_id" "$matched_payload" "$matched_out_file" "$matched_err_file" "matched"; then
+        portfolio_file="$matched_out_file"
       fi
     fi
   fi

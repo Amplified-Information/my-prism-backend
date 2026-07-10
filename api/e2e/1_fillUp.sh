@@ -63,6 +63,19 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 1
 fi
 
+env_get() {
+  local key="$1"
+  awk -F '=' -v k="$key" '
+    $1==k {
+      val=substr($0, index($0, "=")+1)
+      sub(/^[[:space:]]+/, "", val)
+      sub(/[[:space:]]+$/, "", val)
+      print val
+      exit
+    }
+  ' "$ENV_FILE"
+}
+
 
 
 
@@ -130,9 +143,13 @@ if [[ $? -ne 0 || -z "$market_json" ]]; then
   echo "Error: failed to fetch market details for marketId $marketId."
   exit 1
 fi
-spender_account_id=$(printf '%s\n' "$market_json" | sed -n 's/.*"smartContractId"[[:space:]]*:[[:space:]]*"\([0-9][0-9.]*\)".*/\1/p' | head -n 1)
+spender_account_id=$(printf '%s\n' "$market_json" | jq -r '.smartContractId // .smartContractID // .contractId // .contractID // ""')
 if [[ -z "$spender_account_id" ]]; then
   echo "Error: failed to resolve spender smartContractId from market response."
+  exit 1
+fi
+if [[ ! "$spender_account_id" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "Error: invalid spender smartContractId '$spender_account_id' in market response."
   exit 1
 fi
 
@@ -141,17 +158,33 @@ usdc_var_name="${network_upper}_USDC_ADDRESS"
 usdc_token_id="${!usdc_var_name}"
 
 if [[ -z "$usdc_token_id" ]]; then
+  usdc_token_id=$(env_get "$usdc_var_name")
+fi
+
+if [[ -z "$usdc_token_id" ]]; then
   macro_json=$(easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d '{}' -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.MacroMetadata 2>/dev/null)
   if [[ $? -ne 0 || -z "$macro_json" ]]; then
     echo "Error: failed to query MacroMetadata for USDC token id."
     exit 1
   fi
-  usdc_token_id=$(printf '%s\n' "$macro_json" | sed -n "s/.*\"$network\"[[:space:]]*:[[:space:]]*\"\([0-9][0-9.]*\)\".*/\1/p" | head -n 1)
+  usdc_token_id=$(printf '%s\n' "$macro_json" | jq -r --arg net "$network" '.usdcTokenIds[$net] // .usdc_token_ids[$net] // ""')
 fi
 
 if [[ -z "$usdc_token_id" ]]; then
   echo "Error: could not resolve USDC token id for network $network."
   echo "Set ${usdc_var_name} in the environment or ensure MacroMetadata.usdcTokenIds contains $network."
+  exit 1
+fi
+
+if [[ ! "$usdc_token_id" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "Error: invalid USDC token id '$usdc_token_id' for network $network."
+  exit 1
+fi
+
+if [[ "$usdc_token_id" == "$spender_account_id" ]]; then
+  echo "Error: resolved USDC token id equals spender smartContractId ($usdc_token_id)."
+  echo "This indicates a bad USDC token lookup or server-side metadata misconfiguration."
+  echo "Set ${usdc_var_name} in $ENV_FILE (or your shell env) to the correct Hedera USDC token id and retry."
   exit 1
 fi
 
@@ -476,6 +509,9 @@ printf '\nCreated %d prediction intents against %s\n' "$created_orders" "$grpc_a
 # GetUserPortfolio: foreach accountId, get the number of open orders (sitting on orderbook) and active positions (matched)
 printf '\nFetching user portfolios...\n'
 
+portfolio_failures=0
+declare -a portfolio_failure_accounts
+
 resolve_evm_address() {
   local account_id="$1"
   local account_json
@@ -483,18 +519,59 @@ resolve_evm_address() {
   printf '%s\n' "$account_json" | sed -n 's/.*"evm_address"[[:space:]]*:[[:space:]]*"0x\{0,1\}\([0-9a-fA-F]\{40\}\)".*/\1/p' | head -n 1 | tr 'A-F' 'a-f'
 }
 
+fetch_user_portfolio_json() {
+  local evm_address="$1"
+  local output=""
+  local status=1
+  local attempt
+  local max_attempts=4
+
+  for ((attempt = 1; attempt <= max_attempts; attempt++)); do
+    output=$(easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d "{\"evmAddress\":\"$evm_address\",\"net\":\"$network\",\"marketId\":\"$marketId\"}" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetUserPortfolio 2>&1)
+    status=$?
+    if [[ $status -eq 0 && -n "$output" ]]; then
+      printf '%s\n' "$output"
+      return 0
+    fi
+    if (( attempt < max_attempts )); then
+      echo "Warning: GetUserPortfolio transient failure for evm=$evm_address (attempt $attempt/$max_attempts, exit=$status). Retrying..." >&2
+    fi
+  done
+
+  printf '%s\n' "$output"
+  return 1
+}
+
 for i in "${!account_ids[@]}"; do
   account_id="${account_ids[$i]}"
   if [[ -n "$account_id" ]]; then
     evm_address=$(resolve_evm_address "$account_id")
     if [[ -z "$evm_address" ]]; then
-      echo "Error: failed to resolve evmAddress for account $account_id."
+      echo "Error: failed to resolve evmAddress for account $account_id via $mirror_base."
+      portfolio_failures=$((portfolio_failures + 1))
+      portfolio_failure_accounts+=("$account_id")
       continue
     fi
 
-    portfolio_json=$(easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d "{\"evmAddress\":\"$evm_address\",\"net\":\"$network\",\"marketId\":\"$marketId\"}" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetUserPortfolio 2>/dev/null)
-    if [[ $? -ne 0 || -z "$portfolio_json" ]]; then
-      echo "Error: failed to fetch portfolio for account $account_id."
+    portfolio_output=$(fetch_user_portfolio_json "$evm_address")
+    portfolio_status=$?
+    portfolio_json="$portfolio_output"
+    if [[ $portfolio_status -ne 0 || -z "$portfolio_json" ]]; then
+      echo "Error: failed to fetch portfolio for account $account_id (easyrpc exit=$portfolio_status)."
+      if [[ -n "$portfolio_output" ]]; then
+        printf '%s\n' "$portfolio_output" | tail -n 2
+      fi
+      portfolio_failures=$((portfolio_failures + 1))
+      portfolio_failure_accounts+=("$account_id")
+      continue
+    fi
+
+    portfolio_error_code=$(printf '%s\n' "$portfolio_json" | jq -r '.errorCode // ""' 2>/dev/null)
+    if [[ -n "$portfolio_error_code" && "$portfolio_error_code" != "0" ]]; then
+      portfolio_message=$(printf '%s\n' "$portfolio_json" | jq -r '.message // ""' 2>/dev/null)
+      echo "Error: failed to fetch portfolio for account $account_id (errorCode=$portfolio_error_code message='$portfolio_message')."
+      portfolio_failures=$((portfolio_failures + 1))
+      portfolio_failure_accounts+=("$account_id")
       continue
     fi
 
@@ -503,6 +580,11 @@ for i in "${!account_ids[@]}"; do
     printf 'Account %s: open orders=%d, active positions=%d\n' "$account_id" "$open_orders" "$active_positions"
   fi
 done
+
+if (( portfolio_failures > 0 )); then
+  echo
+  echo "Portfolio fetch completed with $portfolio_failures failure(s): ${portfolio_failure_accounts[*]}"
+fi
 
 
 ### 8 state file

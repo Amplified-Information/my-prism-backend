@@ -44,6 +44,11 @@ func (ps *PositionsService) Init(positionsRepository *repositories.PositionsRepo
 
 func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (*pb_api.UserPortfolioResponse, error) {
 	// guards
+	var requestedMarketID string
+	hasMarketFilter := req.MarketId != nil && strings.TrimSpace(*req.MarketId) != ""
+	if hasMarketFilter {
+		requestedMarketID = strings.TrimSpace(*req.MarketId)
+	}
 
 	// OK
 	var userPositions []sqlc.GetUserPositionsRow
@@ -154,6 +159,9 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 	}
 	// loop through each predictionIntents and add to OrderbookPositions
 	for _, pi := range predictionIntents {
+		if hasMarketFilter && pi.MarketID.String() != requestedMarketID {
+			continue
+		}
 		orderbookPosition := &pb_api.PredictionIntentResponse{
 			TxId:             pi.TxID.String(),
 			Net:              pi.Net,
@@ -177,6 +185,9 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 	}
 	// loop through each predictionIntents and add to OrderbookPositions
 	for _, pi := range matchedPredictionIntents {
+		if hasMarketFilter && pi.MarketID.String() != requestedMarketID {
+			continue
+		}
 		matchedPosition := &pb_api.PredictionIntentResponse{
 			TxId:             pi.TxID.String(),
 			Net:              pi.Net,

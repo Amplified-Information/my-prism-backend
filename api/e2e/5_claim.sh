@@ -309,25 +309,40 @@ const main = async () => {
   }
 
   const marketIdBigInt = toUint128(marketId)
-  const fnNames = ['totalCollateral', 'getTotalCollateral']
-
-  for (const fnName of fnNames) {
-    try {
-      const params = new ContractFunctionParameters().addUint128(marketIdBigInt.toString())
-      const result = await new ContractCallQuery()
-        .setContractId(ContractId.fromString(contractId))
-        .setGas(100_000)
-        .setFunction(fnName, params)
-        .execute(client)
-      const value = result.getUint256(0).toString()
-      console.log(`TOTAL_COLLATERAL=${value}`)
-      return
-    } catch {
-      // Try next known method signature.
+  const callUint = async (fnNames: string[]): Promise<string | null> => {
+    for (const fnName of fnNames) {
+      try {
+        const params = new ContractFunctionParameters().addUint128(marketIdBigInt.toString())
+        const result = await new ContractCallQuery()
+          .setContractId(ContractId.fromString(contractId))
+          .setGas(100_000)
+          .setFunction(fnName, params)
+          .execute(client)
+        return result.getUint256(0).toString()
+      } catch {
+        // Try next known method signature.
+      }
     }
+    return null
   }
 
-  throw new Error('Unable to call total collateral function on contract')
+  const totalCollateral = await callUint(['totalCollateral', 'getTotalCollateral'])
+  if (totalCollateral === null) {
+    throw new Error('Unable to call total collateral function on contract')
+  }
+  console.log(`TOTAL_COLLATERAL=${totalCollateral}`)
+
+  const totalYesOutstanding = await callUint(['totalYesTokensOutstanding'])
+  if (totalYesOutstanding !== null) {
+    console.log(`TOTAL_YES_OUTSTANDING=${totalYesOutstanding}`)
+  }
+
+  const totalNoOutstanding = await callUint(['totalNoTokensOutstanding'])
+  if (totalNoOutstanding !== null) {
+    console.log(`TOTAL_NO_OUTSTANDING=${totalNoOutstanding}`)
+  }
+
+  return
 }
 
 ;(async () => {
@@ -347,6 +362,8 @@ fi
 rm -f "$tmp_ts"
 
 total_collateral=$(printf '%s\n' "$total_collateral_output" | awk -F '=' '/^TOTAL_COLLATERAL=/{print $2; exit}')
+total_yes_outstanding=$(printf '%s\n' "$total_collateral_output" | awk -F '=' '/^TOTAL_YES_OUTSTANDING=/{print $2; exit}')
+total_no_outstanding=$(printf '%s\n' "$total_collateral_output" | awk -F '=' '/^TOTAL_NO_OUTSTANDING=/{print $2; exit}')
 if [[ -z "$total_collateral" ]]; then
   echo "Failed to read totalCollateral from Solidity call"
   printf '%s\n' "$total_collateral_output"
@@ -373,6 +390,12 @@ total_collateral_scaled=$(printf '%s\n' "$total_collateral_scaled" | sed -E 's/(
 
 echo "totalCollateral($marketId) raw = $total_collateral"
 echo "totalCollateral($marketId) = \$$total_collateral_scaled"
+if [[ "$total_yes_outstanding" =~ ^[0-9]+$ ]]; then
+  echo "totalYesTokensOutstanding($marketId) raw = $total_yes_outstanding"
+fi
+if [[ "$total_no_outstanding" =~ ^[0-9]+$ ]]; then
+  echo "totalNoTokensOutstanding($marketId) raw = $total_no_outstanding"
+fi
 
 
 
@@ -390,10 +413,9 @@ if [[ "$total_yes" -eq 0 && "$total_no" -eq 0 ]]; then
   if [[ "$total_collateral" =~ ^[0-9]+$ && "$total_collateral" -gt 0 ]]; then
     echo
     echo "Note: totalCollateral is still non-zero."
-    echo "In Prism.sol, redeem() subtracts gross winning tokens from totalCollateral, not full market collateral."
-    echo "That means losing-side collateral remains in the contract after winners claim."
-    echo "Any remaining balance here can be either losing-side collateral, unclaimed winnings for accounts not listed in .env, or both."
-    echo "The residual market collateral is only sweepable by the contract owner via claimCollateralAfterOneYear() after the waiting period."
+    echo "With the current Prism.sol payout model, resolved winners should drain the market pot as they redeem."
+    echo "A remaining balance here usually means some winning claims still belong to accounts not listed in .env,"
+    echo "or the market has been abandoned and would need claimCollateralAfterOneYear() after the waiting period."
   fi
   exit 0
 fi
@@ -468,15 +490,25 @@ done
 
 winner_label=""
 expected_base_raw=0
+tracked_winner_units_raw=0
+winning_outstanding_raw=""
 if [[ "$outcome" == "1" ]]; then
   winner_label="YES"
-  expected_base_raw=$total_yes
+  expected_base_raw=$total_collateral
+  tracked_winner_units_raw=$total_yes
+  winning_outstanding_raw="$total_yes_outstanding"
 elif [[ "$outcome" == "0" ]]; then
   winner_label="NO"
-  expected_base_raw=$total_no
+  expected_base_raw=$total_collateral
+  tracked_winner_units_raw=$total_no
+  winning_outstanding_raw="$total_no_outstanding"
 elif [[ "$outcome" == "2" ]]; then
   winner_label="CANCELLED_50_50"
   expected_base_raw=$total_collateral
+  tracked_winner_units_raw=$((total_yes + total_no))
+  if [[ "$total_yes_outstanding" =~ ^[0-9]+$ && "$total_no_outstanding" =~ ^[0-9]+$ ]]; then
+    winning_outstanding_raw=$((total_yes_outstanding + total_no_outstanding))
+  fi
 else
   echo "Unable to compute expected payout: unknown market outcome '$outcome'"
   exit 1
@@ -484,10 +516,29 @@ fi
 
 expected_payout_raw=$(awk -v base="$expected_base_raw" -v rake="$rake_percent" 'BEGIN { v=base*(100-rake)/100; printf "%d", int(v+0.5) }')
 expected_rake_raw=$((expected_base_raw - expected_payout_raw))
+
+expected_tracked_base_raw=""
+expected_tracked_payout_raw=""
+if [[ "$winning_outstanding_raw" =~ ^[0-9]+$ && "$winning_outstanding_raw" -gt 0 && "$tracked_winner_units_raw" -ge 0 && "$tracked_winner_units_raw" -le "$winning_outstanding_raw" ]]; then
+  if [[ "$tracked_winner_units_raw" -eq "$winning_outstanding_raw" ]]; then
+    expected_tracked_base_raw=$total_collateral
+  else
+    expected_tracked_base_raw=$(awk -v total="$total_collateral" -v tracked="$tracked_winner_units_raw" -v denom="$winning_outstanding_raw" 'BEGIN { v=(total*tracked)/denom; printf "%d", int(v+0.5) }')
+  fi
+  expected_tracked_payout_raw=$(awk -v base="$expected_tracked_base_raw" -v rake="$rake_percent" 'BEGIN { v=base*(100-rake)/100; printf "%d", int(v+0.5) }')
+fi
+
 sum_tokens_raw=$((total_yes + total_no))
 collateral_delta_raw=$((sum_tokens_raw - total_collateral))
 
-delta_raw=$((total_received_raw - expected_payout_raw))
+assert_expected_payout_raw=$expected_payout_raw
+assert_label="full market"
+if [[ "$expected_tracked_payout_raw" =~ ^[0-9]+$ ]]; then
+  assert_expected_payout_raw=$expected_tracked_payout_raw
+  assert_label="tracked-account share"
+fi
+
+delta_raw=$((total_received_raw - assert_expected_payout_raw))
 abs_delta_raw=$delta_raw
 if (( abs_delta_raw < 0 )); then
   abs_delta_raw=$(( -abs_delta_raw ))
@@ -502,23 +553,32 @@ echo "Rake percent: $rake_percent"
 echo "Total received raw: $total_received_raw"
 total_received_usd=$(format_units_6 "$total_received_raw")
 echo "Total received USD: \$$total_received_usd"
-echo "Expected raw (outcome/rake adjusted): $expected_payout_raw"
+echo "Expected raw (full market collateral less rake): $expected_payout_raw"
 expected_payout_usd=$(format_units_6 "$expected_payout_raw")
-echo "Expected USD (outcome/rake adjusted): \$$expected_payout_usd"
+echo "Expected USD (full market collateral less rake): \$$expected_payout_usd"
+if [[ "$expected_tracked_payout_raw" =~ ^[0-9]+$ ]]; then
+  echo "Expected raw (tracked-account share less rake): $expected_tracked_payout_raw"
+  expected_tracked_payout_usd=$(format_units_6 "$expected_tracked_payout_raw")
+  echo "Expected USD (tracked-account share less rake): \$$expected_tracked_payout_usd"
+fi
 
 echo
 echo "Accounting diagnostics"
 echo "Sum YES+NO raw: $sum_tokens_raw"
 echo "totalCollateral raw: $total_collateral"
 echo "Token-vs-collateral delta raw: $collateral_delta_raw"
+if [[ "$winning_outstanding_raw" =~ ^[0-9]+$ ]]; then
+  echo "Winning outstanding raw (on-chain): $winning_outstanding_raw"
+  echo "Tracked winner units raw: $tracked_winner_units_raw"
+fi
 echo "Expected rake raw: $expected_rake_raw"
 expected_rake_usd=$(format_units_6 "$expected_rake_raw")
 echo "Expected rake USD: \$$expected_rake_usd"
-actual_rake_raw=$((expected_base_raw - total_received_raw))
+actual_rake_raw=$((assert_expected_payout_raw - total_received_raw))
 actual_rake_usd=$(format_units_6 "$actual_rake_raw")
-echo "Implied actual rake raw: $actual_rake_raw"
-echo "Implied actual rake USD: \$$actual_rake_usd"
-echo "Received-vs-expected delta raw: $delta_raw"
+echo "Implied actual delta raw vs $assert_label expectation: $actual_rake_raw"
+echo "Implied actual delta USD vs $assert_label expectation: \$$actual_rake_usd"
+echo "Received-vs-expected delta raw ($assert_label): $delta_raw"
 
 if [[ "$collateral_delta_raw" -ne 0 ]]; then
   echo "ALERT: Token accounting mismatch (YES+NO differs from totalCollateral)."
