@@ -452,11 +452,14 @@ printf 'Forced crossing pairs: %d\n\n' "$overlap_pairs"
 printf 'submitted_at\tseq\tside\taccount_index\taccount_id\tkey_type\tprice\tusd\tqty\tprimary_secondary\ttx_id\terror_code\tresponse_message\n' > "$orders_file"
 
 created_orders=0
+successful_submissions=0
 loaded_indices=("${!account_ids[@]}")
 loaded_indices_count=${#loaded_indices[@]}
 declare -a submitted_qty_raw
 declare -a submitted_notional_usd
 declare -a submitted_order_count
+declare -a submitted_success_order_count
+declare -A submitted_tx_by_account
 
 if [[ $loaded_indices_count -eq 0 ]]; then
   echo "No loaded account indices found."
@@ -484,6 +487,11 @@ for ((n = 0; n < buy_orders; n++)); do
   submitted_qty_raw[$account_index]=$(float_add "${submitted_qty_raw[$account_index]:-0}" "$qty")
   submitted_notional_usd[$account_index]=$(float_add "${submitted_notional_usd[$account_index]:-0}" "$notional_usd")
   submitted_order_count[$account_index]=$(( ${submitted_order_count[$account_index]:-0} + 1 ))
+  if [[ "$CREATE_LAST_ERROR_CODE" == "0" && -n "$CREATE_LAST_TX_ID" ]]; then
+    submitted_success_order_count[$account_index]=$(( ${submitted_success_order_count[$account_index]:-0} + 1 ))
+    submitted_tx_by_account["$account_index|$CREATE_LAST_TX_ID"]=1
+    successful_submissions=$((successful_submissions + 1))
+  fi
   created_orders=$((created_orders + 1))
 done
 
@@ -509,6 +517,11 @@ for ((n = 0; n < sell_orders; n++)); do
   submitted_qty_raw[$account_index]=$(float_add "${submitted_qty_raw[$account_index]:-0}" "$qty")
   submitted_notional_usd[$account_index]=$(float_add "${submitted_notional_usd[$account_index]:-0}" "$notional_usd")
   submitted_order_count[$account_index]=$(( ${submitted_order_count[$account_index]:-0} + 1 ))
+  if [[ "$CREATE_LAST_ERROR_CODE" == "0" && -n "$CREATE_LAST_TX_ID" ]]; then
+    submitted_success_order_count[$account_index]=$(( ${submitted_success_order_count[$account_index]:-0} + 1 ))
+    submitted_tx_by_account["$account_index|$CREATE_LAST_TX_ID"]=1
+    successful_submissions=$((successful_submissions + 1))
+  fi
   created_orders=$((created_orders + 1))
 done
 
@@ -556,6 +569,10 @@ fetch_user_portfolio_json() {
   return 1
 }
 
+total_submitted_accounts=0
+total_open_accounts=0
+total_matched_accounts=0
+
 for i in "${!account_ids[@]}"; do
   account_id="${account_ids[$i]}"
   if [[ -n "$account_id" ]]; then
@@ -589,17 +606,31 @@ for i in "${!account_ids[@]}"; do
       continue
     fi
 
-    open_orders=$(printf '%s\n' "$portfolio_json" | jq -r --arg m "$marketId" '(.openPredictionIntents[$m].openPredictionIntents // []) | length')
-    matched_orders=$(printf '%s\n' "$portfolio_json" | jq -r --arg m "$marketId" '
-      ((.openPredictionIntents[$m].openPredictionIntents // []) | map(.txId) | map(select(. != null and . != "")) | unique) as $openTxIds
-      | (.matchedPredictionIntents[$m].matchedPredictionIntents // [])
-      | map(.txId)
-      | map(select(. != null and . != ""))
-      | unique
-      | map(select((. as $tx | $openTxIds | index($tx)) | not))
-      | length
-    ')
-    printf 'Account %s: open orders=%d, matched orders=%d\n' "$account_id" "$open_orders" "$matched_orders"
+    declare -A open_tx_ids
+    while IFS= read -r open_tx_id; do
+      [[ -z "$open_tx_id" ]] && continue
+      open_tx_ids["$open_tx_id"]=1
+    done < <(printf '%s\n' "$portfolio_json" | jq -r --arg m "$marketId" '.openPredictionIntents[$m].openPredictionIntents[]?.txId // empty')
+
+    run_submitted="${submitted_success_order_count[$i]:-0}"
+    run_open_orders=0
+    for tx_key in "${!submitted_tx_by_account[@]}"; do
+      [[ "$tx_key" != "$i|"* ]] && continue
+      tx_id="${tx_key#${i}|}"
+      if [[ -n "${open_tx_ids[$tx_id]:-}" ]]; then
+        run_open_orders=$((run_open_orders + 1))
+      fi
+    done
+    run_matched_orders=$(( run_submitted - run_open_orders ))
+    if (( run_matched_orders < 0 )); then
+      run_matched_orders=0
+    fi
+
+    total_submitted_accounts=$((total_submitted_accounts + run_submitted))
+    total_open_accounts=$((total_open_accounts + run_open_orders))
+    total_matched_accounts=$((total_matched_accounts + run_matched_orders))
+
+    printf 'Account %s: submitted=%d, open orders=%d, matched=%d\n' "$account_id" "$run_submitted" "$run_open_orders" "$run_matched_orders"
   fi
 done
 
@@ -608,8 +639,29 @@ if (( portfolio_failures > 0 )); then
   echo "Portfolio fetch completed with $portfolio_failures failure(s): ${portfolio_failure_accounts[*]}"
 fi
 
+echo
+echo "Order accounting totals:"
+echo "- attempted submissions: $created_orders"
+echo "- successful submissions: $successful_submissions"
+echo "- per-account submitted total: $total_submitted_accounts"
+echo "- per-account open total: $total_open_accounts"
+echo "- per-account matched total: $total_matched_accounts"
+
+if (( total_submitted_accounts != successful_submissions )); then
+  echo "PANIC: accounting mismatch (per-account submitted total $total_submitted_accounts != successful submissions $successful_submissions)."
+  exit 1
+fi
+
+if (( (total_open_accounts + total_matched_accounts) != total_submitted_accounts )); then
+  echo "PANIC: accounting mismatch (open + matched = $((total_open_accounts + total_matched_accounts)) != submitted $total_submitted_accounts)."
+  exit 1
+fi
+
+printf '\033[32m✅\033[0m All submitted orders are accounted for: %s = %s open + %s matched.\n' "$total_submitted_accounts" "$total_open_accounts" "$total_matched_accounts"
+echo
 
 ### 8 state file
+echo "Finally, creating a state file..."
 # Persist this run so 2_reconcile.sh can run independently.
 state_file="$OUT_DIR/fillup_state_${marketId}.env"
 latest_state_file="$OUT_DIR/fillup_state_latest.env"

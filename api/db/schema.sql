@@ -1801,6 +1801,14 @@ ALTER TABLE ONLY public.positions
 
 
 --
+-- Name: comments unique_sig; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+--
+
+ALTER TABLE ONLY public.comments
+    ADD CONSTRAINT unique_sig UNIQUE (sig);
+
+
+--
 -- Name: prediction_intents unique_tx_id; Type: CONSTRAINT; Schema: public; Owner: your_db_user
 --
 

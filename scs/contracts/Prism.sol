@@ -45,10 +45,12 @@ contract Prism {
   
   mapping(uint128 => mapping(address => uint256)) public yesTokens;
   mapping(uint128 => mapping(address => uint256)) public noTokens;
+  mapping(uint128 => mapping(address => mapping(uint128 => bool))) public redeemAuthorizationUsed;
 
   uint256 public marketCreationFeeUsdc;
   uint256 public collateralTokenNdecimals;
   uint256 internal rakePercentScaled100;
+  bool private _entered;
 
   // events in alphabetical order:
   event DaoUpdated(address newDao);
@@ -92,6 +94,7 @@ contract Prism {
     require(collateralToken.transfer(owner, marketCreationFeeUsdc), "Fee transfer failed");
     
     statements[marketId] = _statement;
+    outcomes[marketId] = 0; // initialize to NO/default until explicitly resolved
     resolutionTimes[marketId] = 0;
     totalCollateralUsd[marketId] = 0;
     totalYesTokensOutstanding[marketId] = 0;
@@ -202,8 +205,9 @@ contract Prism {
       require(noTokens[marketId][signerSlot0] >= qty_lower, "Insufficient NO tokens");
       noTokens[marketId][signerSlot0] -= qty_lower;
       totalNoTokensOutstanding[marketId] -= qty_lower;
-      require(collateralToken.transfer(signerSlot0, collateralUsdAbsScaled_lower), "Transfer to NO seller failed");
+      require(totalCollateralUsd[marketId] >= collateralUsdAbsScaled_lower, "Insufficient market collateral (SELL NO)");
       totalCollateralUsd[marketId] -= collateralUsdAbsScaled_lower;
+      require(collateralToken.transfer(signerSlot0, collateralUsdAbsScaled_lower), "Transfer to NO seller failed");
     } else {
       // positive+primary => BUY YES
       require(collateralToken.transferFrom(signerSlot0, address(this), collateralUsdAbsScaled_lower), "Transfer from YES buyer failed");
@@ -218,8 +222,9 @@ contract Prism {
       require(yesTokens[marketId][signerSlot1] >= qty_lower, "Insufficient YES tokens");
       yesTokens[marketId][signerSlot1] -= qty_lower;
       totalYesTokensOutstanding[marketId] -= qty_lower;
-      require(collateralToken.transfer(signerSlot1, collateralUsdAbsScaled_lower), "Transfer to YES seller failed");
+      require(totalCollateralUsd[marketId] >= collateralUsdAbsScaled_lower, "Insufficient market collateral (SELL YES)");
       totalCollateralUsd[marketId] -= collateralUsdAbsScaled_lower;
+      require(collateralToken.transfer(signerSlot1, collateralUsdAbsScaled_lower), "Transfer to YES seller failed");
     } else {
       // negative+primary => BUY NO
       require(collateralToken.transferFrom(signerSlot1, address(this), collateralUsdAbsScaled_lower), "Transfer from NO buyer failed");
@@ -240,7 +245,7 @@ contract Prism {
   @param marketId The ID of the market for which the user wants to redeem their winnings.
   @return amountUSDC The amount of collateral (in USDC) redeemed by the user
   */
-  function redeem(uint128 marketId) external returns (uint256 amountUSDC) {
+  function redeem(uint128 marketId) external nonReentrant returns (uint256 amountUSDC) {
     return redeemInternal(marketId, msg.sender);
   }
 
@@ -252,7 +257,7 @@ contract Prism {
   @param user_account The address of the user whose winnings are being redeemed
   @return amountUSDC The amount of collateral (in USDC) redeemed by the user
   */
-  function redeemOnBehalfOfUser(uint128 marketId, address user_account) external onlyOwner returns (uint256 amountUSDC) {
+  function redeemOnBehalfOfUser(uint128 marketId, address user_account) external onlyOwner nonReentrant returns (uint256 amountUSDC) {
     return redeemInternal(marketId, user_account);
   }
 
@@ -353,6 +358,7 @@ contract Prism {
   @param noYes A boolean indicating the outcome of the market: true for YES wins, false for NO wins.
   */
   function resolveMarket(uint128 marketId, bool noYes) external onlyOracle {
+    require(bytes(statements[marketId]).length > 0, "No market statement has been set");
     require(resolutionTimes[marketId] == 0, "Already resolved");
 
     outcomes[marketId] = noYes ? 1 : 0; // 1 = YES wins, 0 = NO wins
@@ -404,6 +410,7 @@ contract Prism {
   @param marketId The ID of the market to be closed.
   */
   function emergencyCloseMarket5050(uint128 marketId) external onlyDao {
+    require(bytes(statements[marketId]).length > 0, "No market statement has been set");
     require(resolutionTimes[marketId] == 0, "Market already resolved");
 
     resolutionTimes[marketId] = block.timestamp;
@@ -527,5 +534,15 @@ contract Prism {
   modifier onlyDao() {
     require(msg.sender == dao, "Only DAO can call this function");
     _;
+  }
+
+  /**
+  Reentrancy guard for external entrypoints that perform token transfers.
+  */
+  modifier nonReentrant() {
+    require(!_entered, "ReentrancyGuard: reentrant call");
+    _entered = true;
+    _;
+    _entered = false;
   }
 }

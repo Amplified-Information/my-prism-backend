@@ -521,6 +521,7 @@ func main() {
 		"JWT_EXPIRY_HOURS",
 		"S3_BUCKET_NAME",
 		"S3_AWS_REGION",
+		"OPENAI_API_BASE_URL",
 		// secrets:
 		"DB_PWORD",
 		"PREVIEWNET_HEDERA_OPERATOR_KEY",
@@ -528,6 +529,7 @@ func main() {
 		"MAINNET_HEDERA_OPERATOR_KEY",
 		"SMTP_PWORD",
 		"JWT_SECRET",
+		"OPENAI_API_KEY",
 	}
 	vals := make(map[string]string)
 
@@ -663,7 +665,7 @@ func main() {
 
 	// initialize Matches service
 	matchesService := services.MatchesService{}
-	err = matchesService.Init(&matchesRepository)
+	err = matchesService.Init(&matchesRepository, &predictionIntentsRepository)
 	if err != nil {
 		fatal("Failed to initialize Matches service: %v", err)
 	}

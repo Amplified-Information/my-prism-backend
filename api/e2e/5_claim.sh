@@ -159,6 +159,12 @@ if [[ ! "$usdc_token_id" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   exit 1
 fi
 
+contract_owner_account_id=$(env_get "0_ACCOUNT_ID")
+if [[ -z "$contract_owner_account_id" || ! "$contract_owner_account_id" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "Missing or invalid 0_ACCOUNT_ID in $ENV_FILE"
+  exit 1
+fi
+
 grpc_addr="${baseUrl#*://}"
 grpc_addr="${grpc_addr%%/}"
 grpc_flags=(-w)
@@ -250,24 +256,33 @@ printf '%-15s %-30s %-30s\n' "----------" "---" "--"
 
 total_yes=0
 total_no=0
+declare -A account_yes_raw_map=()
+declare -A account_no_raw_map=()
 
 for account_id in "${account_ids[@]}"; do
   output=$("$TS_NODE_BIN" "$GET_TOKENS_SCRIPT" "$marketId" "$account_id" 2>&1 || true)
   line=$(printf '%s\n' "$output" | grep '=> yes=' | tail -n1 || true)
 
+  yes_raw=0
+  no_raw=0
   if [[ -n "$line" ]]; then
     yes=$(printf '%s\n' "$line" | sed -E 's/.*yes=([^,]+), no=.*/\1/')
     no=$(printf '%s\n' "$line" | sed -E 's/.*no=([^ ]+).*/\1/')
     if [[ "$yes" =~ ^[0-9]+$ ]]; then
+      yes_raw=$yes
       total_yes=$((total_yes + yes))
     fi
     if [[ "$no" =~ ^[0-9]+$ ]]; then
+      no_raw=$no
       total_no=$((total_no + no))
     fi
     printf '%-15s %-30s %-30s\n' "$account_id" "$yes" "$no"
   else
     printf '%-15s %-30s %-30s\n' "$account_id" "ERR" "ERR"
   fi
+
+  account_yes_raw_map["$account_id"]="$yes_raw"
+  account_no_raw_map["$account_id"]="$no_raw"
 done
 
 printf '%-15s %-30s %-30s\n' "----------" "---" "--"
@@ -478,26 +493,100 @@ total_received_raw=0
 fetch_mirror_usdc_credit_raw() {
   local tx_id="$1"
   local account_id="$2"
-  local encoded_tx_id
-  local tx_json
+  local mirror_tx_id
+  local tx_seconds tx_nanos
+  local attempts delay tx_json parsed i
 
-  encoded_tx_id=$(printf '%s' "$tx_id" | sed 's/@/%40/g')
-  tx_json=$(curl -sfL "$mirror_base/api/v1/transactions/$encoded_tx_id") || return 1
+  # Mirror node expects transaction id format shard.realm.num-seconds-nanos.
+  tx_seconds=${tx_id#*@}
+  tx_nanos=${tx_seconds#*.}
+  tx_seconds=${tx_seconds%%.*}
+  if [[ -z "$tx_seconds" || -z "$tx_nanos" || ! "$tx_seconds" =~ ^[0-9]+$ || ! "$tx_nanos" =~ ^[0-9]+$ ]]; then
+    return 1
+  fi
+  mirror_tx_id="${tx_id%@*}-${tx_seconds}-${tx_nanos}"
 
-  printf '%s\n' "$tx_json" | jq -r \
-    --arg account "$account_id" \
-    --arg token "$usdc_token_id" '
-      [
-        (.transactions // [])[]?
-        | (.token_transfers // [])[]?
-        | select((.account // .account_id // "") == $account)
-        | select((.token_id // "") == $token)
-        | (.amount // 0)
-        | tonumber
-        | select(. > 0)
-      ]
-      | add // 0
-    '
+  attempts=12
+  delay=1
+  tx_json=""
+  for ((i=1; i<=attempts; i++)); do
+    tx_json=$(curl -sfL "$mirror_base/api/v1/transactions/$mirror_tx_id" 2>/dev/null || true)
+    if [[ -n "$tx_json" ]]; then
+      parsed=$(printf '%s\n' "$tx_json" | jq -r \
+        --arg account "$account_id" \
+        --arg token "$usdc_token_id" '
+          [
+            (.transactions // [])[]?
+            | (.token_transfers // [])[]?
+            | select((.account // .account_id // "") == $account)
+            | select((.token_id // "") == $token)
+            | (.amount // 0)
+            | tonumber
+            | select(. > 0)
+          ]
+          | add // 0
+        ' 2>/dev/null || true)
+
+      if [[ "$parsed" =~ ^-?[0-9]+$ ]]; then
+        printf '%s\n' "$parsed"
+        return 0
+      fi
+    fi
+
+    sleep "$delay"
+  done
+
+  return 1
+}
+
+estimate_owner_rake_from_payout_raw() {
+  local payout_raw="$1"
+  local rake_percent_value="$2"
+  local estimated_rake=""
+
+  if [[ ! "$payout_raw" =~ ^[0-9]+$ ]]; then
+    printf '0\n'
+    return 0
+  fi
+
+  estimated_rake=$(awk -v payout="$payout_raw" -v rake="$rake_percent_value" '
+    BEGIN {
+      # Contract arithmetic: payout = gross - floor(gross * bps / 10000)
+      bps = int((rake + 0) * 100 + 0.5)
+      if (bps <= 0 || bps >= 10000) {
+        print 0
+        exit
+      }
+
+      denom = 10000 - bps
+      approx = int((payout * 10000) / denom)
+      if (approx < payout) {
+        approx = payout
+      }
+
+      for (i = 0; i < 1000; i++) {
+        gross = approx + i
+        calc_payout = gross - int((gross * bps) / 10000)
+        if (calc_payout == payout) {
+          print gross - payout
+          exit
+        }
+      }
+
+      # Fallback approximation if exact integer inversion was not found quickly.
+      fallback = int((payout * bps) / (10000 - bps) + 0.5)
+      if (fallback < 0) {
+        fallback = 0
+      }
+      print fallback
+    }
+  ')
+
+  if [[ "$estimated_rake" =~ ^[0-9]+$ ]]; then
+    printf '%s\n' "$estimated_rake"
+  else
+    printf '0\n'
+  fi
 }
 
 printf '\n%-15s %-10s %-18s %-18s\n' "Account ID" "Status" "Received(raw)" "Received(USD)"
@@ -506,6 +595,8 @@ printf '%-15s %-10s %-18s %-18s\n' "----------" "------" "-------------" "------
 for account_id in "${account_ids[@]}"; do
   slot=$(find_account_slot "$account_id" || true)
   if [[ -z "$slot" ]]; then
+    claim_amounts_raw+=("")
+    claim_tx_ids+=("")
     printf '%-15s %-10s %-18s %-18s\n' "$account_id" "missing" "-" "-"
     continue
   fi
@@ -513,7 +604,26 @@ for account_id in "${account_ids[@]}"; do
   account_key=$(env_get "${slot}_PRIVATE_KEY")
   account_key_type=$(normalize_key_type "$(env_get "${slot}_KEY_TYPE")")
   if [[ -z "$account_key" || -z "$account_key_type" ]]; then
+    claim_amounts_raw+=("")
+    claim_tx_ids+=("")
     printf '%-15s %-10s %-18s %-18s\n' "$account_id" "bad-env" "-" "-"
+    continue
+  fi
+
+  claimable_units_raw=0
+  yes_raw="${account_yes_raw_map[$account_id]:-0}"
+  no_raw="${account_no_raw_map[$account_id]:-0}"
+  case "$outcome" in
+    1) claimable_units_raw=$yes_raw ;;
+    0) claimable_units_raw=$no_raw ;;
+    2) claimable_units_raw=$((yes_raw + no_raw)) ;;
+    *) claimable_units_raw=0 ;;
+  esac
+
+  if [[ "$claimable_units_raw" -eq 0 ]]; then
+    claim_amounts_raw+=("")
+    claim_tx_ids+=("")
+    printf '%-15s %-10s %-18s %-18s\n' "$account_id" "skip-0" "0" "\$0.0"
     continue
   fi
 
@@ -537,6 +647,7 @@ for account_id in "${account_ids[@]}"; do
     received_usd=$(format_units_6 "$received_raw")
     printf '%-15s %-10s %-18s %-18s\n' "$account_id" "ok" "$received_raw" "\$$received_usd"
   else
+    claim_amounts_raw+=("")
     claim_tx_ids+=("")
     printf '%-15s %-10s %-18s %-18s\n' "$account_id" "fail" "-" "-"
     printf '%s\n' "$redeem_output" | tail -n 3
@@ -657,10 +768,11 @@ sleep 3
 mirror_check_failed=0
 mirror_checked=0
 mirror_total_raw=0
+mirror_expected_total_raw=0
 
 printf '\nMirror-node USDC transfer check\n'
-printf '%-15s %-24s %-18s %-18s %-8s\n' "Account ID" "TxID" "Expected(raw)" "Mirror(raw)" "Match"
-printf '%-15s %-24s %-18s %-18s %-8s\n' "----------" "----" "-------------" "-----------" "-----"
+printf '%-15s %-36s %-18s %-18s %-8s\n' "Account ID" "TxID" "Expected(raw)" "Mirror(raw)" "Match"
+printf '%-15s %-36s %-18s %-18s %-8s\n' "----------" "----" "-------------" "-----------" "-----"
 
 for i in "${!account_ids[@]}"; do
   account_id="${account_ids[$i]}"
@@ -668,23 +780,32 @@ for i in "${!account_ids[@]}"; do
   tx_id="${claim_tx_ids[$i]:-}"
 
   if [[ -z "$expected_raw" || -z "$tx_id" ]]; then
-    printf '%-15s %-24s %-18s %-18s %-8s\n' "$account_id" "-" "-" "-" "skip"
+    printf '%-15s %-36s %-18s %-18s %-8s\n' "$account_id" "-" "-" "-" "skip"
     continue
+  fi
+
+  expected_mirror_raw="$expected_raw"
+  if [[ "$account_id" == "$contract_owner_account_id" ]]; then
+    owner_extra_rake_raw=$(estimate_owner_rake_from_payout_raw "$expected_raw" "$rake_percent")
+    if [[ "$owner_extra_rake_raw" =~ ^[0-9]+$ ]]; then
+      expected_mirror_raw=$((expected_raw + owner_extra_rake_raw))
+    fi
   fi
 
   mirror_raw=$(fetch_mirror_usdc_credit_raw "$tx_id" "$account_id" || true)
   if [[ -z "$mirror_raw" || ! "$mirror_raw" =~ ^-?[0-9]+$ ]]; then
-    printf '%-15s %-24s %-18s %-18s %-8s\n' "$account_id" "$tx_id" "$expected_raw" "ERR" "fail"
+    printf '%-15s %-36s %-18s %-18s %-8s\n' "$account_id" "$tx_id" "$expected_mirror_raw" "ERR" "fail"
     mirror_check_failed=1
     continue
   fi
 
   mirror_checked=$((mirror_checked + 1))
   mirror_total_raw=$((mirror_total_raw + mirror_raw))
-  if [[ "$mirror_raw" == "$expected_raw" ]]; then
-    printf '%-15s %-24s %-18s %-18s %-8s\n' "$account_id" "$tx_id" "$expected_raw" "$mirror_raw" "yes"
+  mirror_expected_total_raw=$((mirror_expected_total_raw + expected_mirror_raw))
+  if [[ "$mirror_raw" == "$expected_mirror_raw" ]]; then
+    printf '%-15s %-36s %-18s %-18s %-8s\n' "$account_id" "$tx_id" "$expected_mirror_raw" "$mirror_raw" "yes"
   else
-    printf '%-15s %-24s %-18s %-18s %-8s\n' "$account_id" "$tx_id" "$expected_raw" "$mirror_raw" "no"
+    printf '%-15s %-36s %-18s %-18s %-8s\n' "$account_id" "$tx_id" "$expected_mirror_raw" "$mirror_raw" "no"
     mirror_check_failed=1
   fi
 done
@@ -692,10 +813,12 @@ done
 echo
 echo "Mirror check summary"
 echo "USDC token id: $usdc_token_id"
+echo "Contract owner account id: $contract_owner_account_id"
 echo "Accounts checked: $mirror_checked"
-echo "Expected total raw: $total_received_raw"
+echo "Expected total raw (mirror basis): $mirror_expected_total_raw"
+echo "Expected total raw (payout only): $total_received_raw"
 echo "Mirror total raw: $mirror_total_raw"
-if [[ "$mirror_total_raw" != "$total_received_raw" ]]; then
+if [[ "$mirror_total_raw" != "$mirror_expected_total_raw" ]]; then
   echo "ALERT: mirror total raw does not match expected total raw."
   mirror_check_failed=1
 fi

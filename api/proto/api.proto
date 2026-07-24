@@ -163,6 +163,8 @@ message Match {
   double qty2 = 7            [json_name = "qty2"];
   string created_at = 8      [json_name = "matchedAt"];
   string tx_hash = 9         [json_name = "txHash"];
+  double price_usd1 = 10     [json_name = "priceUsd1"];
+  double price_usd2 = 11     [json_name = "priceUsd2"];
 }
 
 message GetMatchesRequest {

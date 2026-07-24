@@ -464,14 +464,20 @@ Retrieve all secrets:
 
 ```bash
 export ENV=local
-aws ssm get-parameters-by-path --path "/$ENV" | grep "Name"
+aws ssm get-parameters-by-path --path "/$ENV" --profile prism --region us-east-1 | grep "Name"
 ```
 
 Or...
 
 ```bash
+# view all secrets:
+aws ssm describe-parameters --query "Parameters[?Type=='SecureString'].Name" --output json  --profile prism --region us-east-1 | jq -r '.[]' | sort | jq -R . | jq -s .
+
+# or:
 aws ssm describe-parameters --query "Parameters[?Type=='SecureString'].Name" --output text
 ```
+
+
 
 Retrieve a secret:
 
@@ -616,6 +622,11 @@ See: `assemblePayloadHexForSigning(...)` in ./web.eng/lib/utils.ts
 See: `AssemblePayloadHexForSigning(...)` in ./api/server/lib/sign.go
 
 See: `assemblePayload(...)` in ./scs/contracts/Prism.sol
+
+```go
+// signature format for comments:
+commentPayload := fmt.Sprintf("%s:%s:%s", req.MarketId, req.AccountId, req.Content)
+```
 
 ## Add a submodule to your monorepo (web)
 

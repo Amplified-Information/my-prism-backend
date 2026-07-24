@@ -178,6 +178,51 @@ remappings = [
 ]
 ```
 
+## e2e test of smart contract
+
+```bash
+cd api/e2e
+
+# configure the e2e test
+cp .env.example .env
+# populate .env
+
+ls 
+# now run:
+./0_allowances.sh # follow prompts
+
+# get a token (JWT with ADMIN) to access the API
+./0_bearerToken.sh 
+
+# create a new market on Prism:
+./0_createMarket.sh # follow prompts
+
+# fill up the market just created with orders:
+./1_fillUp.sh # follow prompts
+
+# fill up with secondary orders
+./1_fillUp.sh # follow prompts
+
+# reconcile all orders submitted:
+./2_reconcile.sh
+
+# view all positions in the market:
+./4_positions.sh
+
+# resolve the market to YES or NO
+./3_resolve.sh
+
+# view all positions in the market:
+./4_positions.sh
+
+# claim winnings:
+./5_claim.sh
+
+# (optionally) delete market:
+./7_softDeleteMarket.sh
+
+```
+
 ## contract parameters
 
 collateral token - USDC, USDC[hts], HBAR, etc.

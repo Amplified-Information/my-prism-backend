@@ -1,11 +1,11 @@
 services:
   api:
-    image: ghcr.io/prismmarketlabs/api:0.6.8
+    image: ghcr.io/prismmarketlabs/api:0.6.28
   clob:
     image: ghcr.io/prismmarketlabs/clob:0.3.7
   web:
-    image: ghcr.io/prismmarketlabs/web:0.7.41
+    image: ghcr.io/prismmarketlabs/web:0.8.7
   web.admin:
-    image: ghcr.io/prismmarketlabs/web.admin:0.1.23
+    image: ghcr.io/prismmarketlabs/web.admin:0.2.5
   web.lp:
     image: ghcr.io/prismmarketlabs/web.lp:0.4.8

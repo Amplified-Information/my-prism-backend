@@ -261,15 +261,20 @@ declare -a submitted_token
 
 submitted_count=0
 submitted_success=0
+accounts_total=${#account_ids[@]}
+account_progress=0
 
 for i in "${!account_ids[@]}"; do
 	account_id="${account_ids[$i]}"
+	account_progress=$((account_progress + 1))
+	echo "[submit $account_progress/$accounts_total] Account $account_id: resolving EVM address..."
 	evm_address=$(resolve_evm_address "$account_id" || true)
 	if [[ -z "$evm_address" ]]; then
 		echo "Warning: failed to resolve evmAddress for account $account_id; skipping."
 		continue
 	fi
 
+	echo "[submit $account_progress/$accounts_total] Account $account_id: fetching portfolio..."
 	portfolio_json=$(fetch_user_portfolio_json "$evm_address" || true)
 	if [[ -z "$portfolio_json" ]]; then
 		echo "Warning: failed to fetch portfolio for account $account_id; skipping."
@@ -287,6 +292,7 @@ for i in "${!account_ids[@]}"; do
 	no_raw=$(printf '%s\n' "$portfolio_json" | jq -r --arg m "$marketId" '.positions[$m].position.no // "0"' 2>/dev/null)
 	yes_raw=${yes_raw:-0}
 	no_raw=${no_raw:-0}
+	echo "[submit $account_progress/$accounts_total] Account $account_id: YES=$yes_raw NO=$no_raw"
 
 	for token in YES NO; do
 		held_raw="$yes_raw"
@@ -320,6 +326,7 @@ for i in "${!account_ids[@]}"; do
 		fi
 
 		notional_usd=$(awk -v p="$price" -v q="$qty" 'BEGIN { ap = (p < 0 ? -p : p); printf "%.6f", ap * q }')
+		echo "[submit $account_progress/$accounts_total] Account $account_id token=$token side=$side qty=$qty price=$price: submitting CreatePredictionIntent..."
 
 		create_prediction_intent "$i" "$price" "$qty" "s" >/dev/null || {
 			echo "Warning: CreatePredictionIntent transport failure for account $account_id token=$token"
@@ -339,6 +346,9 @@ for i in "${!account_ids[@]}"; do
 		submitted_count=$((submitted_count + 1))
 		if [[ "$CREATE_LAST_ERROR_CODE" == "0" ]]; then
 			submitted_success=$((submitted_success + 1))
+			echo "[submit $account_progress/$accounts_total] Account $account_id token=$token: submitted txId=$CREATE_LAST_TX_ID"
+		else
+			echo "[submit $account_progress/$accounts_total] Account $account_id token=$token: API returned errorCode=$CREATE_LAST_ERROR_CODE"
 		fi
 	done
 done
@@ -365,51 +375,102 @@ for idx in "${!submitted_account[@]}"; do
 done
 
 echo
-echo "Checking matchedPredictionIntents for submitted secondary txIds..."
+echo "Fetching GetPredictionIntentMatches for submitted secondary txIds..."
 
-matched_found=0
-printf '%-15s %-36s %-5s %12s %10s %-22s\n' "AccountID" "TxID" "Tok" "MatchedQty" "PriceUSD" "GeneratedAt"
-printf '%-15s %-36s %-5s %12s %10s %-22s\n' "--------" "----" "---" "----------" "--------" "-----------"
+declare -A secondary_tx_lookup
+declare -A matched_qty_by_tx
+declare -A matched_rows_by_tx
 
-for i in "${!account_ids[@]}"; do
-	account_id="${account_ids[$i]}"
-	if [[ -z "${account_has_success[$account_id]:-}" ]]; then
+for idx in "${!submitted_tx[@]}"; do
+	if [[ "${submitted_error[$idx]}" != "0" ]]; then
 		continue
 	fi
-
-	evm_address=$(resolve_evm_address "$account_id" || true)
-	[[ -z "$evm_address" ]] && continue
-
-	portfolio_json=$(fetch_user_portfolio_json "$evm_address" || true)
-	[[ -z "$portfolio_json" ]] && continue
-
-	for idx in "${!submitted_account[@]}"; do
-		if [[ "${submitted_account[$idx]}" != "$account_id" ]]; then
-			continue
-		fi
-		if [[ "${submitted_error[$idx]}" != "0" ]]; then
-			continue
-		fi
-
-		tx_id="${submitted_tx[$idx]}"
-		token="${submitted_token[$idx]}"
-		while IFS=$'\t' read -r matched_qty matched_price generated_at; do
-			[[ -z "$matched_qty" ]] && continue
-			matched_found=$((matched_found + 1))
-			printf '%-15s %-36s %-5s %12s %10s %-22s\n' "$account_id" "$tx_id" "$token" "$matched_qty" "$matched_price" "$generated_at"
-		done < <(printf '%s\n' "$portfolio_json" | jq -r --arg m "$marketId" --arg tx "$tx_id" '
-			(.matchedPredictionIntents[$m].matchedPredictionIntents // [])
-			| map(select(.txId == $tx))
-			| .[]?
-			| [(.qty // 0), (.priceUsd // 0), (.generatedAt // "")]
-			| @tsv
-		')
-	done
+	tx_id="${submitted_tx[$idx]}"
+	[[ -z "$tx_id" ]] && continue
+	secondary_tx_lookup["$tx_id"]=1
+	matched_qty_by_tx["$tx_id"]=0
+	matched_rows_by_tx["$tx_id"]=0
 done
 
-if [[ "$matched_found" == "0" ]]; then
-	echo "No submitted secondary txIds are matched yet."
+if [[ ${#secondary_tx_lookup[@]} -gt 0 ]]; then
+	echo "Tracking ${#secondary_tx_lookup[@]} successful secondary txIds in match history..."
+	limit=1000
+	offset=0
+	page=0
+	while true; do
+		page=$((page + 1))
+		echo "[matches page $page] Fetching offset=$offset limit=$limit..."
+		matches_json=$(easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d "{\"marketId\":\"$marketId\",\"limit\":$limit,\"offset\":$offset}" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetPredictionIntentMatches 2>/dev/null || printf '{}')
+
+		while IFS=$'\t' read -r tx_id1 qty1 tx_id2 qty2; do
+			if [[ -n "${secondary_tx_lookup[$tx_id1]:-}" ]]; then
+				prev_qty="${matched_qty_by_tx[$tx_id1]:-0}"
+				matched_qty_by_tx["$tx_id1"]=$(awk -v a="$prev_qty" -v b="$qty1" 'BEGIN { printf "%.6f", (a + 0) + (b + 0) }')
+				matched_rows_by_tx["$tx_id1"]=$(( ${matched_rows_by_tx[$tx_id1]:-0} + 1 ))
+			fi
+
+			if [[ -n "${secondary_tx_lookup[$tx_id2]:-}" ]]; then
+				prev_qty="${matched_qty_by_tx[$tx_id2]:-0}"
+				matched_qty_by_tx["$tx_id2"]=$(awk -v a="$prev_qty" -v b="$qty2" 'BEGIN { printf "%.6f", (a + 0) + (b + 0) }')
+				matched_rows_by_tx["$tx_id2"]=$(( ${matched_rows_by_tx[$tx_id2]:-0} + 1 ))
+			fi
+		done < <(printf '%s\n' "$matches_json" | jq -r '.matches[]? | [(.txId1 // ""), (.qty1 // 0), (.txId2 // ""), (.qty2 // 0)] | @tsv')
+
+		page_count=$(printf '%s\n' "$matches_json" | jq -r '(.matches // []) | length')
+		echo "[matches page $page] Received $page_count rows"
+		if [[ -z "$page_count" || "$page_count" -lt "$limit" ]]; then
+			break
+		fi
+		offset=$((offset + limit))
+	done
 fi
+
+echo
+echo "Secondary order status summary"
+printf '%-15s %-5s %-36s %12s %12s %12s %9s %-8s %-6s\n' "AccountID" "Tok" "TxID" "SubmittedQty" "MatchedQty" "OpenQty" "Rows" "Status" "Err"
+printf '%-15s %-5s %-36s %12s %12s %12s %9s %-8s %-6s\n' "--------" "---" "----" "------------" "----------" "-------" "----" "------" "---"
+
+total_submitted_qty=0
+total_matched_qty=0
+for row in "${submitted_rows[@]}"; do
+	IFS=$'\t' read -r account_id token held_raw sell_raw qty price side tx_id err msg <<< "$row"
+
+	if [[ "$err" != "0" || -z "$tx_id" ]]; then
+		status="fail"
+		matched_qty_fmt="-"
+		open_qty_fmt="-"
+		rows_fmt="-"
+	else
+		matched_qty_raw="${matched_qty_by_tx[$tx_id]:-0}"
+		rows_count="${matched_rows_by_tx[$tx_id]:-0}"
+
+		matched_effective=$(awk -v s="$qty" -v m="$matched_qty_raw" 'BEGIN { x=m+0; if (x < 0) x=0; if (x > s) x=s; printf "%.6f", x }')
+		open_qty=$(awk -v s="$qty" -v m="$matched_effective" 'BEGIN { o=(s+0)-(m+0); if (o < 0) o=0; printf "%.6f", o }')
+
+		total_submitted_qty=$(awk -v a="$total_submitted_qty" -v b="$qty" 'BEGIN { printf "%.6f", (a + 0) + (b + 0) }')
+		total_matched_qty=$(awk -v a="$total_matched_qty" -v b="$matched_effective" 'BEGIN { printf "%.6f", (a + 0) + (b + 0) }')
+
+		matched_qty_fmt="$matched_effective"
+		open_qty_fmt="$open_qty"
+		rows_fmt="$rows_count"
+
+		if awk -v o="$open_qty" 'BEGIN { exit ((o + 0) <= 0.0000005 ? 0 : 1) }'; then
+			status="filled"
+		elif awk -v m="$matched_effective" 'BEGIN { exit ((m + 0) > 0.0000005 ? 0 : 1) }'; then
+			status="partial"
+		else
+			status="open"
+		fi
+	fi
+
+	printf '%-15s %-5s %-36s %12s %12s %12s %9s %-8s %-6s\n' "$account_id" "$token" "$tx_id" "$qty" "$matched_qty_fmt" "$open_qty_fmt" "$rows_fmt" "$status" "$err"
+done
+
+echo
+echo "Secondary totals"
+echo "Submitted qty: $total_submitted_qty"
+echo "Matched qty:   $total_matched_qty"
+echo "Open qty:      $(awk -v s="$total_submitted_qty" -v m="$total_matched_qty" 'BEGIN { o=(s+0)-(m+0); if (o < 0) o=0; printf "%.6f", o }')"
 
 echo
 echo "Appended secondary orders to: $orders_latest_file"

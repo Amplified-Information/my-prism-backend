@@ -10,10 +10,12 @@ import (
 
 type MatchesService struct {
 	matchesRepository *repositories.MatchesRepository
+	predictionIntents *repositories.PredictionIntentsRepository
 }
 
-func (ms *MatchesService) Init(matchesRepository *repositories.MatchesRepository) error {
+func (ms *MatchesService) Init(matchesRepository *repositories.MatchesRepository, predictionIntents *repositories.PredictionIntentsRepository) error {
 	ms.matchesRepository = matchesRepository
+	ms.predictionIntents = predictionIntents
 
 	lib.Log(lib.LOG_INFO, "Service: Matches service initialized successfully")
 	return nil
@@ -61,6 +63,14 @@ func (ms *MatchesService) GetPredictionIntentMatches(marketId string, limit *int
 
 	var apiMatches []*pb_api.Match
 	for _, m := range matchesResp {
+		intent1, err := ms.predictionIntents.GetPredictionIntentByTxId(m.TxId1.String())
+		if err != nil {
+			return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get prediction intent by txId1: %v", err)
+		}
+		intent2, err := ms.predictionIntents.GetPredictionIntentByTxId(m.TxId2.String())
+		if err != nil {
+			return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get prediction intent by txId2: %v", err)
+		}
 		apiMatch := &pb_api.Match{
 			TxId1:     m.TxId1.String(),
 			TxId2:     m.TxId2.String(),
@@ -69,6 +79,8 @@ func (ms *MatchesService) GetPredictionIntentMatches(marketId string, limit *int
 			TxHash:    m.TxHash,
 			Qty1:      m.Qty1,
 			Qty2:      m.Qty2,
+			PriceUsd1: intent1.PriceUsd,
+			PriceUsd2: intent2.PriceUsd,
 		}
 		apiMatches = append(apiMatches, apiMatch)
 	}

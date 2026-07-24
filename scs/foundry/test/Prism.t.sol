@@ -214,6 +214,25 @@ contract PrismTest is Test {
         prism.resolveMarket(marketId, true);
     }
 
+    function testResolveMarketRequiresExistingMarket() public {
+        uint128 marketId = 4001;
+        vm.expectRevert("No market statement has been set");
+        prism.resolveMarket(marketId, true);
+    }
+
+    function testEmergencyCloseRequiresExistingMarket() public {
+        uint128 marketId = 4002;
+        vm.expectRevert("No market statement has been set");
+        prism.emergencyCloseMarket5050(marketId);
+    }
+
+    function testCreateNewMarketResetsOutcomeToDefault() public {
+        uint128 marketId = 4003;
+        prism.setOutcomeForTest(marketId, 2);
+        prism.createNewMarket(marketId, "Outcome reset check");
+        assertEq(prism.outcomes(marketId), 0, "outcome reset to default on create");
+    }
+
     // --- getUserTokens & getTotalCollateral ---
     function testGetUserTokensAndTotalCollateral() public view {
         uint128 marketId = 5;

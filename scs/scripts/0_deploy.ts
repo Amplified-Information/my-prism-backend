@@ -112,8 +112,8 @@ async function deployContract(client: Client) {
 `)
     console.log('--> Don\'t forget to associate USDC!')
     console.log('--> Don\'t forget to create at least one new market!')
-    console.log('--> Finally, you will need to set an allowance for the contract to spend USDC on behalf your account!')
-
+    console.log('--> Finally, you will need to set an allowance for the contract to spend USDC on behalf your account! (see: e2e scripts)')
+    console.log('--> Lastly, redeploy the "api" and "blocknode" services')
     /////
     // This is not acceptable as it requires an admin key on the contract!
     // Solution: call associateToken() in Solidity...
