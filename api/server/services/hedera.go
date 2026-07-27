@@ -153,33 +153,35 @@ func (hs *HederaService) BuyOrSellPositionTokens(sideYes *pb_clob.CreateOrderReq
 	if err != nil {
 		return false, lib.LogAndError(lib.LOG_ERROR, "invalid USDC_DECIMALS: %v", err)
 	}
-	// For signature verification, we need seperate reconstruction of the payloads for YES and NO positions, including collateralUsd
-	// const collateralUsd_abs_scaled = floatToBigIntScaledDecimals(Math.abs(predictionIntentRequest.priceUsd*predictionIntentRequest.qty), usdcDecimals).toString()
-	collateralUsdAbsScaledYes, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideYes.PriceUsd*sideYes.QtyOrig /* N.B. use QtyOrig and not Qty (remaining amount) */), int(usdcDecimals))
+	// For signature verification, we need separate reconstruction of the payloads for YES and NO positions, including collateralUsd.
+	// The signed payload uses the originally authorized amount, while settlement uses the live match amount.
+	collateralUsdAbsScaledYes, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideYes.PriceUsd*sideYes.QtyOrig /* signed authorization amount */), int(usdcDecimals))
 	if err != nil {
 		return false, lib.LogAndError(lib.LOG_ERROR, "failed to scale collateralUsdAbsYes: %v", err)
 	}
 
-	collateralUsdAbsScaledNo, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideNo.PriceUsd*sideNo.QtyOrig /* N.B. use QtyOrig and not Qty (remaining amount) */), int(usdcDecimals))
+	collateralUsdAbsScaledNo, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideNo.PriceUsd*sideNo.QtyOrig /* signed authorization amount */), int(usdcDecimals))
 	if err != nil {
 		return false, lib.LogAndError(lib.LOG_ERROR, "failed to scale collateralUsdAbsNo: %v", err)
 	}
 
-	// OLD - before the invariant...
-	// qtyScaledYesBig, err := lib.FloatToBigIntScaledDecimals(sideYes.QtyOrig, int(usdcDecimals))
-	// if err != nil {
-	// 	return false, lib.LogAndError(lib.LOG_ERROR, "failed to calculate qtyScaledYesBig: %v", err)
-	// }
+	settlementUsdAbsScaledYes, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideYes.PriceUsd*sideYes.Qty /* live match amount */), int(usdcDecimals))
+	if err != nil {
+		return false, lib.LogAndError(lib.LOG_ERROR, "failed to scale settlementUsdAbsYes: %v", err)
+	}
 
-	// qtyScaledNoBig, err := lib.FloatToBigIntScaledDecimals(sideNo.QtyOrig, int(usdcDecimals))
-	// if err != nil {
-	// 	return false, lib.LogAndError(lib.LOG_ERROR, "failed to calculate qtyScaledNoBig: %v", err)
-	// }
+	settlementUsdAbsScaledNo, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideNo.PriceUsd*sideNo.Qty /* live match amount */), int(usdcDecimals))
+	if err != nil {
+		return false, lib.LogAndError(lib.LOG_ERROR, "failed to scale settlementUsdAbsNo: %v", err)
+	}
 
-	// Contract invariant requires 1:1 settlement units between collateral and qty.
-	// Pass qtyScaled in collateral units (USDC-scaled), not raw share qty.
-	qtyScaledYesBig := new(big.Int).Set(collateralUsdAbsScaledYes)
-	qtyScaledNoBig := new(big.Int).Set(collateralUsdAbsScaledNo)
+	settlementUsdAbsScaledLower := new(big.Int).Set(settlementUsdAbsScaledYes)
+	if settlementUsdAbsScaledNo.Cmp(settlementUsdAbsScaledLower) < 0 {
+		settlementUsdAbsScaledLower = new(big.Int).Set(settlementUsdAbsScaledNo)
+	}
+
+	qtyScaledYesBig := new(big.Int).Set(settlementUsdAbsScaledLower)
+	qtyScaledNoBig := new(big.Int).Set(settlementUsdAbsScaledLower)
 
 	// priceUsdAbsScaledYesBig, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideYes.PriceUsd), int(usdcDecimals))
 	// if err != nil {
@@ -272,21 +274,17 @@ func (hs *HederaService) BuyOrSellPositionTokens(sideYes *pb_clob.CreateOrderReq
 	lib.Log(lib.LOG_INFO, "sigYes (keyType=%d) (hex): %x", sideYes.KeyType, sigYes)
 	lib.Log(lib.LOG_INFO, "sigNo (keyType=%d) (hex): %x", sideNo.KeyType, sigNo)
 
-	// NEW - Defensive pre-submit check for contract invariant in partial matches.
-	settlementCollateralLower := new(big.Int).Set(collateralUsdAbsScaledYes)
-	if collateralUsdAbsScaledNo.Cmp(settlementCollateralLower) < 0 {
-		settlementCollateralLower = new(big.Int).Set(collateralUsdAbsScaledNo)
+	// Defensive pre-submit check: the live settlement amount must not exceed the signed authorization amount.
+	signedCollateralLower := new(big.Int).Set(collateralUsdAbsScaledYes)
+	if collateralUsdAbsScaledNo.Cmp(signedCollateralLower) < 0 {
+		signedCollateralLower = new(big.Int).Set(collateralUsdAbsScaledNo)
 	}
-	settlementQtyLower := new(big.Int).Set(qtyScaledYesBig)
-	if qtyScaledNoBig.Cmp(settlementQtyLower) < 0 {
-		settlementQtyLower = new(big.Int).Set(qtyScaledNoBig)
-	}
-	invariantHolds := settlementCollateralLower.Cmp(settlementQtyLower) == 0
+	invariantHolds := settlementUsdAbsScaledLower.Cmp(signedCollateralLower) <= 0
 	lib.Log(lib.LOG_INFO,
-		"Pre-submit invariant check (marketId=%s): collateral_lower=%s qty_lower=%s collateral_slot0=%s collateral_slot1=%s qty_slot0=%s qty_slot1=%s holds=%t",
+		"Pre-submit invariant check (marketId=%s): signed_lower=%s settlement_lower=%s signed_slot0=%s signed_slot1=%s settlement_slot0=%s settlement_slot1=%s holds=%t",
 		sideYes.MarketId,
-		settlementCollateralLower.String(),
-		settlementQtyLower.String(),
+		signedCollateralLower.String(),
+		settlementUsdAbsScaledLower.String(),
 		collateralUsdAbsScaledYes.String(),
 		collateralUsdAbsScaledNo.String(),
 		qtyScaledYesBig.String(),
@@ -302,10 +300,10 @@ func (hs *HederaService) BuyOrSellPositionTokens(sideYes *pb_clob.CreateOrderReq
 	params.AddUint128BigInt(marketIdBig)               // marketId
 	params.AddAddress(sideYes.EvmAddress)              // signerYes
 	params.AddAddress(sideNo.EvmAddress)               // signerNo
-	params.AddUint256BigInt(collateralUsdAbsScaledYes) // collateralUsdAbsScaledYes
-	params.AddUint256BigInt(collateralUsdAbsScaledNo)  // collateralUsdAbsScaledNo
-	params.AddUint256BigInt(qtyScaledYesBig)
-	params.AddUint256BigInt(qtyScaledNoBig)
+	params.AddUint256BigInt(collateralUsdAbsScaledYes) // collateralUsdAbsScaledYes (signed authorization amount)
+	params.AddUint256BigInt(collateralUsdAbsScaledNo)  // collateralUsdAbsScaledNo (signed authorization amount)
+	params.AddUint256BigInt(qtyScaledYesBig)           // settlement amount in collateral units
+	params.AddUint256BigInt(qtyScaledNoBig)            // settlement amount in collateral units
 	// params.AddUint256BigInt(priceUsdAbsScaledYesBig)
 	// params.AddUint256BigInt(priceUsdAbsScaledNoBig)
 	params.AddUint128BigInt(txIdYesBig)                              // txIdYes

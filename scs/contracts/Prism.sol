@@ -115,10 +115,10 @@ contract Prism {
   @param marketId The ID of the market
   @param signerSlot0 The signing address of slot 0 (positive-price leg)
   @param signerSlot1 The signing address of slot 1 (negative-price leg)
-  @param collateralUsdAbsScaledSlot0 Slot 0 collateral amount (scaled)
-  @param collateralUsdAbsScaledSlot1 Slot 1 collateral amount (scaled)
-  @param qtyScaledSlot0 Slot 0 quantity (scaled)
-  @param qtyScaledSlot1 Slot 1 quantity (scaled)
+  @param collateralUsdAbsScaledSlot0 Slot 0 signed collateral authorization amount (scaled)
+  @param collateralUsdAbsScaledSlot1 Slot 1 signed collateral authorization amount (scaled)
+  @param qtyScaledSlot0 Slot 0 settlement amount (scaled)
+  @param qtyScaledSlot1 Slot 1 settlement amount (scaled)
   @param txIdSlot0 txId of slot 0
   @param txIdSlot1 txId of slot 1
   @param sigObjSlot0 The signatureObject (includes key type) for slot 0
@@ -146,25 +146,6 @@ contract Prism {
     require(resolutionTimes[marketId] == 0, "Market resolved");
     require(bytes(statements[marketId]).length > 0, "No market statement has been set");
 
-    // calculate the lower collateral amount:
-    uint256 collateralUsdAbsScaled_lower = 0; // the lower of the two collateral amounts
-    if (collateralUsdAbsScaledSlot0 < collateralUsdAbsScaledSlot1) {
-      collateralUsdAbsScaled_lower = collateralUsdAbsScaledSlot0;
-    } else {
-      collateralUsdAbsScaled_lower = collateralUsdAbsScaledSlot1; // always transfer the lower amount of collateral (partial match)
-    }
-
-    uint256 qty_lower = 0; // the lower of the two qty amounts
-    if (qtyScaledSlot0 < qtyScaledSlot1) {
-      qty_lower = qtyScaledSlot0;
-    } else {
-      qty_lower = qtyScaledSlot1;
-    }
-
-    // Apply an invariant here
-    // Enforce 1:1 settlement units between collateral and position token quantity.
-    require(collateralUsdAbsScaled_lower == qty_lower, "Collateral/qty mismatch");
-
     // On-chain signature verification mirrors payload assembly in API/web:
     // buySell byte is slot-position-based (slot0=0xf0, slot1=0xf1) because the
     // API/frontend derives it from price sign (positive=0xf0, negative=0xf1)
@@ -187,6 +168,15 @@ contract Prism {
       "isAuthorized slot1 failed"
     );
 
+    // The settlement tuple must not exceed the signed authorization and both sides must agree
+    // on the exact executed amount.
+    require(qtyScaledSlot0 > 0, "Settlement amount must be positive");
+    require(qtyScaledSlot0 == qtyScaledSlot1, "Oversize settlement tuple");
+    require(qtyScaledSlot0 <= collateralUsdAbsScaledSlot0, "Oversize settlement tuple");
+    require(qtyScaledSlot1 <= collateralUsdAbsScaledSlot1, "Oversize settlement tuple");
+
+    uint256 settlementUsdAbsScaled = qtyScaledSlot0;
+
     /*
     Settlement semantics (README-aligned) with sign-ordered slots:
     - signerSlot0 is the positive-price leg
@@ -202,39 +192,39 @@ contract Prism {
     // positive-price slot (signerSlot0)
     if (primarySecondarySlot0) {
       // positive+secondary => SELL NO
-      require(noTokens[marketId][signerSlot0] >= qty_lower, "Insufficient NO tokens");
-      noTokens[marketId][signerSlot0] -= qty_lower;
-      totalNoTokensOutstanding[marketId] -= qty_lower;
-      require(totalCollateralUsd[marketId] >= collateralUsdAbsScaled_lower, "Insufficient market collateral (SELL NO)");
-      totalCollateralUsd[marketId] -= collateralUsdAbsScaled_lower;
-      require(collateralToken.transfer(signerSlot0, collateralUsdAbsScaled_lower), "Transfer to NO seller failed");
+      require(noTokens[marketId][signerSlot0] >= settlementUsdAbsScaled, "Insufficient NO tokens");
+      noTokens[marketId][signerSlot0] -= settlementUsdAbsScaled;
+      totalNoTokensOutstanding[marketId] -= settlementUsdAbsScaled;
+      require(totalCollateralUsd[marketId] >= settlementUsdAbsScaled, "Insufficient market collateral (SELL NO)");
+      totalCollateralUsd[marketId] -= settlementUsdAbsScaled;
+      require(collateralToken.transfer(signerSlot0, settlementUsdAbsScaled), "Transfer to NO seller failed");
     } else {
       // positive+primary => BUY YES
-      require(collateralToken.transferFrom(signerSlot0, address(this), collateralUsdAbsScaled_lower), "Transfer from YES buyer failed");
-      yesTokens[marketId][signerSlot0] += qty_lower; // 1:1 mapping of collateral qty to position tokens
-      totalYesTokensOutstanding[marketId] += qty_lower;
-      totalCollateralUsd[marketId] += collateralUsdAbsScaled_lower;
+      require(collateralToken.transferFrom(signerSlot0, address(this), settlementUsdAbsScaled), "Transfer from YES buyer failed");
+      yesTokens[marketId][signerSlot0] += settlementUsdAbsScaled; // 1:1 mapping of collateral qty to position tokens
+      totalYesTokensOutstanding[marketId] += settlementUsdAbsScaled;
+      totalCollateralUsd[marketId] += settlementUsdAbsScaled;
     }
 
     // negative-price slot (signerSlot1)
     if (primarySecondarySlot1) {
       // negative+secondary => SELL YES
-      require(yesTokens[marketId][signerSlot1] >= qty_lower, "Insufficient YES tokens");
-      yesTokens[marketId][signerSlot1] -= qty_lower;
-      totalYesTokensOutstanding[marketId] -= qty_lower;
-      require(totalCollateralUsd[marketId] >= collateralUsdAbsScaled_lower, "Insufficient market collateral (SELL YES)");
-      totalCollateralUsd[marketId] -= collateralUsdAbsScaled_lower;
-      require(collateralToken.transfer(signerSlot1, collateralUsdAbsScaled_lower), "Transfer to YES seller failed");
+      require(yesTokens[marketId][signerSlot1] >= settlementUsdAbsScaled, "Insufficient YES tokens");
+      yesTokens[marketId][signerSlot1] -= settlementUsdAbsScaled;
+      totalYesTokensOutstanding[marketId] -= settlementUsdAbsScaled;
+      require(totalCollateralUsd[marketId] >= settlementUsdAbsScaled, "Insufficient market collateral (SELL YES)");
+      totalCollateralUsd[marketId] -= settlementUsdAbsScaled;
+      require(collateralToken.transfer(signerSlot1, settlementUsdAbsScaled), "Transfer to YES seller failed");
     } else {
       // negative+primary => BUY NO
-      require(collateralToken.transferFrom(signerSlot1, address(this), collateralUsdAbsScaled_lower), "Transfer from NO buyer failed");
-      noTokens[marketId][signerSlot1] += qty_lower; // 1:1 mapping of collateral qty to position tokens
-      totalNoTokensOutstanding[marketId] += qty_lower;
-      totalCollateralUsd[marketId] += collateralUsdAbsScaled_lower;
+      require(collateralToken.transferFrom(signerSlot1, address(this), settlementUsdAbsScaled), "Transfer from NO buyer failed");
+      noTokens[marketId][signerSlot1] += settlementUsdAbsScaled; // 1:1 mapping of collateral qty to position tokens
+      totalNoTokensOutstanding[marketId] += settlementUsdAbsScaled;
+      totalCollateralUsd[marketId] += settlementUsdAbsScaled;
     }
 
-    emit PositionTokensPurchased(marketId, signerSlot0, collateralUsdAbsScaled_lower, qtyScaledSlot0, primarySecondarySlot0);
-    emit PositionTokensPurchased(marketId, signerSlot1, collateralUsdAbsScaled_lower, qtyScaledSlot1, primarySecondarySlot1);
+    emit PositionTokensPurchased(marketId, signerSlot0, settlementUsdAbsScaled, settlementUsdAbsScaled, primarySecondarySlot0);
+    emit PositionTokensPurchased(marketId, signerSlot1, settlementUsdAbsScaled, settlementUsdAbsScaled, primarySecondarySlot1);
 
     return (yesTokens[marketId][signerSlot0], noTokens[marketId][signerSlot0], yesTokens[marketId][signerSlot1], noTokens[marketId][signerSlot1]); // return current balances
   }

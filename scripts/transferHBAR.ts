@@ -59,10 +59,10 @@ async function main() {
   console.log(`Transfer of ${amountHbar} HBAR from ${from} to ${to} successful. Transaction ID: ${transferTx.transactionId.toString()}`)
 
   // Check balances
-  const fromBalance = await new AccountBalanceQuery()
+  const fromBalance = await new AccountBalanceQuery() // AccountBalanceQuery is deprecated!
     .setAccountId(from)
     .execute(client)
-  const toBalance = await new AccountBalanceQuery()
+  const toBalance = await new AccountBalanceQuery() // AccountBalanceQuery is deprecated!
     .setAccountId(to)
     .execute(client)
 

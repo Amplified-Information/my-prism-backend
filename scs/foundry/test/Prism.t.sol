@@ -483,35 +483,35 @@ contract PrismTest is Test {
         );
     }
 
-    // Settlement invariant: lower collateral and lower qty must match.
-    function testSettlementInvariantCollateralQtyMismatchReverts() public {
+    // Settlement guard: the executed amount must not exceed the signed authorization.
+    function testSettlementAmountExceedsAuthorizationReverts() public {
         uint128 marketId = 17;
         _createAndFundMarket(marketId);
         _mockHAS();
 
-        // lower(collateral)=49e6, lower(qty)=50e6 -> invariant violation
-        vm.expectRevert("Collateral/qty mismatch");
+        // settlement amount 60e6 exceeds slot0's signed collateral 50e6 -> reject.
+        vm.expectRevert("Oversize settlement tuple");
         prism.posColToksOnBehalfAtomic(
             marketId, user1, user2,
-            49e6, 60e6,
-            50e6, 70e6,
+            50e6, 60e6,
+            60e6, 60e6,
             13, 14,
             hex"", hex"",
             false, false
         );
     }
 
-    // Settlement invariant positive case: lower collateral equals lower qty.
-    function testSettlementInvariantCollateralQtyMatchPasses() public {
+    // Settlement guard positive case: executed amount is within the signed authorization.
+    function testSettlementAmountWithinAuthorizationPasses() public {
         uint128 marketId = 18;
         _createAndFundMarket(marketId);
         _mockHAS();
 
-        // lower(collateral)=50e6 and lower(qty)=50e6 -> invariant satisfied
+        // settlement amount 50e6 is within both signed authorizations.
         prism.posColToksOnBehalfAtomic(
             marketId, user1, user2,
             50e6, 60e6,
-            50e6, 70e6,
+            50e6, 50e6,
             15, 16,
             hex"", hex"",
             false, false
@@ -524,6 +524,60 @@ contract PrismTest is Test {
         assertEq(yesUser2, 0, "user2 YES tokens after matched buy");
         assertEq(noUser2, 50e6, "user2 NO tokens after matched buy");
         assertEq(prism.getTotalCollateral(marketId), 100e6, "total collateral tracks matched amount on both legs");
+    }
+
+    // Residual path: settle in two steps and ensure each step uses executed amount,
+    // while total effect equals the full signed amount after completion.
+    function testResidualTwoStepSettlementUsesExecutedAmounts() public {
+        uint128 marketId = 19;
+        _createAndFundMarket(marketId);
+        _mockHAS();
+
+        uint256 signedSlot0 = 50e6;
+        uint256 signedSlot1 = 50e6;
+        uint256 partialStep = 20e6;
+        uint256 residualStep = 30e6;
+
+        uint256 user1BalBefore = usdc.balanceOf(user1);
+        uint256 user2BalBefore = usdc.balanceOf(user2);
+
+        prism.posColToksOnBehalfAtomic(
+            marketId, user1, user2,
+            signedSlot0, signedSlot1,
+            partialStep, partialStep,
+            31, 32,
+            hex"", hex"",
+            false, false
+        );
+
+        (uint256 yesUser1Step1, uint256 noUser1Step1) = prism.getUserTokens(marketId, user1);
+        (uint256 yesUser2Step1, uint256 noUser2Step1) = prism.getUserTokens(marketId, user2);
+        assertEq(yesUser1Step1, partialStep, "step1: user1 YES equals partial settlement");
+        assertEq(noUser1Step1, 0, "step1: user1 NO remains zero");
+        assertEq(yesUser2Step1, 0, "step1: user2 YES remains zero");
+        assertEq(noUser2Step1, partialStep, "step1: user2 NO equals partial settlement");
+        assertEq(usdc.balanceOf(user1), user1BalBefore - partialStep, "step1: user1 pays partial settlement");
+        assertEq(usdc.balanceOf(user2), user2BalBefore - partialStep, "step1: user2 pays partial settlement");
+        assertEq(prism.getTotalCollateral(marketId), 2 * partialStep, "step1: market collateral tracks both legs");
+
+        prism.posColToksOnBehalfAtomic(
+            marketId, user1, user2,
+            signedSlot0, signedSlot1,
+            residualStep, residualStep,
+            33, 34,
+            hex"", hex"",
+            false, false
+        );
+
+        (uint256 yesUser1Final, uint256 noUser1Final) = prism.getUserTokens(marketId, user1);
+        (uint256 yesUser2Final, uint256 noUser2Final) = prism.getUserTokens(marketId, user2);
+        assertEq(yesUser1Final, signedSlot0, "final: user1 YES equals signed amount after partial+residual");
+        assertEq(noUser1Final, 0, "final: user1 NO remains zero");
+        assertEq(yesUser2Final, 0, "final: user2 YES remains zero");
+        assertEq(noUser2Final, signedSlot1, "final: user2 NO equals signed amount after partial+residual");
+        assertEq(usdc.balanceOf(user1), user1BalBefore - signedSlot0, "final: user1 charged exactly signed amount");
+        assertEq(usdc.balanceOf(user2), user2BalBefore - signedSlot1, "final: user2 charged exactly signed amount");
+        assertEq(prism.getTotalCollateral(marketId), 2 * signedSlot0, "final: collateral equals both legs of signed amount");
     }
 
     // --- setRakeScaled100 ---

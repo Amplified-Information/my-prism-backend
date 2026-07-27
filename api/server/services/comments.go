@@ -98,15 +98,6 @@ func (c *CommentsService) CreateComment(req *pb_api.CreateCommentRequest) (*pb_a
 		return nil, lib.LogAndError(lib.LOG_ERROR, "invalid account ID: %s", req.AccountId)
 	}
 
-	// Moderate before signature verification to reject abusive payloads early.
-	moderationDecision, err := moderateCommentContent(context.Background(), req.Content)
-	if err != nil {
-		lib.Warn("comment moderation fall-open", "marketId", req.MarketId, "accountId", req.AccountId, "error", err)
-	} else if moderationDecision.Rejected {
-		lib.Warn("comment rejected by moderation", "marketId", req.MarketId, "accountId", req.AccountId, "reason", moderationDecision.Reason)
-		return nil, lib.LogAndError(lib.LOG_WARN, "comment rejected by moderation: %s", moderationDecision.Reason)
-	}
-
 	// ensure public key is valid
 	publicKey, err := hiero.PublicKeyFromString(req.PublicKey)
 	if err != nil {
@@ -125,6 +116,15 @@ func (c *CommentsService) CreateComment(req *pb_api.CreateCommentRequest) (*pb_a
 
 	// ensure the signature is for the comment being created, and not for some other content
 	// (the payload above includes marketId, accountId and content, so a sig is bound to that triple)
+
+	// Moderate before signature verification to reject abusive payloads early.
+	moderationDecision, err := moderateCommentContent(context.Background(), req.Content)
+	if err != nil {
+		lib.Warn("comment moderation fall-open", "marketId", req.MarketId, "accountId", req.AccountId, "error", err)
+	} else if moderationDecision.Rejected {
+		lib.Warn("comment rejected by moderation", "marketId", req.MarketId, "accountId", req.AccountId, "reason", moderationDecision.Reason)
+		return nil, lib.LogAndError(lib.LOG_WARN, "comment rejected by moderation: %s", moderationDecision.Reason)
+	}
 
 	// if we get here, the sig is valid
 	lib.Log(lib.LOG_INFO, "CreateComment signature is valid for account %s", req.AccountId)

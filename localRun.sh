@@ -74,6 +74,7 @@ docker run --pull always -d --name prism-blocknode --network host \
   -e ABI_TESTNET_0_0_9458377="${ABI_TESTNET_0_0_9458377}" \
   -e ABI_TESTNET_0_0_9502269="${ABI_TESTNET_0_0_9502269}" \
   -e ABI_TESTNET_0_0_9653861="${ABI_TESTNET_0_0_9653861}" \
+  -e ABI_TESTNET_0_0_9792499="${ABI_TESTNET_0_0_9792499}" \
   ghcr.io/prismmarketlabs/blocknode:latest
 
 

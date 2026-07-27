@@ -329,7 +329,23 @@ cd api
 ```
 
 
+# fix a dirty database
 
+```bash
+# login to monolith box
+
+source 1_loadEnvVars.sh
+DB_URL=postgres://$DB_UNAME:$DB_PWORD@$DB_HOST:$DB_PORT/$DB_NAME?sslmode=disable
+echo $DB_URL
+
+# connect to the database directly:
+psql $DB_URL # may need to install posqgresql-client
+
+# run the following SQL query (set the version):
+UPDATE schema_migrations SET dirty = false, version = XX;
+exit;
+
+```
 
 
 

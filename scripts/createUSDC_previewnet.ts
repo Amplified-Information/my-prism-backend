@@ -81,7 +81,7 @@ async function main() {
   console.log(`Transfer status: ${transferReceipt.status}`)
 
   // print USDC hts token balance of operator account
-  const operatorBalance = await new AccountBalanceQuery()
+  const operatorBalance = await new AccountBalanceQuery() // AccountBalanceQuery is deprecated!
     .setAccountId(operatorId)
     .execute(client)
   console.log(`Operator account USDC balance: ${operatorBalance.tokens!._map.get(tokenId.toString()) ?? 0}`)

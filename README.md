@@ -379,6 +379,11 @@ source 1_loadEnvVars.sh <ENV>
 docker compose pull modsec && docker compose up -d --force-recreate modsec
 ```
 
+### free up disk space
+
+`docker image prune -a -f`
+
+
 ### Manual release procedure:
 
 1. tag the image
