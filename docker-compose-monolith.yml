@@ -1,6 +1,6 @@
 services:
   api:
-    image: ghcr.io/prismmarketlabs/api:0.6.33
+    image: ghcr.io/prismmarketlabs/api:0.6.38
     restart: always
     ports:
       - "8888:8888"
@@ -70,7 +70,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
   clob:
-    image: ghcr.io/prismmarketlabs/clob:0.3.7
+    image: ghcr.io/prismmarketlabs/clob:0.3.8
     restart: always
     depends_on:
       - api
@@ -90,7 +90,7 @@ services:
       NATS_HOST: ${NATS_HOST}
       NATS_PORT: ${NATS_PORT}
   web:
-    image: ghcr.io/prismmarketlabs/web:0.8.11
+    image: ghcr.io/prismmarketlabs/web:0.8.12
     restart: always
     ports:
       - "5173:80"

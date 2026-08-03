@@ -153,6 +153,16 @@ func (hs *HederaService) BuyOrSellPositionTokens(sideYes *pb_clob.CreateOrderReq
 	if err != nil {
 		return false, lib.LogAndError(lib.LOG_ERROR, "invalid USDC_DECIMALS: %v", err)
 	}
+
+	// Calculate the actual matched quantity (the minimum of the two order sizes).
+	// The CLOB publishes Qty fields that may still be the original quantities, not the matched amounts.
+	qtyYesAbs := math.Abs(sideYes.Qty)
+	qtyNoAbs := math.Abs(sideNo.Qty)
+	matchedQty := qtyYesAbs
+	if qtyNoAbs < matchedQty {
+		matchedQty = qtyNoAbs
+	}
+
 	// For signature verification, we need separate reconstruction of the payloads for YES and NO positions, including collateralUsd.
 	// The signed payload uses the originally authorized amount, while settlement uses the live match amount.
 	collateralUsdAbsScaledYes, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideYes.PriceUsd*sideYes.QtyOrig /* signed authorization amount */), int(usdcDecimals))
@@ -165,23 +175,20 @@ func (hs *HederaService) BuyOrSellPositionTokens(sideYes *pb_clob.CreateOrderReq
 		return false, lib.LogAndError(lib.LOG_ERROR, "failed to scale collateralUsdAbsNo: %v", err)
 	}
 
-	settlementUsdAbsScaledYes, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideYes.PriceUsd*sideYes.Qty /* live match amount */), int(usdcDecimals))
+	settlementUsdAbsScaledYes, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideYes.PriceUsd*matchedQty /* live matched amount */), int(usdcDecimals))
 	if err != nil {
 		return false, lib.LogAndError(lib.LOG_ERROR, "failed to scale settlementUsdAbsYes: %v", err)
 	}
 
-	settlementUsdAbsScaledNo, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideNo.PriceUsd*sideNo.Qty /* live match amount */), int(usdcDecimals))
+	settlementUsdAbsScaledNo, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideNo.PriceUsd*matchedQty /* live matched amount */), int(usdcDecimals))
 	if err != nil {
 		return false, lib.LogAndError(lib.LOG_ERROR, "failed to scale settlementUsdAbsNo: %v", err)
 	}
 
-	settlementUsdAbsScaledLower := new(big.Int).Set(settlementUsdAbsScaledYes)
-	if settlementUsdAbsScaledNo.Cmp(settlementUsdAbsScaledLower) < 0 {
-		settlementUsdAbsScaledLower = new(big.Int).Set(settlementUsdAbsScaledNo)
-	}
-
-	qtyScaledYesBig := new(big.Int).Set(settlementUsdAbsScaledLower)
-	qtyScaledNoBig := new(big.Int).Set(settlementUsdAbsScaledLower)
+	// Both settlement amounts are now identical since they use the same matched quantity.
+	// Assign directly to both qtyScaled values.
+	qtyScaledYesBig := new(big.Int).Set(settlementUsdAbsScaledYes)
+	qtyScaledNoBig := new(big.Int).Set(settlementUsdAbsScaledNo)
 
 	// priceUsdAbsScaledYesBig, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideYes.PriceUsd), int(usdcDecimals))
 	// if err != nil {
@@ -279,12 +286,12 @@ func (hs *HederaService) BuyOrSellPositionTokens(sideYes *pb_clob.CreateOrderReq
 	if collateralUsdAbsScaledNo.Cmp(signedCollateralLower) < 0 {
 		signedCollateralLower = new(big.Int).Set(collateralUsdAbsScaledNo)
 	}
-	invariantHolds := settlementUsdAbsScaledLower.Cmp(signedCollateralLower) <= 0
+	invariantHolds := settlementUsdAbsScaledYes.Cmp(signedCollateralLower) <= 0
 	lib.Log(lib.LOG_INFO,
-		"Pre-submit invariant check (marketId=%s): signed_lower=%s settlement_lower=%s signed_slot0=%s signed_slot1=%s settlement_slot0=%s settlement_slot1=%s holds=%t",
+		"Pre-submit invariant check (marketId=%s): signed_lower=%s settlement=%s signed_slot0=%s signed_slot1=%s settlement_slot0=%s settlement_slot1=%s holds=%t",
 		sideYes.MarketId,
 		signedCollateralLower.String(),
-		settlementUsdAbsScaledLower.String(),
+		settlementUsdAbsScaledYes.String(),
 		collateralUsdAbsScaledYes.String(),
 		collateralUsdAbsScaledNo.String(),
 		qtyScaledYesBig.String(),

@@ -397,15 +397,30 @@ printf '  step2 bug-shaped raw: %s\n' "$step2_expected_bug_raw"
 printf '  rest open after final step: %s\n' "$after_second_rest_open_qty"
 printf '  second tx open after final step: %s\n' "$after_second_second_open_qty"
 
-if awk -v actual="$after_second_second_open_qty" -v expected="0" 'BEGIN { diff = actual - expected; if (diff < 0) diff = -diff; exit !(diff <= 0.000001) }'; then
-  echo "BUG REPRODUCED: the second order closed out instead of leaving the residual open quantity."
+step2_residual_matches_expected=false
+if awk -v actual="$step2_actual_raw" -v expected="$step2_expected_residual_raw" 'BEGIN { diff = actual - expected; if (diff < 0) diff = -diff; exit !(diff <= 0.000001) }'; then
+  step2_residual_matches_expected=true
+fi
+
+rest_residual_open_expected=false
+if awk -v actual="$after_second_rest_open_qty" -v expected="0" 'BEGIN { diff = actual - expected; if (diff < 0) diff = -diff; exit !(diff <= 0.000001) }'; then
+  rest_residual_open_expected=true
+fi
+
+second_residual_open_expected=false
+if awk -v actual="$after_second_second_open_qty" -v expected="$partial_qty" 'BEGIN { diff = actual - expected; if (diff < 0) diff = -diff; exit !(diff <= 0.000001) }'; then
+  second_residual_open_expected=true
+fi
+
+if [ "$step2_residual_matches_expected" = true ] && [ "$rest_residual_open_expected" = true ] && [ "$second_residual_open_expected" = true ]; then
+  echo "NO BUG: the residual remained open exactly as expected after the second fill."
   exit 0
 fi
 
-if awk -v actual="$after_second_second_open_qty" -v expected="$partial_qty" 'BEGIN { diff = actual - expected; if (diff < 0) diff = -diff; exit !(diff <= 0.000001) }'; then
-  echo "NO BUG: the second order retained the expected residual open quantity."
+if [ "$step2_residual_matches_expected" = true ] && [ "$rest_residual_open_expected" = true ] && [ "$second_residual_open_expected" = false ]; then
+  echo "BUG REPRODUCED: the second order closed out instead of leaving the residual open quantity."
   exit 1
 fi
 
-echo "INCONCLUSIVE: the second order did not resolve to either the expected residual or the bug shape."
+echo "INCONCLUSIVE: the residual state did not match either the expected residual or the bug shape."
 exit 1

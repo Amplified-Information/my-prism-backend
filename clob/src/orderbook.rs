@@ -310,11 +310,21 @@ impl OrderBook {
             if (incoming_order.price_usd > 0.0 && incoming_order.price_usd >= existing_order.price_usd.abs()) ||
                (incoming_order.price_usd < 0.0 && existing_order.price_usd >= incoming_order.price_usd.abs()) {
 
-                let orc2= existing_order.clone();
                 if incoming_order.qty <= existing_order.qty {
                     // Incoming fully consumed; existing may still have remainder.
                     let matched_qty = incoming_order.qty;
                     let existing_remainder = existing_order.qty - matched_qty;
+
+                    let orc1 = {
+                        let mut order = incoming_order.clone();
+                        order.qty = matched_qty;
+                        order
+                    };
+                    let orc2 = {
+                        let mut order = existing_order.clone();
+                        order.qty = matched_qty;
+                        order
+                    };
 
                     existing_order.qty -= incoming_order.qty;
                     if existing_order.qty.abs() < 1e-3 { // small EPSILON to account for floating point precision
@@ -322,9 +332,6 @@ impl OrderBook {
                     }
 
                     log::info!("MATCH \t OrderRequestClob: {:?}", incoming_order);
-                    
-                    // Publish pre-match order sizes so downstream can infer which order was fully consumed.
-                    let orc1 = incoming_order.clone();
 
                     let nats_clone = nats_service.clone();
                     tokio::spawn(async move {
@@ -344,24 +351,24 @@ impl OrderBook {
                 } else {
                     // Existing fully consumed; incoming still has remainder.
                     let matched_qty = existing_order.qty;
-                    let incoming_before_match = incoming_order.clone();
+                    let incoming_before_match = {
+                        let mut order = incoming_order.clone();
+                        order.qty = matched_qty;
+                        order
+                    };
+                    let orc2 = {
+                        let mut order = existing_order.clone();
+                        order.qty = matched_qty;
+                        order
+                    };
                     incoming_order.qty -= matched_qty;
                     opposite_orders.remove(i);
 
                     log::info!("MATCH_PARTIAL \t Remaining incoming order quantity: {}", incoming_order.qty);
-                    
-                    // Publish pre-match order sizes so downstream can infer which order was fully consumed.
-                    let orc1 = incoming_before_match;
 
                     let nats_clone = nats_service.clone();
                     tokio::spawn(async move {
-                        // // ensure the positive price order is always first!
-                        // let (first, second) = if orc1.price_usd >= 0.0 {
-                        //     (orc1, orc2)
-                        // } else {
-                        //     (orc2, orc1)
-                        // };
-                        if let Err(e) = nats_clone.publish_match(true, &orc1, &orc2).await {
+                        if let Err(e) = nats_clone.publish_match(true, &incoming_before_match, &orc2).await {
                             log::error!("NATS\tFailed to publish (partial) match: {}", e);
                         }
                     });

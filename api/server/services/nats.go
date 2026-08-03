@@ -2,6 +2,7 @@ package services
 
 import (
 	"encoding/json"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -166,28 +167,7 @@ func (ns *NatsService) HandleOrderMatches() error {
 		// clob.matches.partial => smaller qty order is fully matched.
 		/////
 		isPartial := msg.Subject == lib.NATS_CLOB_MATCHES_PARTIAL
-		qtyTx0Abs := orderRequestClobTuple[0].Qty
-		if qtyTx0Abs < 0 {
-			qtyTx0Abs = -qtyTx0Abs
-		}
-		qtyTx1Abs := orderRequestClobTuple[1].Qty
-		if qtyTx1Abs < 0 {
-			qtyTx1Abs = -qtyTx1Abs
-		}
-
-		markAsMatched := [2]bool{false, false}
-		if !isPartial {
-			markAsMatched[0] = true
-			markAsMatched[1] = true
-		} else if qtyTx0Abs < qtyTx1Abs {
-			markAsMatched[0] = true // smaller order fully consumed
-		} else if qtyTx1Abs < qtyTx0Abs {
-			markAsMatched[1] = true // smaller order fully consumed
-		} else {
-			// equal qty on a partial subject is unexpected; fail-safe mark both
-			markAsMatched[0] = true
-			markAsMatched[1] = true
-		}
+		markAsMatched := fullyMatchedOrderIndexFromTuple(orderRequestClobTuple, isPartial)
 
 		marketId := orderRequestClobTuple[0].MarketId
 		if markAsMatched[0] == true { // mark tx0 for deletion
@@ -225,6 +205,36 @@ func (ns *NatsService) HandleOrderMatches() error {
 		return err
 	}
 	return nil
+}
+
+func fullyMatchedOrderIndexFromTuple(tuple [2]*pb_clob.CreateOrderRequestClob, isPartial bool) [2]bool {
+	markAsMatched := [2]bool{false, false}
+	if !isPartial {
+		markAsMatched[0] = true
+		markAsMatched[1] = true
+		return markAsMatched
+	}
+
+	if tuple[0] == nil || tuple[1] == nil {
+		return markAsMatched
+	}
+
+	// For partial fills, the smaller original order is the side that is fully consumed.
+	// The larger side remains open with residual quantity.
+	qtyOrig0Abs := math.Abs(tuple[0].QtyOrig)
+	qtyOrig1Abs := math.Abs(tuple[1].QtyOrig)
+	if math.Abs(qtyOrig0Abs-qtyOrig1Abs) <= 1e-9 {
+		markAsMatched[0] = true
+		markAsMatched[1] = true
+		return markAsMatched
+	}
+
+	if qtyOrig0Abs < qtyOrig1Abs {
+		markAsMatched[0] = true
+	} else {
+		markAsMatched[1] = true
+	}
+	return markAsMatched
 }
 
 func (ns *NatsService) HandleSmartContractEvents() error {
