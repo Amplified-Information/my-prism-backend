@@ -90,7 +90,7 @@ services:
       NATS_HOST: ${NATS_HOST}
       NATS_PORT: ${NATS_PORT}
   web:
-    image: ghcr.io/prismmarketlabs/web:0.8.13
+    image: ghcr.io/prismmarketlabs/web:0.8.14
     restart: always
     ports:
       - "5173:80"
