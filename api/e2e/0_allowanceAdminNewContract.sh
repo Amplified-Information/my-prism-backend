@@ -64,9 +64,19 @@ case "$network" in
 		;;
 esac
 
-base_url_default="https://${network}.${enviro}.prism.market"
+base_url_default="${BASE_URL:-$(env_get "BASE_URL") }"
+base_url_default="${base_url_default% }"
+if [[ -z "$base_url_default" ]]; then
+	base_url_default="https://${network}.${enviro}.prism.market"
+fi
+
 read -p "Enter base URL [$base_url_default]: " baseUrl
 baseUrl=${baseUrl:-$base_url_default}
+if grep -qE '^BASE_URL=' "$ENV_FILE"; then
+	sed -i "s|^BASE_URL=.*|BASE_URL=$baseUrl|" "$ENV_FILE"
+else
+	printf '\nBASE_URL=%s\n' "$baseUrl" >> "$ENV_FILE"
+fi
 echo "Base URL set to: $baseUrl"
 
 grpc_addr="${baseUrl#*://}"

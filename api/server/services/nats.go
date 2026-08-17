@@ -2,6 +2,7 @@ package services
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"strconv"
@@ -23,6 +24,7 @@ type NatsService struct {
 	matchesRepository            *repositories.MatchesRepository
 	predictionIntentsRepository  *repositories.PredictionIntentsRepository
 	smartContractEventRepository *repositories.SmartContractEventRepository
+	matchDedup                   map[string]bool
 }
 
 func (ns *NatsService) InitNATS(h *HederaService, d *repositories.DbRepository, m *repositories.MatchesRepository, p *repositories.PredictionIntentsRepository, scer *repositories.SmartContractEventRepository) error {
@@ -48,6 +50,9 @@ func (ns *NatsService) InitNATS(h *HederaService, d *repositories.DbRepository, 
 	ns.predictionIntentsRepository = p
 	// and inject the SmartContractEventRepository:
 	ns.smartContractEventRepository = scer
+	if ns.matchDedup == nil {
+		ns.matchDedup = make(map[string]bool)
+	}
 
 	lib.Log(lib.LOG_INFO, "Service: NATS service initialized successfully")
 	return nil
@@ -135,6 +140,20 @@ func (ns *NatsService) HandleOrderMatches() error {
 			return
 		}
 
+		if err := validateMatchTupleInvariant(orderRequestClobTuple); err != nil {
+			lib.Log(lib.LOG_CRITICAL, "CRITICAL PROTOCOL ERROR: invalid match tuple invariant: %v", err)
+			return
+		}
+
+		matchKey := matchTupleKey(orderRequestClobTuple)
+		if matchKey != "" {
+			if seen, ok := ns.matchDedup[matchKey]; ok && seen {
+				lib.Log(lib.LOG_WARN, "Skipping duplicate match tuple: %s", matchKey)
+				return
+			}
+			ns.matchDedup[matchKey] = true
+		}
+
 		// OK
 
 		/////
@@ -170,6 +189,18 @@ func (ns *NatsService) HandleOrderMatches() error {
 		markAsMatched := fullyMatchedOrderIndexFromTuple(orderRequestClobTuple, isPartial)
 
 		marketId := orderRequestClobTuple[0].MarketId
+		if orderRequestClobTuple[0] != nil {
+			err = ns.predictionIntentsRepository.UpdatePredictionIntentQtyRem(marketId, orderRequestClobTuple[0].TxId, orderRequestClobTuple[0].QtyRem)
+			if err != nil {
+				lib.Log(lib.LOG_ERROR, "Error decrementing qty_rem for tx0 (%s): %v", orderRequestClobTuple[0].TxId, err)
+			}
+		}
+		if orderRequestClobTuple[1] != nil {
+			err = ns.predictionIntentsRepository.UpdatePredictionIntentQtyRem(marketId, orderRequestClobTuple[1].TxId, orderRequestClobTuple[1].QtyRem)
+			if err != nil {
+				lib.Log(lib.LOG_ERROR, "Error decrementing qty_rem for tx1 (%s): %v", orderRequestClobTuple[1].TxId, err)
+			}
+		}
 		if markAsMatched[0] == true { // mark tx0 for deletion
 			lib.Log(lib.LOG_INFO, "marking tx0 (%s) as fully matched with tx1 (%s)", orderRequestClobTuple[0].TxId, orderRequestClobTuple[1].TxId)
 			err = ns.predictionIntentsRepository.MarkPredictionIntentAsFullyMatched(marketId, orderRequestClobTuple[0].TxId)
@@ -207,6 +238,65 @@ func (ns *NatsService) HandleOrderMatches() error {
 	return nil
 }
 
+func matchTupleKey(tuple [2]*pb_clob.CreateOrderRequestClob) string {
+	if tuple[0] == nil || tuple[1] == nil {
+		return ""
+	}
+
+	leftTx, rightTx := tuple[0].TxId, tuple[1].TxId
+	leftQty, rightQty := tuple[0].QtyRem, tuple[1].QtyRem
+	if leftTx > rightTx {
+		leftTx, rightTx = rightTx, leftTx
+		leftQty, rightQty = rightQty, leftQty
+	}
+
+	return tuple[0].MarketId + "|" + leftTx + "|" + rightTx + "|" + fmt.Sprintf("%.12f", leftQty) + "|" + fmt.Sprintf("%.12f", rightQty)
+}
+
+func validateMatchTupleInvariant(tuple [2]*pb_clob.CreateOrderRequestClob) error {
+	if tuple[0] == nil || tuple[1] == nil {
+		return lib.ErrorLog("match tuple contains nil order")
+	}
+
+	if tuple[0].MarketId != tuple[1].MarketId {
+		return lib.ErrorLog("match tuple invariant failed",
+			"marketId0", tuple[0].MarketId,
+			"marketId1", tuple[1].MarketId,
+			"txId0", tuple[0].TxId,
+			"txId1", tuple[1].TxId,
+		)
+	}
+
+	if tuple[0].PriceUsd == 0.0 || tuple[1].PriceUsd == 0.0 {
+		return lib.ErrorLog("match tuple invariant failed",
+			"txId0", tuple[0].TxId,
+			"price0", tuple[0].PriceUsd,
+			"txId1", tuple[1].TxId,
+			"price1", tuple[1].PriceUsd,
+		)
+	}
+
+	if (tuple[0].PriceUsd > 0.0 && tuple[1].PriceUsd > 0.0) || (tuple[0].PriceUsd < 0.0 && tuple[1].PriceUsd < 0.0) {
+		return lib.ErrorLog("match tuple invariant failed",
+			"txId0", tuple[0].TxId,
+			"price0", tuple[0].PriceUsd,
+			"txId1", tuple[1].TxId,
+			"price1", tuple[1].PriceUsd,
+		)
+	}
+
+	if math.Abs(tuple[0].QtyRem-tuple[1].QtyRem) > 1e-9 {
+		return lib.ErrorLog("match tuple invariant failed",
+			"txId0", tuple[0].TxId,
+			"qty0", tuple[0].QtyRem,
+			"txId1", tuple[1].TxId,
+			"qty1", tuple[1].QtyRem,
+		)
+	}
+
+	return nil
+}
+
 func fullyMatchedOrderIndexFromTuple(tuple [2]*pb_clob.CreateOrderRequestClob, isPartial bool) [2]bool {
 	markAsMatched := [2]bool{false, false}
 	if !isPartial {
@@ -219,21 +309,13 @@ func fullyMatchedOrderIndexFromTuple(tuple [2]*pb_clob.CreateOrderRequestClob, i
 		return markAsMatched
 	}
 
-	// For partial fills, the smaller original order is the side that is fully consumed.
-	// The larger side remains open with residual quantity.
-	qtyOrig0Abs := math.Abs(tuple[0].QtyOrig)
-	qtyOrig1Abs := math.Abs(tuple[1].QtyOrig)
-	if math.Abs(qtyOrig0Abs-qtyOrig1Abs) <= 1e-9 {
-		markAsMatched[0] = true
-		markAsMatched[1] = true
-		return markAsMatched
-	}
-
-	if qtyOrig0Abs < qtyOrig1Abs {
-		markAsMatched[0] = true
-	} else {
-		markAsMatched[1] = true
-	}
+	// For a partial match, the side whose remaining quantity is zero after this trade is fully consumed.
+	// We must use post-match residual qty, not original order size, otherwise a partial fill gets
+	// incorrectly marked as fully matched when it still has open quantity remaining.
+	qtyRem0Abs := math.Abs(tuple[0].QtyRem)
+	qtyRem1Abs := math.Abs(tuple[1].QtyRem)
+	markAsMatched[0] = qtyRem0Abs <= 1e-9
+	markAsMatched[1] = qtyRem1Abs <= 1e-9
 	return markAsMatched
 }
 

@@ -30,6 +30,17 @@ AND ($2::bool OR (is_suspended = FALSE AND is_paused = FALSE));
 --   AND ($2::bool OR (m.is_suspended = FALSE AND m.is_paused = FALSE))
 -- GROUP BY m.market_id;
 
+-- name: IsMarketTradeable :one
+SELECT EXISTS (
+    SELECT 1 FROM markets
+    WHERE market_id = $1
+    AND deleted_at IS NULL
+    AND resolved_at IS NULL
+    AND closes_at > CURRENT_TIMESTAMP
+    AND is_suspended = FALSE
+    AND is_paused = FALSE
+) AS is_market_tradeable;
+
 
 -- name: GetMarkets :many
 SELECT * FROM markets

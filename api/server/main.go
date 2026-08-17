@@ -379,7 +379,7 @@ func (s *server) ResolveMarket(ctx context.Context, req *pb_api.ResolveMarketReq
 
 	isOK, err := s.marketsService.ResolveMarket(req.MarketId, req.Outcome)
 	if err != nil {
-		return nil, lib.LogAndError(lib.LOG_ERROR, "market resolution failed", err)
+		return nil, lib.LogAndError(lib.LOG_ERROR, "market resolution failed: %v", err)
 	}
 
 	if !isOK {
@@ -408,7 +408,7 @@ func (s *server) CreateCategory(ctx context.Context, req *pb_api.CategoryRequest
 
 	result, err := s.categoriesService.CreateCategory(req.Name, req.IsActive, req.Description)
 	if err != nil {
-		return nil, lib.LogAndError(lib.LOG_ERROR, "create category failed", err)
+		return nil, lib.LogAndError(lib.LOG_ERROR, "create category failed: %v", err)
 	}
 
 	return &pb_api.CategoryResponse{
@@ -432,7 +432,7 @@ func (s *server) UpdateCategory(ctx context.Context, req *pb_api.CategoryRequest
 
 	result, err := s.categoriesService.UpdateCategory(*req.CategoryId, req.Name, req.IsActive, req.Description)
 	if err != nil {
-		return nil, lib.LogAndError(lib.LOG_ERROR, "update category failed", err)
+		return nil, lib.LogAndError(lib.LOG_ERROR, "update category failed: %v", err)
 	}
 
 	return &pb_api.CategoryResponse{
@@ -452,7 +452,7 @@ func (s *server) DeleteCategory(ctx context.Context, req *pb_api.CategoryIdReque
 
 	err := s.categoriesService.DeleteCategory(req.CategoryId)
 	if err != nil {
-		return nil, lib.LogAndError(lib.LOG_ERROR, "delete category failed", err)
+		return nil, lib.LogAndError(lib.LOG_ERROR, "delete category failed: %v", err)
 	}
 
 	return &pb_api.StdResponse{

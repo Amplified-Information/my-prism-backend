@@ -39,6 +39,11 @@ docker run --pull always -d --name prism-proxy --network host \
   -e ENVOY_HOST_WEB_LP="${ENVOY_HOST_WEB_LP}" \
   ghcr.io/prismmarketlabs/proxy:latest
 
+
+
+
+
+
 # echo "Starting local modsec..."
 # cd ../modsec
 # source loadEnv.sh local
@@ -49,6 +54,9 @@ docker run --pull always -d --name prism-proxy --network host \
 #   -e ANOMALY_INBOUND=${MODSEC_ANOMALY_INBOUND} \
 #   -e ANOMALY_OUTBOUND=${MODSEC_ANOMALY_OUTBOUND} \
 #   ghcr.io/prismmarketlabs/modsec:latest
+
+
+
 
 
 echo "Starting local blocknode..."

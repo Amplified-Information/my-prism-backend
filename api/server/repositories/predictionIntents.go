@@ -73,7 +73,8 @@ func (pir *PredictionIntentsRepository) CreateOrderIntentRequest(req *pb_api.Pri
 		MarketID:         marketUUID,
 		AccountID:        req.AccountId,
 		PriceUsd:         req.PriceUsd,
-		Qty:              req.Qty,
+		QtyOrig:          req.Qty,
+		QtyRem:           req.Qty,
 		Sig:              req.Sig,
 		GeneratedAt:      generatedAt,
 		PublicKeyHex:     req.PublicKey,
@@ -128,8 +129,14 @@ func (pir *PredictionIntentsRepository) GetAllOpenPredictionIntentsByMarketId(ma
 		return nil, lib.ErrorLog("GetAllOpenPredictionIntentsByMarketId failed", "error", err, "marketId", marketId)
 	}
 
-	// debug: fetched prediction intents for market
-	return &predictionIntents, nil
+	filtered := make([]sqlc.PredictionIntent, 0, len(predictionIntents))
+	for _, pi := range predictionIntents {
+		if isOpenPredictionIntent(pi) {
+			filtered = append(filtered, pi)
+		}
+	}
+
+	return &filtered, nil
 }
 
 func (dbRepository *DbRepository) MarkPredictionIntentAsRegenerated(txId string) error {
@@ -144,6 +151,35 @@ func (dbRepository *DbRepository) MarkPredictionIntentAsRegenerated(txId string)
 	}
 
 	lib.Info("called MarkPredictionIntentAsRegenerated", "txId", txId)
+	return nil
+}
+
+func (pir *PredictionIntentsRepository) UpdatePredictionIntentQtyRem(marketId string, txId string, qtyToSubtract float64) error {
+	if pir.db == nil {
+		return lib.ErrorLog("database not initialized")
+	}
+
+	marketUUID, err := uuid.Parse(marketId)
+	if err != nil {
+		return lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
+	}
+
+	txUUID, err := uuid.Parse(txId)
+	if err != nil {
+		return lib.ErrorLog("invalid txId uuid", "error", err, "txId", txId)
+	}
+
+	q := sqlc.New(pir.db)
+	_, err = q.DecrementPredictionIntentQtyRem(context.Background(), sqlc.DecrementPredictionIntentQtyRemParams{
+		MarketID: marketUUID,
+		TxID:     txUUID,
+		QtyRem:   qtyToSubtract,
+	})
+	if err != nil {
+		return lib.ErrorLog("DecrementPredictionIntentQtyRem failed", "error", err, "marketId", marketId, "txId", txId, "qtyToSubtract", qtyToSubtract)
+	}
+
+	lib.Info("updated prediction intent remaining qty", "marketId", marketId, "txId", txId, "qtyToSubtract", qtyToSubtract)
 	return nil
 }
 
@@ -226,7 +262,14 @@ func (pir *PredictionIntentsRepository) GetAllOpenPredictionIntentsByMarketIdAnd
 		return nil, lib.ErrorLog("GetAllOpenPredictionIntentsByMarketIdAndAccountId failed", "error", err, "marketId", marketId.String(), "accountId", accountId)
 	}
 
-	return orderIntents, nil
+	filtered := make([]sqlc.PredictionIntent, 0, len(orderIntents))
+	for _, pi := range orderIntents {
+		if isOpenPredictionIntent(pi) {
+			filtered = append(filtered, pi)
+		}
+	}
+
+	return filtered, nil
 }
 
 // GetMatchedQtyForPredictionIntent returns the total matched quantity for a tx across all match rows.
@@ -281,7 +324,14 @@ func (pir *PredictionIntentsRepository) GetAllOpenPredictionIntentsByEvmAddress(
 		return nil, lib.ErrorLog("GetAllOpenPredictionIntentsByEvmAddress failed", "error", err, "evmAddress", evmAddress)
 	}
 
-	return predictionIntents, nil
+	filtered := make([]sqlc.PredictionIntent, 0, len(predictionIntents))
+	for _, pi := range predictionIntents {
+		if isOpenPredictionIntent(pi) {
+			filtered = append(filtered, pi)
+		}
+	}
+
+	return filtered, nil
 }
 
 func (pir *PredictionIntentsRepository) GetAllMatchedPredictionIntentsByEvmAddress(evmAddress string) ([]sqlc.PredictionIntent, error) {
@@ -370,4 +420,14 @@ func (pir *PredictionIntentsRepository) GetTxHashes(txId string) ([]sqlc.GetTxHa
 	}
 
 	return txHashes, nil
+}
+
+func isOpenPredictionIntent(pi sqlc.PredictionIntent) bool {
+	if pi.QtyRem <= 0 {
+		return false
+	}
+	if pi.CancelledAt.Valid || pi.FullyMatchedAt.Valid || pi.EvictedAt.Valid {
+		return false
+	}
+	return true
 }

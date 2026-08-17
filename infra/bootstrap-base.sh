@@ -165,3 +165,11 @@ fi
 sudo systemctl start fluent-bit
 sudo systemctl enable fluent-bit
 sudo systemctl status fluent-bit --no-pager
+
+
+
+# Schedule daily pruning of Docker images that are older than 7 days (keep disk space under control):
+# This runs via cron at 03:15 every day.
+if ! sudo crontab -l 2>/dev/null | grep -Fq 'docker image prune -a -f --filter "until=168h"'; then
+  (sudo crontab -l 2>/dev/null; echo '15 3 * * * docker image prune -a -f --filter "until=168h" >/var/log/docker-prune.log 2>&1') | sudo crontab -
+fi

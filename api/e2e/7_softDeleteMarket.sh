@@ -69,10 +69,19 @@ net_from_env=$(printf '%s' "$net_from_env" | tr -d '[:space:]' | tr '[:upper:]' 
 enviro_from_env=$(printf '%s' "$enviro_from_env" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
 net_from_env=${net_from_env:-testnet}
 enviro_from_env=${enviro_from_env:-dev}
-base_url_default="https://${net_from_env}.${enviro_from_env}.prism.market"
+base_url_default="${BASE_URL:-$(env_get "BASE_URL") }"
+base_url_default="${base_url_default% }"
+if [[ -z "$base_url_default" ]]; then
+	base_url_default="https://${net_from_env}.${enviro_from_env}.prism.market"
+fi
 
 read -p "Enter base URL [$base_url_default]: " baseUrl
 baseUrl=${baseUrl:-$base_url_default}
+if grep -qE '^BASE_URL=' "$ENV_FILE"; then
+	sed -i "s|^BASE_URL=.*|BASE_URL=$baseUrl|" "$ENV_FILE"
+else
+	printf '\nBASE_URL=%s\n' "$baseUrl" >> "$ENV_FILE"
+fi
 echo "Base URL set to: $baseUrl"
 
 bearer_token=$(env_get "ADMIN_BEARER_TOKEN")

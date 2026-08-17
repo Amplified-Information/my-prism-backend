@@ -415,3 +415,4 @@ export PAYLOAD='{"txid":"019a2bc2-d729-7407-acb7-fff6e81daa11","marketId":"019a2
 
 grpcurl -plaintext -import-path ./proto -proto api.proto -d $PAYLOAD localhost:$API_PORT api.ApiService.PredictIntent
 ```
+

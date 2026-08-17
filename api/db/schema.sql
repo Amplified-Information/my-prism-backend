@@ -724,7 +724,6 @@ CREATE TABLE public.prediction_intents (
     market_id uuid CONSTRAINT order_requests_market_id_not_null NOT NULL,
     account_id text CONSTRAINT order_requests_account_id_not_null NOT NULL,
     price_usd double precision CONSTRAINT order_requests_price_usd_not_null NOT NULL,
-    qty double precision CONSTRAINT order_requests_qty_not_null NOT NULL,
     sig text CONSTRAINT order_requests_sig_not_null NOT NULL,
     public_key_hex text CONSTRAINT order_requests_public_key_hex_not_null NOT NULL,
     evmaddress text CONSTRAINT order_requests_evmaddress_not_null NOT NULL,
@@ -738,13 +737,17 @@ CREATE TABLE public.prediction_intents (
     evicted_at timestamp with time zone,
     primary_secondary character varying(1) DEFAULT 'p'::character varying NOT NULL,
     redeemed_at timestamp with time zone,
+    qty_orig double precision NOT NULL,
+    qty_rem double precision NOT NULL,
     CONSTRAINT order_requests_account_id_check CHECK ((length(account_id) >= 5)),
     CONSTRAINT order_requests_evmaddress_check CHECK ((length(evmaddress) = 40)),
     CONSTRAINT order_requests_keytype_check CHECK ((keytype = ANY (ARRAY[1, 2, 3]))),
     CONSTRAINT order_requests_net_check CHECK ((net = ANY (ARRAY['testnet'::text, 'mainnet'::text, 'previewnet'::text]))),
     CONSTRAINT order_requests_price_usd_check CHECK (((price_usd >= ('-1.0'::numeric)::double precision) AND (price_usd <= (1.0)::double precision))),
     CONSTRAINT order_requests_public_key_hex_check CHECK (((length(public_key_hex) > 10) AND (length(public_key_hex) <= 256))),
-    CONSTRAINT order_requests_qty_check CHECK ((qty > (0.0)::double precision)),
+    CONSTRAINT order_requests_qty_orig_check CHECK ((qty_orig > (0.0)::double precision)),
+    CONSTRAINT order_requests_qty_rem_check CHECK ((qty_rem >= (0.0)::double precision)),
+    CONSTRAINT order_requests_qty_rem_lte_qty_orig_check CHECK ((qty_rem <= qty_orig)),
     CONSTRAINT order_requests_sig_check CHECK (((length(sig) > 10) AND (length(sig) < 256)))
 );
 
@@ -1860,6 +1863,13 @@ CREATE INDEX idx_comments_account_id ON public.comments USING btree (account_id)
 --
 
 CREATE INDEX idx_comments_market_id ON public.comments USING btree (market_id);
+
+
+--
+-- Name: idx_prediction_intents_market_account_open; Type: INDEX; Schema: public; Owner: your_db_user
+--
+
+CREATE INDEX idx_prediction_intents_market_account_open ON public.prediction_intents USING btree (market_id, account_id) WHERE ((cancelled_at IS NULL) AND (fully_matched_at IS NULL) AND (evicted_at IS NULL));
 
 
 --

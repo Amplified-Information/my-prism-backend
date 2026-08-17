@@ -90,8 +90,8 @@ func (matchesRepository *MatchesRepository) CreateMatch(orderRequestClobTuple [2
 		MarketID: marketId,
 		TxId1:    txId1,
 		TxId2:    txId2,
-		Qty1:     orderRequestClobTuple[0].Qty,
-		Qty2:     orderRequestClobTuple[1].Qty,
+		Qty1:     orderRequestClobTuple[0].QtyRem,
+		Qty2:     orderRequestClobTuple[1].QtyRem,
 		TxHash:   txHash,
 	}
 

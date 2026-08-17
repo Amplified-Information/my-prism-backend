@@ -159,8 +159,8 @@ message Match {
   string tx_id1 = 2          [json_name = "txId1"];
   string tx_id2 = 3          [json_name = "txId2"];
   double price_usd = 5       [json_name = "priceUsd"];
-  double qty1 = 6            [json_name = "qty1"];
-  double qty2 = 7            [json_name = "qty2"];
+  double qty1 = 6            [json_name = "qty1"]; // qty matched by the clob
+  double qty2 = 7            [json_name = "qty2"]; // qty matched by the clob
   string created_at = 8      [json_name = "matchedAt"];
   string tx_hash = 9         [json_name = "txHash"];
   double price_usd1 = 10     [json_name = "priceUsd1"];

@@ -68,7 +68,21 @@ net_from_env=$(printf '%s' "$net_from_env" | tr -d '[:space:]' | tr '[:upper:]' 
 enviro_from_env=$(printf '%s' "$enviro_from_env" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
 net_from_env=${net_from_env:-testnet}
 enviro_from_env=${enviro_from_env:-dev}
-baseUrl="https://${net_from_env}.${enviro_from_env}.prism.market"
+base_url_default="${BASE_URL:-$(env_get "BASE_URL") }"
+base_url_default="${base_url_default% }"
+if [[ -z "$base_url_default" ]]; then
+  base_url_default="https://${net_from_env}.${enviro_from_env}.prism.market"
+fi
+
+read -p "Enter base URL [$base_url_default]: " baseUrl
+baseUrl=${baseUrl:-$base_url_default}
+if grep -qE '^BASE_URL=' "$ENV_FILE"; then
+  sed -i "s|^BASE_URL=.*|BASE_URL=$baseUrl|" "$ENV_FILE"
+else
+  printf '\nBASE_URL=%s\n' "$baseUrl" >> "$ENV_FILE"
+fi
+
+echo "Base URL set to: $baseUrl"
 
 source "$state_file"
 
@@ -91,6 +105,8 @@ if [[ "$baseUrl" == https://* ]]; then
 elif [[ "$grpc_addr" != *:* ]]; then
   grpc_addr="${grpc_addr}:8888"
 fi
+
+echo "Connecting to host: ${grpc_addr} (base URL: ${baseUrl})"
 
 declare -a account_ids
 declare -a key_types
@@ -608,11 +624,8 @@ for i in "${loaded_indices[@]}"; do
     tx_price="${run_tx_price_by_account[$tx_key]:-0}"
 
     tx_matched_qty="${matched_qty_by_tx_api[$tx_id]:-0}"
-    # If a tx is still open in this portfolio snapshot, treat it as not-yet-consumed
-    # for this run-level reconciliation to avoid cross-endpoint timing skew.
-    if [[ -n "${open_tx_ids[$tx_id]:-}" ]]; then
-      tx_matched_qty="0"
-    fi
+    # Partial fills are still matched even if the order remains open in the API snapshot.
+    # Zeroing them out causes false reconciliation failures when a tx has a residual open qty.
     tx_matched_capped=$(awk -v m="$tx_matched_qty" -v o="$tx_qty" 'BEGIN { v = m + 0; lim = o + 0; if (lim > 0 && v > lim) v = lim; if (v < 0) v = 0; printf "%.6f", v }')
     tx_open_rem=$(awk -v o="$tx_qty" -v m="$tx_matched_capped" 'BEGIN { v = (o + 0) - (m + 0); if (v < 0 && v > -0.000001) v = 0; if (v < 0) v = 0; printf "%.6f", v }')
 
@@ -692,6 +705,28 @@ for i in "${loaded_indices[@]}"; do
 
   if (( $(echo "$abs_delta_collateral > $tolerance_qty" | bc -l) )) || (( $(echo "$max_abs_delta > $tolerance_qty" | bc -l) )); then
     echo "Error: reconciliation mismatch for $account_id (|deltaCol|=$abs_delta_collateral, |deltaBuy|=$abs_delta_buy_qty, |deltaSell|=$abs_delta_sell_qty, tolerance=$tolerance_qty)."
+    echo "Debug details for $account_id:"
+    for tx_key in "${!run_tx_qty_by_account[@]}"; do
+      [[ "$tx_key" != "$i|"* ]] && continue
+      tx_id="${tx_key#${i}|}"
+      tx_side="${run_tx_side_by_account[$tx_key]:-}"
+      tx_ps="${run_tx_ps_by_account[$tx_key]:-p}"
+      tx_qty="${run_tx_qty_by_account[$tx_key]:-0}"
+      tx_price="${run_tx_price_by_account[$tx_key]:-0}"
+      tx_matched_qty="${matched_qty_by_tx_api[$tx_id]:-0}"
+      tx_matched_capped=$(awk -v m="$tx_matched_qty" -v o="$tx_qty" 'BEGIN { v = m + 0; lim = o + 0; if (lim > 0 && v > lim) v = lim; if (v < 0) v = 0; printf "%.6f", v }')
+      tx_open_rem=$(awk -v o="$tx_qty" -v m="$tx_matched_capped" 'BEGIN { v = (o + 0) - (m + 0); if (v < 0 && v > -0.000001) v = 0; if (v < 0) v = 0; printf "%.6f", v }')
+      api_open_flag="no"
+      if [[ -n "${open_tx_ids[$tx_id]:-}" ]]; then
+        api_open_flag="yes"
+      fi
+      printf '  tx=%s side=%s ps=%s submitted=%.6f matchedApi=%.6f expectedOpen=%.6f apiOpen=%s\n' \
+        "$tx_id" "$tx_side" "$tx_ps" "$tx_qty" "$tx_matched_capped" "$tx_open_rem" "$api_open_flag"
+    done
+    echo "API open tx IDs for $account_id:"
+    printf '%s\n' "$portfolio_json" | jq -r --arg m "$marketId" '.openPredictionIntents[$m].openPredictionIntents[]? | select(.txId != null) | .txId // empty' 2>/dev/null || echo "  <none>"
+    echo "API portfolio JSON for $account_id:"
+    printf '%s\n' "$portfolio_json" | jq --arg m "$marketId" '{marketId:$m, openPredictionIntents:(.openPredictionIntents[$m].openPredictionIntents // []), matchedPredictionIntents:(.matchedPredictionIntents[$m].matchedPredictionIntents // []) , positions:(.positions[$m] // null)}' 2>/dev/null || printf '%s\n' "$portfolio_json"
     reconcile_failed=1
   fi
 done

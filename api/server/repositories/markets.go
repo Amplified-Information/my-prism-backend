@@ -65,6 +65,25 @@ func (marketsRepository *MarketsRepository) GetMarketById(marketId string, isAdm
 	return &market, nil
 }
 
+func (marketsRepository *MarketsRepository) IsMarketTradeable(marketId string) (bool, error) {
+	if marketsRepository.db == nil {
+		return false, lib.ErrorLog("database not initialized")
+	}
+
+	marketUUID, err := uuid.Parse(marketId)
+	if err != nil {
+		return false, lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
+	}
+
+	q := sqlc.New(marketsRepository.db)
+	tradeable, err := q.IsMarketTradeable(context.Background(), marketUUID)
+	if err != nil {
+		return false, lib.ErrorLog("IsMarketTradeable failed", "error", err, "marketId", marketId)
+	}
+
+	return tradeable, nil
+}
+
 func (marketsRepository *MarketsRepository) GetMarkets(limit int32, offset int32, isAdmin bool) ([]sqlc.Market, error) {
 	if marketsRepository.db == nil {
 		return nil, lib.ErrorLog("database not initialized")

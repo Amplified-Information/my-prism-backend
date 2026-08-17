@@ -130,7 +130,11 @@ net_from_env=$(printf '%s' "$net_from_env" | tr -d '[:space:]' | tr '[:upper:]' 
 enviro_from_env=$(printf '%s' "$enviro_from_env" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
 net_from_env=${net_from_env:-testnet}
 enviro_from_env=${enviro_from_env:-dev}
-base_url_default="https://${net_from_env}.${enviro_from_env}.prism.market"
+base_url_default="${BASE_URL:-$(env_get "BASE_URL") }"
+base_url_default="${base_url_default% }"
+if [[ -z "$base_url_default" ]]; then
+  base_url_default="https://${net_from_env}.${enviro_from_env}.prism.market"
+fi
 
 network="$net_from_env"
 network_lower=$(printf '%s' "$network" | tr '[:upper:]' '[:lower:]')
@@ -146,6 +150,12 @@ network_upper=$(printf '%s' "$network" | tr '[:lower:]' '[:upper:]')
 
 read -p "Enter base URL [$base_url_default]: " baseUrl
 baseUrl=${baseUrl:-$base_url_default}
+if grep -qE '^BASE_URL=' "$ENV_FILE"; then
+  sed -i "s|^BASE_URL=.*|BASE_URL=$baseUrl|" "$ENV_FILE"
+else
+  printf '\nBASE_URL=%s\n' "$baseUrl" >> "$ENV_FILE"
+fi
+echo "Base URL set to: $baseUrl"
 
 mirror_base="https://${network}.mirrornode.hedera.com"
 usdc_var_name="${network_upper}_USDC_ADDRESS"
@@ -329,6 +339,7 @@ fi
 echo "Retrieving the collateral currently in the smart contract ($contract_id) for marketId=$marketId..."
 
 tmp_ts="$SCS_DIR/scripts/.tmp_total_collateral.ts"
+trap 'rm -f "$tmp_ts"' EXIT
 cat > "$tmp_ts" <<'TS'
 import { ContractCallQuery, ContractFunctionParameters, ContractId } from '@hashgraph/sdk'
 import { initHederaClient } from './lib/hedera.ts'
@@ -400,7 +411,6 @@ if command -v timeout >/dev/null 2>&1; then
 else
   total_collateral_output=$("$TS_NODE_BIN" "$tmp_ts" "$contract_id" "$marketId" 2>&1 || true)
 fi
-rm -f "$tmp_ts"
 
 total_collateral=$(printf '%s\n' "$total_collateral_output" | awk -F '=' '/^TOTAL_COLLATERAL=/{print $2; exit}')
 total_yes_outstanding=$(printf '%s\n' "$total_collateral_output" | awk -F '=' '/^TOTAL_YES_OUTSTANDING=/{print $2; exit}')
@@ -826,6 +836,29 @@ fi
 if [[ $mirror_check_failed -ne 0 ]]; then
   echo "ALERT: mirror-node transfer verification failed."
   printf '\033[31m❌\033[0m Mirror-node transfer verification failed.\n'
+  exit 1
+fi
+
+echo
+echo "Verifying no collateral remains claimable in the market..."
+if command -v timeout >/dev/null 2>&1; then
+  final_collateral_output=$(timeout 45s "$TS_NODE_BIN" "$tmp_ts" "$contract_id" "$marketId" 2>&1 || true)
+else
+  final_collateral_output=$("$TS_NODE_BIN" "$tmp_ts" "$contract_id" "$marketId" 2>&1 || true)
+fi
+final_total_collateral=$(printf '%s\n' "$final_collateral_output" | awk -F '=' '/^TOTAL_COLLATERAL=/{print $2; exit}')
+if [[ ! "$final_total_collateral" =~ ^[0-9]+$ ]]; then
+  echo "ALERT: failed to read final totalCollateral from Solidity call."
+  printf '%s\n' "$final_collateral_output"
+  exit 1
+fi
+
+final_total_collateral_usd=$(format_units_6 "$final_total_collateral")
+echo "Final totalCollateral raw: $final_total_collateral"
+echo "Final totalCollateral USD: \$$final_total_collateral_usd"
+if [[ "$final_total_collateral" -ne 0 ]]; then
+  echo "ALERT: collateral remains claimable after all configured claims completed."
+  printf '\033[31m❌\033[0m Final claimability verification failed.\n'
   exit 1
 fi
 

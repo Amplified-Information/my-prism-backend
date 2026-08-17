@@ -220,7 +220,7 @@ func (p *Prism) TriggerRecreateClob() (bool, error) {
 			lib.Log(lib.LOG_INFO, "\t - txId: %s", pi.TxID.String())
 
 			// calculate "qtyRemaining" to be placed on CLOB (may not exist)
-			var qtyRemaining float64 = pi.Qty // set to Qty by default
+			var qtyRemaining float64 = pi.QtyRem // set to the remaining quantity by default [previously was Qty causing a bug!]
 
 			allMatches, err := p.matchesRepository.GetAllMatchesForMarketIdTxId(pi.MarketID, pi.TxID)
 			lib.Log(lib.LOG_INFO, "\t - allMatches for txId %s on marketId %s: %v", pi.TxID.String(), pi.MarketID.String(), allMatches)
@@ -262,8 +262,8 @@ func (p *Prism) TriggerRecreateClob() (bool, error) {
 				MarketId:         pi.MarketID.String(),
 				AccountId:        pi.AccountID,
 				PriceUsd:         pi.PriceUsd,
-				Qty:              qtyRemaining,
-				QtyOrig:          pi.Qty, // need to keep track of the original qty for on/off-chain signature validation
+				QtyRem:           qtyRemaining,
+				QtyOrig:          pi.QtyOrig, // keep the original order size for signature validation and consistent match semantics
 				Sig:              pi.Sig,
 				PublicKey:        pi.PublicKeyHex, // passing extra key info - i) avoid lookups ii) handle situation where user has changed their key
 				EvmAddress:       pi.Evmaddress,
@@ -275,7 +275,7 @@ func (p *Prism) TriggerRecreateClob() (bool, error) {
 				return false, lib.LogAndError(lib.LOG_ERROR, "failed to marshal CLOB request: %v", err)
 			}
 
-			lib.Log(lib.LOG_INFO, "\tre-creating tx (qty=%f, qtyOrig=%f): %v", clobRequestObj.Qty, clobRequestObj.QtyOrig, clobRequestObj)
+			lib.Log(lib.LOG_INFO, "\tre-creating tx (qtyRem=%f, qtyOrig=%f): %v", clobRequestObj.QtyRem, clobRequestObj.QtyOrig, clobRequestObj)
 
 			/////
 			// And push to CLOB via NATS

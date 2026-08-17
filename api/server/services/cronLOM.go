@@ -63,7 +63,7 @@ func (cs *CronLOMService) CalcLOM() error {
 	}
 
 	var PRISMperDay = (0.1 * float64(lib.TotalNprismTokens)) / (vestingPeriodYears * 365) // 10% of 1 billion PRISM distributed per year, divided by 365 to get daily distribution
-	var prismToBeAllocatedThisRun = PRISMperDay / 24                                      // since this cron runs every hour, we allocate 1/24th of the daily PRISM allocation each run
+	var prismToBeAllocatedThisRun = PRISMperDay / 24                                      // TODO: derive based on cron string                                   // since this cron runs every hour, we allocate 1/24th of the daily PRISM allocation each run
 
 	var distance2durationRatio = 2.0     // weight distance points twice as much as duration points when calculating the total LOM score
 	var dollarValue2lomScoreRatio = 1.25 // larger dollar values in the orderbook give more PRISM than a lower dollar value LOM score
@@ -148,7 +148,7 @@ func (cs *CronLOMService) CalcLOM() error {
 			totalDurationPointsForUser := 0
 
 			for _, pi := range predictionIntentsForUserInMarket {
-				dollarValueBuyOrdersForUser += math.Abs(pi.PriceUsd * pi.Qty)
+				dollarValueBuyOrdersForUser += math.Abs(pi.PriceUsd * pi.QtyRem)
 
 				/////
 				// Calculate *distance* from market price
@@ -258,16 +258,17 @@ func (cs *CronLOMService) CalcLOM() error {
 		// cs.hederaService.SendHTStokens(networkSelected, tokenId, recipientAccountId, prismToSendUser, nDecimals)
 
 		/////
-		// Log the send to database
+		// Log the aggregate LOM result for this account to the database.
+		// The table enforces a non-null UUID pair, so for this aggregate snapshot we
+		// record a sentinel UUID for both the market and prediction-intent tx.
 		/////
-		// marketUUID, err := uuid.Parse(marketId)
-		// if err != nil {
-		// 	return lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
-		// }
+		// marketUUID := uuid.Nil           // n/a - aggregate
+		// predictionIntentTxID := uuid.Nil // n/a - aggregate
+		// hederaTxHash := ""
 		// err := cs.prismLomRepository.CreateLOMentryForUserOnMarket(
-		// 	// market_id, account_id, prediction_intent_tx_id, total_lom_score, cron_ran_at, hedera_tx_hash
-		// 	marketUUID, // market_id is not relevant for this aggregated view, so we can use a placeholder value
+		// 	marketUUID,
 		// 	accountID,
+		// 	predictionIntentTxID,
 		// 	compoundedLOMForUser,
 		// 	cronRanAt,
 		// 	hederaTxHash,

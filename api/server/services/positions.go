@@ -169,7 +169,7 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 			GeneratedAt:      pi.GeneratedAt.String(),
 			AccountId:        pi.AccountID,
 			PriceUsd:         pi.PriceUsd,
-			Qty:              pi.Qty,
+			Qty:              pi.QtyRem,
 			PrimarySecondary: pi.PrimarySecondary,
 		}
 		if _, ok := response.OpenPredictionIntents[pi.MarketID.String()]; !ok {
@@ -223,22 +223,28 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 	} else {
 		// lib.Log(lib.LOG_INFO, "%s_TOKEN: %s", strings.ToUpper(req.Net), prismTokenIdStr)
 	}
-	prismTokenId, err := hiero.TokenIDFromString(prismTokenIdStr)
-	if err != nil {
-		lib.Log(lib.LOG_ERROR, "invalid %s_TOKEN: %v", strings.ToUpper(req.Net), err)
+
+	var prismTokenId hiero.TokenID
+	if prismTokenIdStr != "" {
+		parsedTokenID, err := hiero.TokenIDFromString(prismTokenIdStr)
+		if err != nil {
+			lib.Log(lib.LOG_ERROR, "invalid %s_TOKEN: %v", strings.ToUpper(req.Net), err)
+		} else {
+			prismTokenId = parsedTokenID
+		}
 	}
 
 	userAccountId, err := lib.EvmAddressToHederaAccountId(*_networkSelected, req.EvmAddress)
 	if err != nil {
 		lib.Log(lib.LOG_ERROR, "failed to convert evm address to hedera account ID: %v", err)
-	} else {
+	} else if prismTokenIdStr != "" {
 		// lib.Log(lib.LOG_INFO, "userAccountId: %s", userAccountId.String())
-	}
-	userBalanceInt64, err := lib.GetTokenBalance(*_networkSelected, prismTokenId, *userAccountId)
-	if err != nil {
-		lib.Log(lib.LOG_ERROR, "failed to get user's prism token balance: %v", err)
-	} else {
-		response.PrismTokenBalance = uint64(userBalanceInt64)
+		userBalanceInt64, err := lib.GetTokenBalance(*_networkSelected, prismTokenId, *userAccountId)
+		if err != nil {
+			lib.Log(lib.LOG_ERROR, "failed to get user's prism token balance: %v", err)
+		} else {
+			response.PrismTokenBalance = uint64(userBalanceInt64)
+		}
 	}
 
 	// and retrieve the number of Prism Points this user has for a given season:

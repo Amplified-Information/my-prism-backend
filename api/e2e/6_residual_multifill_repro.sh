@@ -221,9 +221,18 @@ net_from_env="$(env_get "NET")"
 enviro_from_env="$(env_get "ENVIRO")"
 network="$(printf '%s' "${net_from_env:-testnet}" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
 enviro="$(printf '%s' "${enviro_from_env:-dev}" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
-base_url_default="https://${network}.${enviro}.prism.market"
+base_url_default="${BASE_URL:-$(env_get "BASE_URL") }"
+base_url_default="${base_url_default% }"
+if [[ -z "$base_url_default" ]]; then
+  base_url_default="https://${network}.${enviro}.prism.market"
+fi
 read -r -p "Enter the Prism base URL [$base_url_default]: " base_url
 base_url="${base_url:-$base_url_default}"
+if grep -qE '^BASE_URL=' "$ENV_FILE"; then
+  sed -i "s|^BASE_URL=.*|BASE_URL=$base_url|" "$ENV_FILE"
+else
+  printf '\nBASE_URL=%s\n' "$base_url" >> "$ENV_FILE"
+fi
 grpc_addr="${base_url#*://}"
 grpc_addr="${grpc_addr%%/}"
 grpc_flags=(-w)
@@ -239,6 +248,24 @@ fi
 
 if [[ ! $marketId =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
   echo "Invalid marketId format. Please provide a valid UUID7."
+  exit 1
+fi
+
+echo "Preflight: verifying market $marketId is tradeable..."
+market_json=$(rpc_call_retry "api.ApiServicePublic.GetMarketById" "{\"marketId\":\"$marketId\"}")
+if ! printf '%s\n' "$market_json" | jq -e 'type == "object"' >/dev/null 2>&1; then
+  echo "Unable to retrieve market metadata for $marketId. Refusing to submit repro orders."
+  exit 1
+fi
+
+market_resolved_at=$(printf '%s\n' "$market_json" | jq -r '.resolvedAt // .resolved_at // ""')
+market_is_paused=$(printf '%s\n' "$market_json" | jq -r '.isPaused // .is_paused // false')
+market_is_suspended=$(printf '%s\n' "$market_json" | jq -r '.isSuspended // .is_suspended // false')
+if [[ -n "$market_resolved_at" || "$market_is_paused" == "true" || "$market_is_suspended" == "true" ]]; then
+  echo "Market $marketId is not tradeable; refusing to submit repro orders."
+  printf '  resolvedAt: %s\n' "${market_resolved_at:-<not resolved>}"
+  printf '  isPaused: %s\n' "$market_is_paused"
+  printf '  isSuspended: %s\n' "$market_is_suspended"
   exit 1
 fi
 

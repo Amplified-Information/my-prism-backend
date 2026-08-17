@@ -151,10 +151,17 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PrismPre
 		return "", lib.LogAndError(lib.LOG_ERROR, "failed to get network selected: %v", err)
 	}
 
-	// db look up of this market's smartContractID in the markets table - don't use the current X_SMART_CONTRACT_ID as loaded from env vars
-	market, err := pis.marketsRepository.GetMarketById(req.MarketId, false /* don't include suspended or paused markets*/)
+	tradeable, err := pis.marketsRepository.IsMarketTradeable(req.MarketId)
 	if err != nil {
-		return "", lib.LogAndError(lib.LOG_ERROR, "failed to get market by id %s: %v. Is the market suspended or paused?", req.MarketId, err)
+		return "", lib.LogAndError(lib.LOG_ERROR, "failed to determine whether market %s is tradeable: %v", req.MarketId, err)
+	}
+	if !tradeable {
+		return "", lib.LogAndError(lib.LOG_ERROR, "market %s is not tradeable (it may be resolved, closed, paused, suspended, or deleted)", req.MarketId)
+	}
+
+	market, err := pis.marketsRepository.GetMarketById(req.MarketId, true)
+	if err != nil {
+		return "", lib.LogAndError(lib.LOG_ERROR, "failed to get tradeable market %s: %v", req.MarketId, err)
 	}
 	_smartContractId, err := hiero.ContractIDFromString(market.SmartContractID)
 	if err != nil {
@@ -262,7 +269,7 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PrismPre
 				return "", lib.LogAndError(lib.LOG_ERROR, "failed to load matched qty for txId=%s in marketId=%s: %v", existingIntent.TxID.String(), req.MarketId, err)
 			}
 
-			remainingQtyForIntent := existingIntent.Qty - matchedQtyForIntent
+			remainingQtyForIntent := existingIntent.QtyRem - matchedQtyForIntent
 			if remainingQtyForIntent < 0 {
 				// Guard against minor drift from eventual consistency or floating point accumulation.
 				remainingQtyForIntent = 0
@@ -314,7 +321,7 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PrismPre
 		MarketId:         req.MarketId,
 		AccountId:        req.AccountId,
 		PriceUsd:         req.PriceUsd,
-		Qty:              req.Qty, // the clob will decrement this value over time as matches occur
+		QtyRem:           req.Qty, // the clob will decrement this value over time as matches occur
 		QtyOrig:          req.Qty, // need to keep track of the original qty for on/off-chain signature validation
 		Sig:              req.Sig,
 		PublicKey:        req.PublicKey, // passing extra key info - i) avoid lookups ii) handle situation where user has changed their key
@@ -515,7 +522,7 @@ func (pis *PredictionIntentsService) GetAllPredictionIntents(limit int32, offset
 			MarketId:         pi.MarketID.String(),
 			AccountId:        pi.AccountID,
 			PriceUsd:         pi.PriceUsd,
-			Qty:              pi.Qty,
+			Qty:              pi.QtyRem,
 			Sig:              pi.Sig,
 			PublicKey:        pi.PublicKeyHex,
 			EvmAddress:       pi.Evmaddress,

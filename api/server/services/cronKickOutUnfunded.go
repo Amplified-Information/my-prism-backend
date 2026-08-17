@@ -151,9 +151,7 @@ func (cs *CronKickOutUnfundedService) validateAndKickoutPrimaryOrders(primaryOrd
 	sumTotalOfAllPrimaryIntents := 0.0
 	for _, pi := range primaryOrders {
 		lib.Log(lib.LOG_INFO, "[primary] processing txId=%s", pi.TxID.String())
-		sumTotalOfAllPrimaryIntents += (math.Abs(pi.PriceUsd) * pi.Qty)
-		lib.Log(lib.LOG_INFO, "[primary] sumTotalOfAllPrimaryIntents: %f", sumTotalOfAllPrimaryIntents)
-
+			sumTotalOfAllPrimaryIntents += (math.Abs(pi.PriceUsd) * pi.QtyRem)
 		if sumTotalOfAllPrimaryIntents > usdcBalance {
 			_, err := cs.predictionIntentsService.CancelPredictionIntentNoSigCheck(market.MarketID.String(), pi.TxID.String())
 			if err != nil {
@@ -190,12 +188,12 @@ func (cs *CronKickOutUnfundedService) validateAndKickoutSecondaryOrders(secondar
 
 	var sumYesRequired, sumNoRequired float64
 	for _, pi := range secondaryOrders {
-		lib.Log(lib.LOG_INFO, "[secondary] processing txId=%s with priceUsd=%.2f qty=%.8f", pi.TxID.String(), pi.PriceUsd, pi.Qty)
+		lib.Log(lib.LOG_INFO, "[secondary] processing txId=%s with priceUsd=%.2f qtyOrig=%.8f qtyRem=%.8f", pi.TxID.String(), pi.PriceUsd, pi.QtyOrig, pi.QtyRem)
 
 		if pi.PriceUsd < 0 {
-			sumYesRequired += pi.Qty
+			sumYesRequired += pi.QtyRem
 		} else {
-			sumNoRequired += pi.Qty
+			sumNoRequired += pi.QtyRem
 		}
 	}
 

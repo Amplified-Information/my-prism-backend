@@ -1,8 +1,8 @@
 -- CREATE
 
 -- name: CreatePredictionIntent :one
-INSERT INTO prediction_intents (tx_id, net, market_id, account_id, price_usd, qty, sig, public_key_hex, evmaddress, keytype, generated_at, primary_secondary)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+INSERT INTO prediction_intents (tx_id, net, market_id, account_id, price_usd, qty_orig, qty_rem, sig, public_key_hex, evmaddress, keytype, generated_at, primary_secondary)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 RETURNING *;
 
 
@@ -22,6 +22,7 @@ FROM prediction_intents pi
 JOIN markets m ON pi.market_id = m.market_id
 WHERE pi.market_id = $1
 AND pi.cancelled_at IS NULL AND pi.fully_matched_at IS NULL AND pi.evicted_at IS NULL
+AND pi.qty_rem > 0
 AND m.deleted_at IS NULL;
 
 -- name: GetAllOpenPredictionIntentsByMarketIdAndAccountId :many
@@ -30,6 +31,7 @@ FROM prediction_intents pi
 JOIN markets m ON pi.market_id = m.market_id
 WHERE pi.market_id = $1 AND pi.account_id = $2
 AND pi.cancelled_at IS NULL AND pi.fully_matched_at IS NULL AND pi.evicted_at IS NULL
+AND pi.qty_rem > 0
 AND m.deleted_at IS NULL
 ORDER BY account_id;
 
@@ -49,6 +51,7 @@ WHERE pi.evmaddress = $1
 	AND pi.cancelled_at IS NULL
 	AND pi.fully_matched_at IS NULL
 	AND pi.evicted_at IS NULL
+	AND pi.qty_rem > 0
 	AND m.deleted_at IS NULL;
 
 -- name: GetAllMatchedPredictionIntentsByEvmAddress :many
@@ -77,7 +80,7 @@ FROM prediction_intents
 WHERE tx_id = $1;
 
 -- name: GetTotalValueUsdForMarketId :one
-SELECT COALESCE(SUM(pi.price_usd * pi.qty), 0)::double precision AS total_value_usd
+SELECT COALESCE(SUM(pi.price_usd * pi.qty_rem), 0)::double precision AS total_value_usd
 FROM prediction_intents pi
 JOIN markets m ON pi.market_id = m.market_id
 WHERE pi.market_id = $1
@@ -92,6 +95,17 @@ AND m.deleted_at IS NULL;
 
 
 -- UPDATE
+
+-- name: DecrementPredictionIntentQtyRem :one
+UPDATE prediction_intents
+SET qty_rem = GREATEST(qty_rem - $3, 0.0),
+    updated_at = CURRENT_TIMESTAMP,
+    fully_matched_at = CASE
+        WHEN GREATEST(qty_rem - $3, 0.0) <= 0.000000001 THEN COALESCE(fully_matched_at, CURRENT_TIMESTAMP)
+        ELSE fully_matched_at
+    END
+WHERE market_id = $1 AND tx_id = $2
+RETURNING *;
 
 -- name: MarkPredictionIntentAsRegenerated :exec
 UPDATE prediction_intents

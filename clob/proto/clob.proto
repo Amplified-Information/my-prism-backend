@@ -36,7 +36,7 @@ message CreateOrderRequestClob {
   string market_id = 3 [json_name = "marketId"];
   string account_id = 4 [json_name = "accountId"];
   double price_usd = 5 [json_name = "priceUsd"];
-  double qty = 6 [json_name = "qty"];
+  double qty_rem = 6 [json_name = "qtyRem"]; // keep track of the remaining qty internally to the clob (may be less than the original qty if partially filled)
   double qty_orig = 7 [json_name = "qtyOrig"]; // keep track of the original qty for signature validation
   string sig = 8 [json_name = "sig"];
   string public_key = 9 [json_name = "publicKey"]; // pass key info - i) avoid lookups ii) handle situation where user has changed their key

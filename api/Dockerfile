@@ -103,6 +103,10 @@ COPY ./clob/proto /app/clob/proto
 # now generate the interfaces:
 RUN sh /app/api/genInterfaces.sh
 
+FROM builder AS test
+RUN go test ./...
+
+FROM builder AS build
 RUN go build -o main /app/api/server/
 
 # RUN stage
@@ -117,14 +121,14 @@ RUN apt-get install -y ca-certificates && update-ca-certificates
 WORKDIR /app
 
 # copy the main binary
-COPY --from=builder /app/api/main .
+COPY --from=build /app/api/main .
 
 # copy the seed.sql to seed the initial DB, if needed
-COPY --from=builder /app/api/db/seed.sql .
+COPY --from=build /app/api/db/seed.sql .
 
 # copy the migrations files to migrate the DB, if needed
-COPY --from=builder /app/api/db/migrations /app/db/migrations
-COPY --from=builder /app/api/migrate-tool /app
+COPY --from=build /app/api/db/migrations /app/db/migrations
+COPY --from=build /app/api/migrate-tool /app
 
 # This section defines environment variables needed to run a database migration prior to starting the API server
 # - DB_UNAME: The username for connecting to the database.

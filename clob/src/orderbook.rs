@@ -214,11 +214,11 @@ impl OrderBookService {
             let book = order_book.read().await;
 
             for order in &book.buy_orders {
-                total_value += order.price_usd.abs() * order.qty;
+                total_value += order.price_usd.abs() * order.qty_rem;
             }
 
             for order in &book.sell_orders {
-                total_value += order.price_usd.abs() * order.qty;
+                total_value += order.price_usd.abs() * order.qty_rem;
             }
         }
         log::info!("tv_pending (USDC) across all markets: {}", total_value);
@@ -232,8 +232,8 @@ impl OrderBookService {
         if let Some(order_book) = order_books.get(&market_id.to_lowercase()) {
             let book = order_book.read().await;
 
-            let buy_depth_qty: f64 = book.buy_orders.iter().map(|o| o.qty).sum();
-            let sell_depth_qty: f64 = book.sell_orders.iter().map(|o| o.qty).sum();
+            let buy_depth_qty: f64 = book.buy_orders.iter().map(|o| o.qty_rem).sum();
+            let sell_depth_qty: f64 = book.sell_orders.iter().map(|o| o.qty_rem).sum();
 
             Ok((buy_depth_qty, sell_depth_qty))
         } else {
@@ -310,24 +310,24 @@ impl OrderBook {
             if (incoming_order.price_usd > 0.0 && incoming_order.price_usd >= existing_order.price_usd.abs()) ||
                (incoming_order.price_usd < 0.0 && existing_order.price_usd >= incoming_order.price_usd.abs()) {
 
-                if incoming_order.qty <= existing_order.qty {
+                if incoming_order.qty_rem <= existing_order.qty_rem {
                     // Incoming fully consumed; existing may still have remainder.
-                    let matched_qty = incoming_order.qty;
-                    let existing_remainder = existing_order.qty - matched_qty;
+                    let matched_qty = incoming_order.qty_rem;
+                    let existing_remainder = existing_order.qty_rem - matched_qty;
 
                     let orc1 = {
                         let mut order = incoming_order.clone();
-                        order.qty = matched_qty;
+                        order.qty_rem = matched_qty;
                         order
                     };
                     let orc2 = {
                         let mut order = existing_order.clone();
-                        order.qty = matched_qty;
+                        order.qty_rem = matched_qty;
                         order
                     };
 
-                    existing_order.qty -= incoming_order.qty;
-                    if existing_order.qty.abs() < 1e-3 { // small EPSILON to account for floating point precision
+                    existing_order.qty_rem -= incoming_order.qty_rem;
+                    if existing_order.qty_rem.abs() < 1e-3 { // small EPSILON to account for floating point precision
                         opposite_orders.remove(i);
                     }
 
@@ -350,21 +350,21 @@ impl OrderBook {
                     return;
                 } else {
                     // Existing fully consumed; incoming still has remainder.
-                    let matched_qty = existing_order.qty;
+                    let matched_qty = existing_order.qty_rem;
                     let incoming_before_match = {
                         let mut order = incoming_order.clone();
-                        order.qty = matched_qty;
+                        order.qty_rem = matched_qty;
                         order
                     };
                     let orc2 = {
                         let mut order = existing_order.clone();
-                        order.qty = matched_qty;
+                        order.qty_rem = matched_qty;
                         order
                     };
-                    incoming_order.qty -= matched_qty;
+                    incoming_order.qty_rem -= matched_qty;
                     opposite_orders.remove(i);
 
-                    log::info!("MATCH_PARTIAL \t Remaining incoming order quantity: {}", incoming_order.qty);
+                    log::info!("MATCH_PARTIAL \t Remaining incoming order quantity: {}", incoming_order.qty_rem);
 
                     let nats_clone = nats_service.clone();
                     tokio::spawn(async move {
@@ -394,14 +394,14 @@ impl OrderBook {
                 tx_id: order.tx_id.clone(),
                 account_id: order.account_id.clone(),
                 price_usd: order.price_usd,
-                qty: order.qty,
+                qty: order.qty_rem,
                 ps: order.primary_secondary.clone(),
             }).collect(),
             asks: self.sell_orders.iter().map(|order| OrderDetail {
                 tx_id: order.tx_id.clone(),
                 account_id: order.account_id.clone(),
                 price_usd: order.price_usd,
-                qty: order.qty,
+                qty: order.qty_rem,
                 ps: order.primary_secondary.clone(),
             }).take(effective_depth).collect(),
         }

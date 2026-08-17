@@ -128,12 +128,30 @@ enviro_from_env=${enviro_from_env:-dev}
 network="$net_from_env"
 mirror_base="https://${network}.mirrornode.hedera.com"
 
-base_url="https://${net_from_env}.${enviro_from_env}.prism.market"
+base_url_default="${BASE_URL:-$(env_get "BASE_URL") }"
+base_url_default="${base_url_default% }"
+if [[ -z "$base_url_default" ]]; then
+	base_url_default="https://${net_from_env}.${enviro_from_env}.prism.market"
+fi
+
+read -p "Enter the base URL [$base_url_default]: " base_url
+base_url="${base_url:-$base_url_default}"
+if grep -qE '^BASE_URL=' "$ENV_FILE"; then
+	sed -i "s|^BASE_URL=.*|BASE_URL=$base_url|" "$ENV_FILE"
+else
+	printf '\nBASE_URL=%s\n' "$base_url" >> "$ENV_FILE"
+fi
+echo "Base URL set to: $base_url"
 grpc_addr="${base_url#*://}"
 grpc_addr="${grpc_addr%%/}"
-grpc_flags=(-w --tls)
-if [[ "$grpc_addr" != *:* ]]; then
-	grpc_addr="${grpc_addr}:443"
+grpc_flags=(-w)
+if [[ "$base_url" == https://* ]]; then
+	grpc_flags=(-w --tls)
+	if [[ "$grpc_addr" != *:* ]]; then
+		grpc_addr="${grpc_addr}:443"
+	fi
+elif [[ "$grpc_addr" != *:* ]]; then
+	grpc_addr="${grpc_addr}:8888"
 fi
 
 basic_auth_user=$(env_get "BASIC_AUTH_USER")
@@ -161,7 +179,7 @@ fetch_user_portfolio_json() {
 fetch_market_json() {
 	local payload
 	payload=$(printf '{"marketId":"%s"}' "$marketId")
-	easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d "$payload" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetMarketById 2>/dev/null
+	easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d "$payload" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetMarketById 2>/dev/null || printf '{}'
 }
 
 declare -A qty_orig_by_tx
@@ -200,6 +218,15 @@ done
 market_json=$(fetch_market_json)
 market_outcome=$(printf '%s\n' "$market_json" | jq -r '.outcome // empty' 2>/dev/null || true)
 market_resolved_at=$(printf '%s\n' "$market_json" | jq -r '.resolvedAt // empty' 2>/dev/null || true)
+if [[ -z "$market_json" || "$market_json" == '{}' ]]; then
+	echo "Warning: GetMarketById returned empty data; continuing without market resolution info."
+	market_is_resolved=false
+else
+	market_is_resolved=false
+	if [[ -n "$market_resolved_at" && -n "$market_outcome" ]]; then
+		market_is_resolved=true
+	fi
+fi
 market_is_resolved=false
 if [[ -n "$market_resolved_at" && -n "$market_outcome" ]]; then
 	market_is_resolved=true

@@ -16,11 +16,12 @@ const (
 	LOG_INFO
 	LOG_WARN
 	LOG_ERROR
+	LOG_CRITICAL
 )
 
 var VolumeResolutionPeriods = []string{"1h", "24h", "7d", "30d"}
 
-var TotalNprismTokens = 1_000_000_000
+var TotalNprismTokens = 100_000_000
 
 var LaunchDate = time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC)
 

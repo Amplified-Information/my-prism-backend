@@ -6,4 +6,4 @@ services:
   redis:
     image: ghcr.io/prismmarketlabs/redis:0.0.1
   blocknode:
-    image: ghcr.io/prismmarketlabs/blocknode:0.1.15
+    image: ghcr.io/prismmarketlabs/blocknode:0.1.16
