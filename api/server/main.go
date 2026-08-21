@@ -183,7 +183,17 @@ func (s *server) GetChallenge(ctx context.Context, req *pb_api.ChallengeRequest)
 }
 
 func (s *server) VerifyChallenge(ctx context.Context, req *pb_api.VerifyChallengeRequest) (*pb_api.StdResponse, error) {
-	lib.Log(lib.LOG_INFO, "Verifying challenge for accountId: %s on network: %s, payload: %s, sigBase64: %s", req.ChallengeRequest.AccountId, req.ChallengeRequest.Network, req.Payload, req.ChallengeResponseBase64)
+	if req == nil {
+		lib.Log(lib.LOG_ERROR, "VerifyChallenge: nil request")
+		return &pb_api.StdResponse{ErrorCode: 1, Message: "Invalid request"}, nil
+	}
+	if req.ChallengeRequest == nil {
+		lib.Log(lib.LOG_ERROR, "VerifyChallenge: missing challengeRequest payload=%q sigLen=%d", req.Payload, len(req.ChallengeResponseBase64))
+		return &pb_api.StdResponse{ErrorCode: 1, Message: "Invalid challenge request"}, nil
+	}
+
+	lib.Log(lib.LOG_INFO, "VerifyChallenge[start] accountId=%s network=%s payloadLen=%d sigLen=%d", req.ChallengeRequest.AccountId, req.ChallengeRequest.Network, len(req.Payload), len(req.ChallengeResponseBase64))
+
 	isValid, err := s.authService.VerifyChallenge(req.ChallengeRequest.AccountId, req.ChallengeRequest.Network, req.ChallengeResponseBase64, req.Payload)
 	if err != nil {
 		return &pb_api.StdResponse{
@@ -220,6 +230,16 @@ func (s *server) VerifyChallenge(ctx context.Context, req *pb_api.VerifyChalleng
 
 		// Inject the JWT token into response header
 		grpc.SendHeader(ctx, metadata.Pairs("Authorization", "Bearer "+jwtToken))
+		if incomingMetadata, ok := metadata.FromIncomingContext(ctx); ok {
+			for _, value := range incomingMetadata.Get("x-e2e-cli") {
+				if value == "1" {
+					return &pb_api.StdResponse{
+						ErrorCode: 0,
+						Message:   "Bearer " + jwtToken,
+					}, nil
+				}
+			}
+		}
 		// grpc.SendHeader(ctx, metadata.Pairs("Set-Cookie", "jwt="+jwtToken+"; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=3600"))
 		return &pb_api.StdResponse{
 			ErrorCode: 0,
@@ -243,9 +263,7 @@ func (s *server) GetAllMatches(ctx context.Context, req *pb_api.LimitOffsetReque
 		return nil, err
 	}
 
-	return &pb_api.MatchesResponse{
-		Matches: allMatches,
-	}, nil
+	return allMatches, nil
 }
 
 func (s *server) GetAllPositions(ctx context.Context, req *pb_api.LimitOffsetRequest) (*pb_api.PositionsResponse, error) {
@@ -258,9 +276,7 @@ func (s *server) GetAllPositions(ctx context.Context, req *pb_api.LimitOffsetReq
 		return nil, err
 	}
 
-	return &pb_api.PositionsResponse{
-		Positions: positions,
-	}, nil
+	return positions, nil
 }
 
 func (s *server) GetAllPredictionIntents(ctx context.Context, req *pb_api.LimitOffsetRequest) (*pb_api.PredictionIntentsResponse, error) {
@@ -273,9 +289,7 @@ func (s *server) GetAllPredictionIntents(ctx context.Context, req *pb_api.LimitO
 		return nil, err
 	}
 
-	return &pb_api.PredictionIntentsResponse{
-		PredictionIntents: predictionIntents,
-	}, nil
+	return predictionIntents, nil
 }
 
 func (s *server) ToggleMarketPause(ctx context.Context, req *pb_api.MarketIdRequest) (*pb_api.StdResponse, error) {

@@ -11,6 +11,7 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 API_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROTO_DIR="$API_DIR/proto"
+source "$SCRIPT_DIR/shared.sh"
 OUT_DIR="$SCRIPT_DIR/out"
 STATE_FILE_DEFAULT="$OUT_DIR/fillup_state_latest.env"
 ENV_FILE="$SCRIPT_DIR/.env"
@@ -102,10 +103,9 @@ if [[ "$baseUrl" == https://* ]]; then
   if [[ "$grpc_addr" != *:* ]]; then
     grpc_addr="${grpc_addr}:443"
   fi
-elif [[ "$grpc_addr" != *:* ]]; then
-  grpc_addr="${grpc_addr}:8888"
 fi
 
+e2e_configure_proxy "$baseUrl"
 echo "Connecting to host: ${grpc_addr} (base URL: ${baseUrl})"
 
 declare -a account_ids
@@ -208,7 +208,7 @@ refresh_account_portfolio_if_missing() {
 }
 
 fetch_market_matches_to_map() {
-  local limit=1000
+  local limit=$PAGE_LIMIT
   local offset=0
   local page_count
   local matches_json
@@ -226,10 +226,10 @@ fetch_market_matches_to_map() {
     done < <(printf '%s\n' "$matches_json" | jq -r '.matches[]? | [(.txId1 // ""), (.qty1 // 0), (.txId2 // ""), (.qty2 // 0)] | @tsv')
 
     page_count=$(printf '%s\n' "$matches_json" | jq -r '(.matches // []) | length')
-    if [[ -z "$page_count" || "$page_count" -lt "$limit" ]]; then
+    if [[ -z "$page_count" || "$page_count" -eq 0 ]]; then
       break
     fi
-    offset=$((offset + limit))
+    offset=$((offset + page_count))
   done
 
   return 0

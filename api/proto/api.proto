@@ -72,8 +72,16 @@ message StdResponse {
 }
 
 message LimitOffsetRequest {
-  int32 limit = 1  [(validate.rules).int32 = {gt: 0}];
+  int32 limit = 1  [(validate.rules).int32 = {gt: 0, lte: 25}]; // max 25 rows per request - the API clamps to DB_MAX_ROWS
   int32 offset = 2 [(validate.rules).int32 = {gte: 0}];
+}
+
+message Pagination {
+  int32 limit = 1       [json_name = "limit"];      // limit actually applied - the server clamps to DB_MAX_ROWS
+  int32 offset = 2      [json_name = "offset"];
+  int64 total = 3       [json_name = "total"];      // total rows matching the query, ignoring limit/offset
+  bool has_more = 4     [json_name = "hasMore"];
+  int32 next_offset = 5 [json_name = "nextOffset"]; // only meaningful when has_more is true
 }
 
 message MarketIdRequest {
@@ -411,14 +419,17 @@ message PatchMarketRequest {
 
 message MatchesResponse {
   repeated Match matches = 1;
+  Pagination pagination = 2 [json_name = "pagination"];
 }
 
 message PositionsResponse {
   repeated Position positions = 1;
+  Pagination pagination = 2 [json_name = "pagination"];
 }
 
 message PredictionIntentsResponse {
   repeated PrismPredictionIntentRequest /* PIRequest for now*/ prediction_intents = 1;
+  Pagination pagination = 2 [json_name = "pagination"];
 }
 
 message CommentIdRequest {

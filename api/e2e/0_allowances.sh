@@ -12,6 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="$SCRIPT_DIR/.env"
 API_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROTO_DIR="$API_DIR/proto"
+source "$SCRIPT_DIR/shared.sh"
 SCS_DIR="$(cd "$API_DIR/.." && pwd)/scs"
 
 if [[ ! -f "$ENV_FILE" ]]; then
@@ -102,10 +103,10 @@ if [[ "$baseUrl" == https://* ]]; then
 	if [[ "$grpc_addr" != *:* ]]; then
 		grpc_addr="${grpc_addr}:443"
 	fi
-elif [[ "$grpc_addr" != *:* ]]; then
-	grpc_addr="${grpc_addr}:8888"
+
 fi
 
+e2e_configure_proxy "$baseUrl"
 echo "Preflight: checking grpc-web Health on $grpc_addr..."
 if ! easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d '{}' -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.Health >/dev/null 2>&1; then
 	echo "grpc-web preflight failed for $grpc_addr"

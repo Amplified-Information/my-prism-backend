@@ -32,8 +32,9 @@ static_resources:
           - name: envoy.filters.network.http_connection_manager
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
-              # grpc-web clients connect over HTTP/1.1; the api_service cluster uses HTTP/2 upstream.
-              codec_type: HTTP1 # http1, http2, auto
+              # grpc-web is browser traffic over HTTP/1.1. Allow Envoy to negotiate HTTP/1.1 for the
+              # incoming client connection while keeping the upstream API connection on HTTP/2 when needed.
+              codec_type: AUTO # http1, http2, auto
               stat_prefix: ingress_http
               upgrade_configs:
                 - upgrade_type: websocket
@@ -42,7 +43,7 @@ static_resources:
               stream_idle_timeout: 0s
               common_http_protocol_options:
                 idle_timeout: 0s
-                max_connection_duration: 0s
+                # max_connection_duration: 0s No! the connection to be closed while easyrpc was sometimes still waiting for the response. Although intended to mean “unlimited,” Envoy reported every downstream connection as: downstream_cx_max_duration_reached. Big problem!
 
               access_log:
                 - name: envoy.access_loggers.file
@@ -66,8 +67,8 @@ static_resources:
                     stat_prefix: global_ratelimit
                     # use_per_filter_config: true # must be true for specifying different rate limits for different routes/domains
                     token_bucket:
-                      max_tokens: 360        # burst size
-                      tokens_per_fill: 360   # refill amount
+                      max_tokens: 2000       # burst size
+                      tokens_per_fill: 2000   # refill amount
                       fill_interval: 60s     # refill interval
                     filter_enabled:
                       default_value: { numerator: 100, denominator: HUNDRED } # 100% of requests are filtered by default
@@ -205,8 +206,8 @@ static_resources:
                             "@type": type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
                             stat_prefix: prism_route_ratelimit
                             token_bucket:
-                              max_tokens: 5
-                              tokens_per_fill: 5
+                              max_tokens: 30
+                              tokens_per_fill: 30
                               fill_interval: 60s
                             filter_enabled:
                               default_value: { numerator: 100, denominator: HUNDRED }

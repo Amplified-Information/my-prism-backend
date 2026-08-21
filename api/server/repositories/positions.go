@@ -115,6 +115,21 @@ func (positionsRepository *PositionsRepository) GetAllPositions(ctx context.Cont
 	return result, nil
 }
 
+func (positionsRepository *PositionsRepository) CountAllPositions(ctx context.Context) (int64, error) {
+	if positionsRepository.db == nil {
+		return 0, lib.ErrorLog("database not initialized")
+	}
+
+	q := sqlc.New(positionsRepository.db)
+
+	total, err := q.CountAllPositions(ctx)
+	if err != nil {
+		return 0, lib.ErrorLog("CountAllPositions failed", "error", err)
+	}
+
+	return total, nil
+}
+
 func (positionsRepository *PositionsRepository) GetPositionsByMarketIdNoPointsAwardedMarketNotResolved(marketId string) (error, []sqlc.Position) {
 	if positionsRepository.db == nil {
 		return lib.ErrorLog("database not initialized"), nil

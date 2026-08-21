@@ -20,6 +20,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 API_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROTO_DIR="$API_DIR/proto"
+source "$SCRIPT_DIR/shared.sh"
 ENV_FILE="$SCRIPT_DIR/.env"
 SCS_DIR="$(cd "$API_DIR/.." && pwd)/scs"
 
@@ -60,31 +61,6 @@ rpc_call() {
   fi
 
   printf '%s\n' "$response"
-}
-
-rpc_call_retry() {
-  local rpc_name="$1"
-  local rpc_payload="$2"
-  local max_attempts="${3:-8}"
-  local attempt
-  local response
-
-  for ((attempt = 1; attempt <= max_attempts; attempt++)); do
-    echo "$rpc_name attempt $attempt/$max_attempts..." >&2
-    if response=$(rpc_call "$rpc_name" "$rpc_payload" 2>&1); then
-      echo "$rpc_name succeeded on attempt $attempt/$max_attempts" >&2
-      printf '%s\n' "$response"
-      return 0
-    fi
-
-    if (( attempt < max_attempts )); then
-      echo "Warning: $rpc_name transient failure on attempt $attempt/$max_attempts. Retrying..." >&2
-      sleep 2
-    fi
-  done
-
-  printf '%s\n' "$response"
-  return 1
 }
 
 portfolio_snapshot() {
@@ -149,11 +125,11 @@ create_prediction_intent() {
 
 fetch_user_portfolio_json() {
   local evm_address="$1"
-  rpc_call_retry "api.ApiServicePublic.GetUserPortfolio" "{\"evmAddress\":\"$evm_address\",\"net\":\"$network\",\"marketId\":\"$marketId\"}"
+  rpc_call "api.ApiServicePublic.GetUserPortfolio" "{\"evmAddress\":\"$evm_address\",\"net\":\"$network\",\"marketId\":\"$marketId\"}"
 }
 
 fetch_matches_json() {
-  rpc_call_retry "api.ApiServicePublic.GetPredictionIntentMatches" "{\"marketId\":\"$marketId\",\"limit\":100,\"offset\":0}"
+  rpc_call "api.ApiServicePublic.GetPredictionIntentMatches" "{\"marketId\":\"$marketId\",\"limit\":100,\"offset\":0}"
 }
 
 snapshot_yes_raw() {
@@ -233,18 +209,7 @@ if grep -qE '^BASE_URL=' "$ENV_FILE"; then
 else
   printf '\nBASE_URL=%s\n' "$base_url" >> "$ENV_FILE"
 fi
-grpc_addr="${base_url#*://}"
-grpc_addr="${grpc_addr%%/}"
-grpc_flags=(-w)
-grpc_meta=()
-if [[ "$base_url" == https://* ]]; then
-  grpc_flags=(-w --tls)
-  if [[ "$grpc_addr" != *:* ]]; then
-    grpc_addr="${grpc_addr}:443"
-  fi
-elif [[ "$grpc_addr" != *:* ]]; then
-  grpc_addr="${grpc_addr}:8888"
-fi
+e2e_configure_proxy "$base_url"
 
 if [[ ! $marketId =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
   echo "Invalid marketId format. Please provide a valid UUID7."
@@ -252,7 +217,7 @@ if [[ ! $marketId =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4
 fi
 
 echo "Preflight: verifying market $marketId is tradeable..."
-market_json=$(rpc_call_retry "api.ApiServicePublic.GetMarketById" "{\"marketId\":\"$marketId\"}")
+market_json=$(rpc_call "api.ApiServicePublic.GetMarketById" "{\"marketId\":\"$marketId\"}")
 if ! printf '%s\n' "$market_json" | jq -e 'type == "object"' >/dev/null 2>&1; then
   echo "Unable to retrieve market metadata for $marketId. Refusing to submit repro orders."
   exit 1

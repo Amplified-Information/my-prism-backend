@@ -18,7 +18,7 @@
 
 
 # BUILD stage
-FROM envoyproxy/envoy:contrib-v1.37-latest
+FROM envoyproxy/envoy:contrib-v1.39-latest
 
  # install gettext (envsubst):
 RUN apt-get update && apt-get install -y gettext && rm -rf /var/lib/apt/lists/*

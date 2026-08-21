@@ -114,6 +114,7 @@ fi
 
 API_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROTO_DIR="$API_DIR/proto"
+source "$SCRIPT_DIR/shared.sh"
 if [[ ! -d "$PROTO_DIR" ]]; then
 	echo "proto directory not found at $PROTO_DIR"
 	exit 1
@@ -142,24 +143,14 @@ else
 	printf '\nBASE_URL=%s\n' "$base_url" >> "$ENV_FILE"
 fi
 echo "Base URL set to: $base_url"
-grpc_addr="${base_url#*://}"
-grpc_addr="${grpc_addr%%/}"
-grpc_flags=(-w)
-if [[ "$base_url" == https://* ]]; then
-	grpc_flags=(-w --tls)
-	if [[ "$grpc_addr" != *:* ]]; then
-		grpc_addr="${grpc_addr}:443"
-	fi
-elif [[ "$grpc_addr" != *:* ]]; then
-	grpc_addr="${grpc_addr}:8888"
-fi
+e2e_configure_proxy "$base_url"
 
 basic_auth_user=$(env_get "BASIC_AUTH_USER")
 basic_auth_pass=$(env_get "BASIC_AUTH_PASS")
 grpc_meta=()
 if [[ -n "$basic_auth_user" || -n "$basic_auth_pass" ]]; then
 	basic_auth_b64=$(printf '%s:%s' "$basic_auth_user" "$basic_auth_pass" | base64 | tr -d '\n')
-	grpc_meta=(-H "authorization=Basic $basic_auth_b64")
+	grpc_meta=(-H "authorization: Basic $basic_auth_b64")
 fi
 
 resolve_evm_address() {
@@ -238,7 +229,7 @@ declare -A cumulative_pair_by_tx
 tmp_match_pairs_file=$(mktemp)
 trap 'rm -f "$tmp_match_pairs_file"' EXIT
 
-limit=1000
+limit=$PAGE_LIMIT
 offset=0
 while true; do
 	matches_json=$(easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d "{\"marketId\":\"$marketId\",\"limit\":$limit,\"offset\":$offset}" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetPredictionIntentMatches 2>/dev/null || printf '{}')
@@ -250,10 +241,10 @@ while true; do
 	done < <(printf '%s\n' "$matches_json" | jq -r '.matches[]? | [(.matchedAt // ""), (.txId1 // ""), (.qty1 // 0), (.txId2 // ""), (.qty2 // 0), (.priceUsd // 0), (.priceUsd1 // ""), (.priceUsd2 // "")] | @tsv')
 
 	page_count=$(printf '%s\n' "$matches_json" | jq -r '(.matches // []) | length')
-	if [[ -z "$page_count" || "$page_count" -lt "$limit" ]]; then
+	if [[ -z "$page_count" || "$page_count" -eq 0 ]]; then
 		break
 	fi
-	offset=$((offset + limit))
+	offset=$((offset + page_count))
 done
 
 printf '\nMatch Pairs (txId1 <-> txId2 from GetPredictionIntentMatches)\n'

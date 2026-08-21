@@ -15,6 +15,7 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 API_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROTO_DIR="$API_DIR/proto"
+source "$SCRIPT_DIR/shared.sh"
 ENV_FILE="$SCRIPT_DIR/.env"
 SCS_DIR="$(cd "$API_DIR/.." && pwd)/scs"
 OUT_DIR="$SCRIPT_DIR/out"
@@ -139,18 +140,17 @@ grpc_flags=(-w) # grpc-web
 grpc_meta=()
 if [[ -n "$basic_auth_user" || -n "$basic_auth_pass" ]]; then
   basic_auth_b64=$(printf '%s:%s' "$basic_auth_user" "$basic_auth_pass" | base64 | tr -d '\n')
-  grpc_meta=(-H "authorization=Basic $basic_auth_b64")
+  grpc_meta=(-H "authorization: Basic $basic_auth_b64")
 fi
 if [[ "$baseUrl" == https://* ]]; then
   grpc_flags=(-w --tls)
   if [[ "$grpc_addr" != *:* ]]; then
     grpc_addr="${grpc_addr}:443"
   fi
-elif [[ "$grpc_addr" != *:* ]]; then
-  grpc_addr="${grpc_addr}:8888"
 fi
 
 # Fail fast if grpc-web endpoint is blocked or unreachable.
+e2e_configure_proxy "$baseUrl"
 echo "Preflight: checking grpc-web Health on $grpc_addr..."
 if ! easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d '{}' -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.Health >/dev/null 2>&1; then
   echo "grpc-web preflight failed for $grpc_addr"

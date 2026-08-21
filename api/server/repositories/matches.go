@@ -180,6 +180,19 @@ func (matchesRepository *MatchesRepository) GetAllMatches(ctx context.Context, l
 	return matches, nil
 }
 
+func (matchesRepository *MatchesRepository) CountAllMatches(ctx context.Context) (int64, error) {
+	if matchesRepository.db == nil {
+		return 0, lib.ErrorLog("database not initialized")
+	}
+	q := sqlc.New(matchesRepository.db)
+	total, err := q.CountAllMatches(ctx)
+	if err != nil {
+		return 0, lib.ErrorLog("CountAllMatches failed", "error", err)
+	}
+
+	return total, nil
+}
+
 func (matchesRepository *MatchesRepository) GetPredictionIntentMatches(ctx context.Context, marketIdStr string, limit int32, offset int32) ([]sqlc.Match, error) {
 	if matchesRepository.db == nil {
 		return nil, lib.ErrorLog("database not initialized")
@@ -201,4 +214,23 @@ func (matchesRepository *MatchesRepository) GetPredictionIntentMatches(ctx conte
 	}
 
 	return matches, nil
+}
+
+func (matchesRepository *MatchesRepository) CountPredictionIntentMatches(ctx context.Context, marketIdStr string) (int64, error) {
+	if matchesRepository.db == nil {
+		return 0, lib.ErrorLog("database not initialized")
+	}
+
+	marketId, err := uuid.Parse(marketIdStr)
+	if err != nil {
+		return 0, lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketIdStr)
+	}
+
+	q := sqlc.New(matchesRepository.db)
+	total, err := q.CountMatchesForMarketId(ctx, marketId)
+	if err != nil {
+		return 0, lib.ErrorLog("CountMatchesForMarketId failed", "error", err, "marketId", marketId)
+	}
+
+	return total, nil
 }

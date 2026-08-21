@@ -12,6 +12,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 API_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROTO_DIR="$API_DIR/proto"
+source "$SCRIPT_DIR/shared.sh"
 ENV_FILE="$SCRIPT_DIR/.env"
 SCS_DIR="$(cd "$API_DIR/.." && pwd)/scs"
 OUT_DIR="$SCRIPT_DIR/out"
@@ -206,10 +207,9 @@ if [[ "$baseUrl" == https://* ]]; then
 	if [[ "$grpc_addr" != *:* ]]; then
 		grpc_addr="${grpc_addr}:443"
 	fi
-elif [[ "$grpc_addr" != *:* ]]; then
-	grpc_addr="${grpc_addr}:8888"
 fi
 
+e2e_configure_proxy "$baseUrl"
 echo "Preflight: checking grpc-web Health on $grpc_addr..."
 if ! easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d '{}' -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.Health >/dev/null 2>&1; then
 	echo "grpc-web preflight failed for $grpc_addr"
@@ -420,7 +420,7 @@ done
 
 if [[ ${#secondary_tx_lookup[@]} -gt 0 ]]; then
 	echo "Tracking ${#secondary_tx_lookup[@]} successful secondary txIds in match history..."
-	limit=1000
+	limit=$PAGE_LIMIT
 	offset=0
 	page=0
 	while true; do
@@ -444,10 +444,10 @@ if [[ ${#secondary_tx_lookup[@]} -gt 0 ]]; then
 
 		page_count=$(printf '%s\n' "$matches_json" | jq -r '(.matches // []) | length')
 		echo "[matches page $page] Received $page_count rows"
-		if [[ -z "$page_count" || "$page_count" -lt "$limit" ]]; then
+		if [[ -z "$page_count" || "$page_count" -eq 0 ]]; then
 			break
 		fi
-		offset=$((offset + limit))
+		offset=$((offset + page_count))
 	done
 fi
 

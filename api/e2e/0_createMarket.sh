@@ -21,6 +21,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 API_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROTO_DIR="$API_DIR/proto"
+source "$SCRIPT_DIR/shared.sh"
 ENV_FILE="$SCRIPT_DIR/.env"
 IMG_FILE="$SCRIPT_DIR/prism_test.png"
 
@@ -127,50 +128,17 @@ if [[ -z "$bearer_token" ]]; then
 	exit 1
 fi
 
-grpc_addr="${baseUrl#*://}"
-grpc_addr="${grpc_addr%%/}"
-grpc_flags=(-w)
-grpc_meta=(-H "authorization=Bearer $bearer_token")
-
-if [[ "$baseUrl" == https://* ]]; then
-	grpc_flags=(-w --tls)
-	if [[ "$grpc_addr" != *:* ]]; then
-		grpc_addr="${grpc_addr}:443"
-	fi
-elif [[ "$grpc_addr" != *:* ]]; then
-	grpc_addr="${grpc_addr}:8888"
-fi
-
+e2e_configure_proxy "$baseUrl"
+grpc_meta=(-H "authorization: $(e2e_bearer_header "$bearer_token")")
 echo "Preflight: checking grpc-web Health on $grpc_addr..."
-health_attempt=1
-health_max_attempts=4
-health_backoff=1
 health_err_file=$(mktemp)
-while (( health_attempt <= health_max_attempts )); do
-	if easyrpc c "${grpc_flags[@]}" -a "$grpc_addr" -d '{}' -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.Health >/dev/null 2>"$health_err_file"; then
-		rm -f "$health_err_file"
-		break
-	fi
-
-	echo "grpc-web preflight attempt $health_attempt/$health_max_attempts failed for $grpc_addr"
-	if [[ -s "$health_err_file" ]]; then
-		cat "$health_err_file"
-	fi
-
-	if (( health_attempt == health_max_attempts )); then
-		rm -f "$health_err_file"
-		echo "Preflight failed after $health_max_attempts attempts."
-		echo "This is usually network/edge reachability (e.g., i/o timeout) rather than payload/auth."
-		exit 1
-	fi
-
-	echo "Retrying preflight in ${health_backoff}s..."
-	sleep "$health_backoff"
-	if (( health_backoff < 8 )); then
-		health_backoff=$((health_backoff * 2))
-	fi
-	health_attempt=$((health_attempt + 1))
-done
+if ! easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d '{}' -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.Health >/dev/null 2>"$health_err_file"; then
+	cat "$health_err_file"
+	rm -f "$health_err_file"
+	echo "grpc-web preflight failed for $grpc_addr"
+	exit 1
+fi
+rm -f "$health_err_file"
 
 market_id=$(generate_uuid7)
 if [[ ! "$market_id" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$ ]]; then

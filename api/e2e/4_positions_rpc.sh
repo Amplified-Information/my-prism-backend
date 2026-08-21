@@ -7,6 +7,7 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 API_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROTO_DIR="$API_DIR/proto"
+source "$SCRIPT_DIR/shared.sh"
 ENV_FILE="$SCRIPT_DIR/.env"
 usdc_decimals=$(grep -E '^USDC_DECIMALS=' "$ENV_FILE" | cut -d '=' -f2)
 usdc_decimals=${usdc_decimals:-6}
@@ -106,9 +107,10 @@ PY
 }
 
 bearer_token=$(grep -E '^(ADMIN_BEARER_TOKEN|AUTH_BEARER_TOKEN|BEARER_TOKEN)=' "$ENV_FILE" | head -n1 | cut -d '=' -f2-)
+bearer_token="${bearer_token#Bearer }"
 if [[ -n "$bearer_token" ]]; then
   if validate_admin_jwt "$bearer_token"; then
-    grpc_meta=(-H "authorization=Bearer $bearer_token")
+    grpc_meta=(-H "authorization: $(e2e_bearer_header "$bearer_token")")
     echo "Using valid ADMIN JWT for privileged match/intents endpoints."
   else
     exit 1
@@ -134,21 +136,9 @@ if [[ "$baseUrl" == https://* ]]; then
   if [[ "$grpc_addr" != *:* ]]; then
     grpc_addr="${grpc_addr}:443"
   fi
-elif [[ "$grpc_addr" != *:* ]]; then
-  grpc_addr="${grpc_addr}:8888"
 fi
 
-# easyrpc cannot parse this endpoint's large gRPC-Web response. Use the raw
-# local API listener for portfolios while keeping the remaining RPCs proxied.
-portfolio_grpc_addr="${PORTFOLIO_GRPC_ADDR:-$grpc_addr}"
-portfolio_grpc_flags=("${grpc_flags[@]}")
-case "$grpc_addr" in
-  localhost:8090|127.0.0.1:8090)
-    portfolio_grpc_addr="${PORTFOLIO_GRPC_ADDR:-${grpc_addr%:8090}:8888}"
-    portfolio_grpc_flags=()
-    ;;
-esac
-
+e2e_configure_proxy "$baseUrl"
 echo "Preflight: checking grpc-web Health on $grpc_addr..."
 if ! easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d '{}' -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.Health >/dev/null 2>&1; then
   echo "grpc-web preflight failed for $grpc_addr"
@@ -234,7 +224,7 @@ get_market_state() {
 }
 
 preload_markets_cache() {
-  local limit=500
+  local limit=$PAGE_LIMIT
   local offset=0
   local pages=0
 
@@ -273,13 +263,9 @@ preload_markets_cache() {
       | @tsv
     ' 2>/dev/null || true)
 
-    if (( rows_in_page < limit )); then
-      break
-    fi
-
-    offset=$((offset + limit))
+    offset=$((offset + rows_in_page))
     pages=$((pages + 1))
-    if (( pages >= 40 )); then
+    if (( pages >= MAX_PAGES )); then
       break
     fi
   done
@@ -346,10 +332,10 @@ for i in "${!account_ids[@]}"; do
 
   # Call the GetUserPortfolio RPC for the current account
   echo "Calling GetUserPortfolio for account: $account_id"
-  printf 'Command: easyrpc c %q ' "${portfolio_grpc_flags[@]}"
-  printf -- '-a %q -d %q -i %q -p %q %s\n' "$portfolio_grpc_addr" "$payload" "$PROTO_DIR" "api.proto" "api.ApiServicePublic.GetUserPortfolio"
+  printf 'Command: easyrpc c %q ' "${grpc_flags[@]}"
+  printf -- '-a %q -d %q -i %q -p %q %s\n' "$grpc_addr" "$payload" "$PROTO_DIR" "api.proto" "api.ApiServicePublic.GetUserPortfolio"
   echo
-  if ! easyrpc c "${portfolio_grpc_flags[@]}" -a "$portfolio_grpc_addr" -d "$payload" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetUserPortfolio > "$OUT_DIR/portfolio_${account_id}.json" 2>"$OUT_DIR/portfolio_${account_id}.err"; then
+  if ! easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d "$payload" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetUserPortfolio > "$OUT_DIR/portfolio_${account_id}.json" 2>"$OUT_DIR/portfolio_${account_id}.err"; then
     echo "Warning: skipping account $account_id because GetUserPortfolio failed or returned a truncated response. See $OUT_DIR/portfolio_${account_id}.err for details."
     continue
   fi
@@ -526,6 +512,13 @@ format_match_timestamp_utc() {
   printf '%s\n' '<unknown>'
 }
 
+account_id_from_tx_hash() {
+  local tx_hash="$1"
+  if [[ "$tx_hash" =~ ^([0-9]+\.[0-9]+\.[0-9]+)@ ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+  fi
+}
+
 echo -e "-------------------------------------------\n"
 printf '\nMatched Orders\n'
 printf '%-15s %-36s %-20s %-8s %-36s %-36s %12s %10s %-6s %-10s\n' "AccountID" "MarketID" "Timestamp UTC" "Resolved" "TxID (can be duplicate)" "TxHash" "Qty" "PriceUSD" "Side" "Prim/Sec"
@@ -537,11 +530,11 @@ declare -A tx_price_map
 declare -A tx_primary_secondary_map
 intents_fetch_failed=0
 intents_rows_total=0
-intent_lookup_limit=500
+intent_lookup_limit=$PAGE_LIMIT
 intent_lookup_offset=0
 intent_lookup_pages=0
 while :; do
-  intents_json=$(easyrpc c "${portfolio_grpc_flags[@]}" "${grpc_meta[@]}" -a "$portfolio_grpc_addr" -d "{\"limit\":$intent_lookup_limit,\"offset\":$intent_lookup_offset}" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetAllPredictionIntents 2>/dev/null)
+  intents_json=$(easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d "{\"limit\":$intent_lookup_limit,\"offset\":$intent_lookup_offset}" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetAllPredictionIntents 2>/dev/null)
   if [[ $? -ne 0 || -z "$intents_json" ]]; then
     intents_fetch_failed=1
     break
@@ -560,13 +553,11 @@ while :; do
     tx_primary_secondary_map[$itx]="$ips"
   done < <(printf '%s\n' "$intents_json" | jq -r '.predictionIntents[]? | [.txId, .accountId, .priceUsd, .primarySecondary] | @tsv')
 
-  if (( intents_in_page < intent_lookup_limit )); then
-    break
-  fi
+  IFS=$'\t' read -r intents_has_more intent_lookup_offset < <(e2e_page_state "$intents_json" "$intents_in_page" "$intent_lookup_offset" "$intent_lookup_limit")
+  [[ "$intents_has_more" == "true" ]] || break
 
-  intent_lookup_offset=$((intent_lookup_offset + intent_lookup_limit))
   intent_lookup_pages=$((intent_lookup_pages + 1))
-  if (( intent_lookup_pages >= 40 )); then
+  if (( intent_lookup_pages >= MAX_PAGES )); then
     break
   fi
 done
@@ -579,12 +570,12 @@ done
 declare -A tx_hashes_json_cache
 matches_fetch_failed=0
 matches_rows_total=0
-match_lookup_limit=500
+match_lookup_limit=$PAGE_LIMIT
 match_lookup_offset=0
 match_lookup_pages=0
 matched_rows=0
 while :; do
-  matches_json=$(easyrpc c "${portfolio_grpc_flags[@]}" "${grpc_meta[@]}" -a "$portfolio_grpc_addr" -d "{\"limit\":$match_lookup_limit,\"offset\":$match_lookup_offset}" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetAllMatches 2>/dev/null)
+  matches_json=$(easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d "{\"limit\":$match_lookup_limit,\"offset\":$match_lookup_offset}" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetAllMatches 2>/dev/null)
   if [[ $? -ne 0 || -z "$matches_json" ]]; then
     matches_fetch_failed=1
     break
@@ -596,7 +587,7 @@ while :; do
     break
   fi
 
-  while IFS=$'\037' read -r row_market_id row_created_at tx1 qty1 tx2 qty2; do
+  while IFS=$'\037' read -r row_market_id row_created_at tx1 qty1 tx2 qty2 price1 price2; do
     [[ -z "$row_market_id" ]] && continue
     if [[ -n "$marketId" && "$row_market_id" != "$marketId" ]]; then
       continue
@@ -612,9 +603,11 @@ while :; do
       if [[ "$leg" == "1" ]]; then
         tx_id="$tx1"
         fallback_qty="$qty1"
+        match_price="$price1"
       else
         tx_id="$tx2"
         fallback_qty="$qty2"
+        match_price="$price2"
       fi
       [[ -z "$tx_id" ]] && continue
 
@@ -622,19 +615,19 @@ while :; do
       if [[ -z "$account_id" ]]; then
         account_id="<unknown>"
       fi
-      # Keep output scoped to loaded accounts when account is known.
-      if [[ "$account_id" != "<unknown>" && -z "${loaded_account_set[$account_id]}" ]]; then
-        continue
-      fi
-
       raw_price="${tx_price_map[$tx_id]}"
       if [[ -z "$raw_price" ]]; then
-        raw_price="0"
+        raw_price="$match_price"
       fi
-      price_fmt=$(awk -v v="$raw_price" 'BEGIN { printf "%.3f", v + 0 }')
-      side="BUY"
-      if awk -v v="$raw_price" 'BEGIN { exit !(v + 0 < 0) }'; then
-        side="SELL"
+      if [[ -n "$raw_price" ]]; then
+        price_fmt=$(awk -v v="$raw_price" 'BEGIN { printf "%.3f", v + 0 }')
+        side="BUY"
+        if awk -v v="$raw_price" 'BEGIN { exit !(v + 0 < 0) }'; then
+          side="SELL"
+        fi
+      else
+        price_fmt="<unknown>"
+        side="?"
       fi
       primary_secondary="${tx_primary_secondary_map[$tx_id]}"
       if [[ -z "$primary_secondary" ]]; then
@@ -642,9 +635,22 @@ while :; do
       fi
 
       if [[ -z "${tx_hashes_json_cache[$tx_id]}" ]]; then
-        tx_hashes_json_cache[$tx_id]=$(easyrpc c "${portfolio_grpc_flags[@]}" "${grpc_meta[@]}" -a "$portfolio_grpc_addr" -d "{\"txId\":\"$tx_id\"}" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetTxHashes 2>/dev/null)
+        tx_hashes_json_cache[$tx_id]=$(easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d "{\"txId\":\"$tx_id\"}" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetTxHashes 2>/dev/null)
       fi
       tx_hashes_json="${tx_hashes_json_cache[$tx_id]}"
+
+      if [[ "$account_id" == "<unknown>" ]]; then
+        first_tx_hash=$(printf '%s\n' "$tx_hashes_json" | jq -r '.txHashes[0].txHash // empty' 2>/dev/null || true)
+        hash_account_id=$(account_id_from_tx_hash "$first_tx_hash")
+        if [[ -n "$hash_account_id" ]]; then
+          account_id="$hash_account_id"
+        fi
+      fi
+
+      # Keep output scoped to loaded accounts when the account can be identified.
+      if [[ "$account_id" != "<unknown>" && -z "${loaded_account_set[$account_id]}" ]]; then
+        continue
+      fi
 
       emitted_hash_row=0
       while IFS=$'\t' read -r tx_hash matched_qty; do
@@ -690,30 +696,30 @@ while :; do
         .txId1,
         .qty1,
         .txId2,
-        .qty2
+        .qty2,
+        (.priceUsd1 // ""),
+        (.priceUsd2 // "")
       ]
     | map(tostring)
     | join("\u001f")
   ')
 
-  if (( rows_in_page < match_lookup_limit )); then
-    break
-  fi
+  IFS=$'\t' read -r matches_has_more match_lookup_offset < <(e2e_page_state "$matches_json" "$rows_in_page" "$match_lookup_offset" "$match_lookup_limit")
+  [[ "$matches_has_more" == "true" ]] || break
 
-  match_lookup_offset=$((match_lookup_offset + match_lookup_limit))
   match_lookup_pages=$((match_lookup_pages + 1))
-  if (( match_lookup_pages >= 40 )); then
+  if (( match_lookup_pages >= MAX_PAGES )); then
     break
   fi
 done
 
 if [[ $matched_rows -eq 0 ]]; then
   if [[ -n "$marketId" ]]; then
-    scoped_matches_json=$(easyrpc c "${portfolio_grpc_flags[@]}" "${grpc_meta[@]}" -a "$portfolio_grpc_addr" -d "{\"marketId\":\"$marketId\",\"limit\":500,\"offset\":0}" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetPredictionIntentMatches 2>/dev/null || printf '{}')
+    scoped_matches_json=$(easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d "{\"marketId\":\"$marketId\",\"limit\":$PAGE_LIMIT,\"offset\":0}" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.GetPredictionIntentMatches 2>/dev/null || printf '{}')
     scoped_rows=$(printf '%s\n' "$scoped_matches_json" | jq -r '(.matches // []) | length' 2>/dev/null || printf '0')
     if [[ "$scoped_rows" != "0" ]]; then
       printf 'Fallback: GetPredictionIntentMatches returned %s row(s) for market %s.\n' "$scoped_rows" "$marketId"
-      while IFS=$'\037' read -r s_market_id s_created_at s_tx1 s_qty1 s_tx2 s_qty2; do
+      while IFS=$'\037' read -r s_market_id s_created_at s_tx1 s_qty1 s_tx2 s_qty2 s_price1 s_price2; do
         [[ -z "$s_market_id" ]] && continue
         printf '%-15s %-36s %-20s %-8s %-36s %-36s %12s %10s %-6s %-10s\n' \
           "${tx_account_map[$s_tx1]:-${tx_account_map[$s_tx2]:-<unknown>}}" \
@@ -723,8 +729,8 @@ if [[ $matched_rows -eq 0 ]]; then
           "${s_tx1}" \
           "<match-via-market-scope>" \
           "$(awk -v v="${s_qty1:-0}" 'BEGIN { printf "%.4f", v + 0 }')" \
-          "0.000" \
-          "BUY" \
+          "$(awk -v v="${s_price1:-0}" 'BEGIN { printf "%.3f", v + 0 }')" \
+          "$(awk -v v="${s_price1:-0}" 'BEGIN { if (v + 0 < 0) print "SELL"; else print "BUY" }')" \
           "?"
       done < <(printf '%s\n' "$scoped_matches_json" | jq -r '
         .matches[]?
@@ -734,7 +740,9 @@ if [[ $matched_rows -eq 0 ]]; then
             .txId1,
             .qty1,
             .txId2,
-            .qty2
+          .qty2,
+          (.priceUsd1 // ""),
+          (.priceUsd2 // "")
           ]
         | map(tostring)
         | join("\u001f")

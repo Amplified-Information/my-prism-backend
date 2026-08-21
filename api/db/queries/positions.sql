@@ -176,6 +176,10 @@ FROM positions
 ORDER BY updated_at DESC
 LIMIT $1 OFFSET $2;
 
+-- name: CountAllPositions :one
+SELECT COUNT(*)
+FROM positions;
+
 
 -- name: GetPositionsByMarketIdNoPointsAwardedMarketNotResolved :many
 SELECT positions.*

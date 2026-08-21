@@ -506,10 +506,17 @@ func (pis *PredictionIntentsService) GetAllPredictionIntentsForMarketIdAndAccoun
 	return predictionIntent, nil
 }
 
-func (pis *PredictionIntentsService) GetAllPredictionIntents(limit int32, offset int32) ([]*pb_api.PrismPredictionIntentRequest, error) {
-	predictionIntents, err := pis.predictionIntentsRepository.GetAllPredictionIntents(int(limit), int(offset))
+func (pis *PredictionIntentsService) GetAllPredictionIntents(limit int32, offset int32) (*pb_api.PredictionIntentsResponse, error) {
+	_limit := lib.ClampLimit(limit)
+
+	predictionIntents, err := pis.predictionIntentsRepository.GetAllPredictionIntents(int(_limit), int(offset))
 	if err != nil {
 		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get all prediction intents: %v", err)
+	}
+
+	total, err := pis.predictionIntentsRepository.CountAllPredictionIntents()
+	if err != nil {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to count all prediction intents: %v", err)
 	}
 
 	// Map []sqlc.PredictionIntent to []*pb_api.PrismPredictionIntentRequest
@@ -532,7 +539,10 @@ func (pis *PredictionIntentsService) GetAllPredictionIntents(limit int32, offset
 		})
 	}
 
-	return pbPredictionIntents, nil
+	return &pb_api.PredictionIntentsResponse{
+		PredictionIntents: pbPredictionIntents,
+		Pagination:        lib.NewPagination(_limit, offset, total, len(pbPredictionIntents)),
+	}, nil
 }
 
 /*

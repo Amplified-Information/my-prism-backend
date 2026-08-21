@@ -277,10 +277,17 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 	return response, nil
 }
 
-func (ps *PositionsService) GetAllPositions(limit int32, offset int32) ([]*pb_api.Position, error) {
-	positionsResp, err := ps.positionsRepository.GetAllPositions(context.Background(), int(limit), int(offset))
+func (ps *PositionsService) GetAllPositions(limit int32, offset int32) (*pb_api.PositionsResponse, error) {
+	_limit := lib.ClampLimit(limit)
+
+	positionsResp, err := ps.positionsRepository.GetAllPositions(context.Background(), int(_limit), int(offset))
 	if err != nil {
 		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to get all positions: %v", err)
+	}
+
+	total, err := ps.positionsRepository.CountAllPositions(context.Background())
+	if err != nil {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to count all positions: %v", err)
 	}
 
 	var apiPositions []*pb_api.Position
@@ -296,5 +303,8 @@ func (ps *PositionsService) GetAllPositions(limit int32, offset int32) ([]*pb_ap
 		apiPositions = append(apiPositions, apiPosition)
 	}
 
-	return apiPositions, nil
+	return &pb_api.PositionsResponse{
+		Positions:  apiPositions,
+		Pagination: lib.NewPagination(_limit, offset, total, len(apiPositions)),
+	}, nil
 }

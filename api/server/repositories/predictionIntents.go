@@ -365,6 +365,20 @@ func (pir *PredictionIntentsRepository) GetAllPredictionIntents(limit int, offse
 	return predictionIntents, nil
 }
 
+func (pir *PredictionIntentsRepository) CountAllPredictionIntents() (int64, error) {
+	if pir.db == nil {
+		return 0, lib.ErrorLog("database not initialized")
+	}
+
+	q := sqlc.New(pir.db)
+	total, err := q.CountAllPredictionIntents(context.Background())
+	if err != nil {
+		return 0, lib.ErrorLog("CountAllPredictionIntents failed", "error", err)
+	}
+
+	return total, nil
+}
+
 func (pir *PredictionIntentsRepository) GetTotalValueUsdForMarketId(marketId string) (float64, error) {
 	if pir.db == nil {
 		return 0, lib.ErrorLog("database not initialized")

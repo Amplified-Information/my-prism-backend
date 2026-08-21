@@ -73,6 +73,12 @@ WHERE m.deleted_at IS NULL
 ORDER BY pi.generated_at DESC
 LIMIT $1 OFFSET $2;
 
+-- name: CountAllPredictionIntents :one
+SELECT COUNT(*)
+FROM prediction_intents pi
+JOIN markets m ON pi.market_id = m.market_id
+WHERE m.deleted_at IS NULL;
+
 
 -- name: IsDuplicateTxId :one
 SELECT COUNT(*) > 0 AS exists
