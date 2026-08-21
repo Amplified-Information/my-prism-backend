@@ -61,6 +61,21 @@ sudo DEBIAN_FRONTEND=noninteractive apt install -y docker-ce docker-ce-cli conta
 # newgrp docker # admin user must be in the docker group
 sudo usermod -aG docker admin
 
+
+# if data box, /mnt/external/postgresdata must be mounted before docker starts (so that postgres container can start successfully):
+if [ "$(hostname)" = "data" ]; then
+  sudo mkdir -p /etc/systemd/system/docker.service.d
+  cat <<'DOCKER_MOUNT_GUARD' | sudo tee /etc/systemd/system/docker.service.d/10-persistent-data.conf > /dev/null
+[Unit]
+Description=Require persistent PostgreSQL storage before Docker starts
+After=local-fs.target
+RequiresMountsFor=/mnt/external/postgresdata
+ConditionPathIsMountPoint=/mnt/external
+DOCKER_MOUNT_GUARD
+  sudo systemctl daemon-reload
+fi
+
+
 sudo systemctl start docker
 sudo systemctl enable docker
 sudo systemctl status docker --no-pager
@@ -164,17 +179,94 @@ pull_config_secrets_files() {
   done
 }
 
-pull_latest_docker_images() {
-  echo "Pulling latest Docker images as per docker-compose files..."
-  # note: only need to pull images from the environment-specific file
-  docker compose -f "docker-compose-\$MACHINE.yml" -f "docker-compose-\$MACHINE.\$ENVIRONMENT.yml" pull --policy always # N.B. the policy always...
+pull_latest_docker_images_if_changed() {
+  echo "Inspecting GHCR image digests for docker-compose files..."
+  local state_dir=/home/admin/.ghcr_image_state
+  local machine="\${MACHINE:-}"
+  local environment="\${ENVIRONMENT:-}"
+  local compose_base="docker-compose-\${machine}.yml"
+  local compose_env="docker-compose-\${machine}.\${environment}.yml"
+
+  if [ -z "\$machine" ] || [ -z "\$environment" ]; then
+    echo "ERROR: MACHINE and ENVIRONMENT must be set for image inspection." >&2
+    return 1
+  fi
+
+  if ! command -v yq >/dev/null 2>&1 || ! command -v docker >/dev/null 2>&1; then
+    echo "ERROR: yq and docker are required for image inspection." >&2
+    return 1
+  fi
+
+  if [ ! -f "\${compose_base}" ] || [ ! -f "\${compose_env}" ]; then
+    echo "Compose files not present: \${compose_base}, \${compose_env}"
+    return 0
+  fi
+
+  if ! mkdir -p /home/admin/.ghcr_image_state; then
+    echo "ERROR: cannot create digest state directory /home/admin/.ghcr_image_state" >&2
+    return 1
+  fi
+
+  local services
+  services=\$(yq -r '.services | keys[]' "\$compose_base" 2>/dev/null) || {
+    echo "ERROR: could not read services from \$compose_base" >&2
+    return 1
+  }
+
+  local changed=0
+  local service
+  while IFS= read -r service; do
+    [ -n "\$service" ] || continue
+
+    local image
+    image=\$(yq -r --arg svc "\$service" '.services[$svc].image // empty' "\$compose_env" 2>/dev/null)
+    if [ -z "\$image" ]; then
+      image=\$(yq -r --arg svc "\$service" '.services[$svc].image // empty' "\$compose_base" 2>/dev/null)
+    fi
+    [ -n "\$image" ] || continue
+
+    local remote_digest
+    remote_digest=\$(docker buildx imagetools inspect "\$image" --format '{{.Manifest.Digest}}' 2>/dev/null || true)
+    if [ -z "\$remote_digest" ]; then
+      echo "INFO: no digest available for \$service (\$image); skipping."
+      continue
+    fi
+
+    local state_file="\$state_dir/\$service.digest"
+    local last_digest
+    last_digest=\$(cat "\$state_file" 2>/dev/null || true)
+
+    if [ "\$last_digest" != "\$remote_digest" ]; then
+      echo "New image available for \$service: \$image -> \$remote_digest"
+      changed=1
+    fi
+  done <<< "\$services"
+
+  if [ "\$changed" -eq 1 ]; then
+    echo "DIFF detected in docker-compose-\$machine.yml"
+    if ! docker compose -f "\$compose_base" -f "\$compose_env" pull --policy missing; then
+      echo "ERROR: image pull failed; digest state was not updated." >&2
+      return 1
+    fi
+
+    while IFS= read -r service; do
+      [ -n "\$service" ] || continue
+      image=\$(yq -r --arg svc "\$service" '.services[$svc].image // empty' "\$compose_env" 2>/dev/null)
+      [ -n "\$image" ] || image=\$(yq -r --arg svc "\$service" '.services[$svc].image // empty' "\$compose_base" 2>/dev/null)
+      [ -n "\$image" ] || continue
+      remote_digest=\$(docker buildx imagetools inspect "\$image" --format '{{.Manifest.Digest}}' 2>/dev/null || true)
+      [ -n "\$remote_digest" ] && printf '%s\n' "\$remote_digest" > "\$state_dir/\$service.digest"
+    done <<< "\$services"
+  fi
+
+  [ "\$changed" -eq 0 ] && echo "No new GHCR digests detected for \$machine."
 }
 
 main() {
   login_to_github
   pull_docker_compose_files
   pull_config_secrets_files
-  pull_latest_docker_images
+  pull_latest_docker_images_if_changed
 }
 
 main
@@ -307,11 +399,18 @@ chmod +x /home/admin/2_dockerComposeUp.sh
 # Finally, add a systemd service to run the above scripts every X seconds
 # (with a delay to ensure machine is ready and volumes are attached)
 #####
+PERSISTENT_DATA_UNIT=""
+if [ "$(hostname)" = "data" ]; then
+  PERSISTENT_DATA_UNIT=$'RequiresMountsFor=/mnt/external/postgresdata\nConditionPathIsMountPoint=/mnt/external'
+fi
+
 cat <<POLL | sudo tee /etc/systemd/system/deploy_poll.service > /dev/null
 
 [Unit]
 Description=Poll for new Docker images and deploy with docker compose
-After=network.target
+# Start only after local filesystems, including the data volume, are ready.
+After=network.target local-fs.target
+$PERSISTENT_DATA_UNIT
 
 [Service]
 Type=simple

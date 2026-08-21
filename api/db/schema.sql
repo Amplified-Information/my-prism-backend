@@ -42,6 +42,22 @@ COMMENT ON EXTENSION pg_partman IS 'Extension to manage partitioned tables by ti
 
 
 --
+-- Name: set_updated_at(); Type: FUNCTION; Schema: public; Owner: your_db_user
+--
+
+CREATE FUNCTION public.set_updated_at() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION public.set_updated_at() OWNER TO your_db_user;
+
+--
 -- Name: update_global_data_updated_at(); Type: FUNCTION; Schema: public; Owner: your_db_user
 --
 
@@ -973,11 +989,11 @@ CREATE TABLE public.prism_lom (
     id integer NOT NULL,
     market_id uuid NOT NULL,
     account_id character varying(255) NOT NULL,
-    prediction_intent_tx_id uuid NOT NULL,
-    total_lom_score double precision NOT NULL,
-    cron_ran_at timestamp with time zone NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    hedera_tx_hash character varying(255) NOT NULL,
+    distance double precision DEFAULT 0.0 NOT NULL,
+    dollar_value double precision DEFAULT 0.0 NOT NULL,
+    duration double precision DEFAULT 0.0 NOT NULL,
+    lom_score double precision DEFAULT 0.0 NOT NULL,
     CONSTRAINT prism_lom_account_id_check CHECK (((account_id)::text ~ '^\d+\.\d+\.\d+$'::text))
 );
 
@@ -1007,27 +1023,36 @@ ALTER SEQUENCE public.prism_lom_id_seq OWNED BY public.prism_lom.id;
 
 
 --
--- Name: prism_points; Type: TABLE; Schema: public; Owner: your_db_user
+-- Name: prism_rewards; Type: TABLE; Schema: public; Owner: your_db_user
 --
 
-CREATE TABLE public.prism_points (
+CREATE TABLE public.prism_rewards (
     id integer NOT NULL,
-    market_id character varying(255) NOT NULL,
-    evm_address character varying(255) NOT NULL,
-    points_awarded double precision DEFAULT 0.0 NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    claimed_at timestamp with time zone
+    dest_account_id character varying(255) NOT NULL,
+    n_prism_scaled bigint DEFAULT 0 NOT NULL,
+    ratio_of_allocation double precision DEFAULT 0.0 NOT NULL,
+    hedera_tx_hash character varying(255),
+    cron_ran_at timestamp without time zone,
+    redeemed_at timestamp without time zone,
+    redeemed_by character varying(255) DEFAULT NULL::character varying,
+    created_at timestamp without time zone DEFAULT now() NOT NULL,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL,
+    is_redeemable boolean DEFAULT false NOT NULL,
+    net character varying(255) DEFAULT 'testnet'::character varying NOT NULL,
+    CONSTRAINT prism_rewards_dest_account_id_check CHECK (((dest_account_id)::text ~ '^[0-9]+\.[0-9]+\.[0-9]+$'::text)),
+    CONSTRAINT prism_rewards_n_prism_scaled_check CHECK ((n_prism_scaled >= 0)),
+    CONSTRAINT prism_rewards_net_check CHECK (((net)::text = ANY ((ARRAY['mainnet'::character varying, 'testnet'::character varying])::text[]))),
+    CONSTRAINT prism_rewards_ratio_of_allocation_check CHECK (((ratio_of_allocation >= (0.0)::double precision) AND (ratio_of_allocation <= (1.0)::double precision)))
 );
 
 
-ALTER TABLE public.prism_points OWNER TO your_db_user;
+ALTER TABLE public.prism_rewards OWNER TO your_db_user;
 
 --
--- Name: prism_points_id_seq; Type: SEQUENCE; Schema: public; Owner: your_db_user
+-- Name: prism_rewards_id_seq; Type: SEQUENCE; Schema: public; Owner: your_db_user
 --
 
-CREATE SEQUENCE public.prism_points_id_seq
+CREATE SEQUENCE public.prism_rewards_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -1036,13 +1061,13 @@ CREATE SEQUENCE public.prism_points_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.prism_points_id_seq OWNER TO your_db_user;
+ALTER SEQUENCE public.prism_rewards_id_seq OWNER TO your_db_user;
 
 --
--- Name: prism_points_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: your_db_user
+-- Name: prism_rewards_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: your_db_user
 --
 
-ALTER SEQUENCE public.prism_points_id_seq OWNED BY public.prism_points.id;
+ALTER SEQUENCE public.prism_rewards_id_seq OWNED BY public.prism_rewards.id;
 
 
 --
@@ -1368,10 +1393,10 @@ ALTER TABLE ONLY public.prism_lom ALTER COLUMN id SET DEFAULT nextval('public.pr
 
 
 --
--- Name: prism_points id; Type: DEFAULT; Schema: public; Owner: your_db_user
+-- Name: prism_rewards id; Type: DEFAULT; Schema: public; Owner: your_db_user
 --
 
-ALTER TABLE ONLY public.prism_points ALTER COLUMN id SET DEFAULT nextval('public.prism_points_id_seq'::regclass);
+ALTER TABLE ONLY public.prism_rewards ALTER COLUMN id SET DEFAULT nextval('public.prism_rewards_id_seq'::regclass);
 
 
 --
@@ -1740,14 +1765,6 @@ ALTER TABLE ONLY public.price_history_p20260311
 
 
 --
--- Name: prism_lom prism_lom_account_id_market_id_prediction_intent_tx_id_key; Type: CONSTRAINT; Schema: public; Owner: your_db_user
---
-
-ALTER TABLE ONLY public.prism_lom
-    ADD CONSTRAINT prism_lom_account_id_market_id_prediction_intent_tx_id_key UNIQUE (account_id, market_id, prediction_intent_tx_id);
-
-
---
 -- Name: prism_lom prism_lom_pkey; Type: CONSTRAINT; Schema: public; Owner: your_db_user
 --
 
@@ -1756,19 +1773,11 @@ ALTER TABLE ONLY public.prism_lom
 
 
 --
--- Name: prism_points prism_points_market_id_evm_address_key; Type: CONSTRAINT; Schema: public; Owner: your_db_user
+-- Name: prism_rewards prism_rewards_pkey; Type: CONSTRAINT; Schema: public; Owner: your_db_user
 --
 
-ALTER TABLE ONLY public.prism_points
-    ADD CONSTRAINT prism_points_market_id_evm_address_key UNIQUE (market_id, evm_address);
-
-
---
--- Name: prism_points prism_points_pkey; Type: CONSTRAINT; Schema: public; Owner: your_db_user
---
-
-ALTER TABLE ONLY public.prism_points
-    ADD CONSTRAINT prism_points_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.prism_rewards
+    ADD CONSTRAINT prism_rewards_pkey PRIMARY KEY (id);
 
 
 --
@@ -1870,6 +1879,13 @@ CREATE INDEX idx_comments_market_id ON public.comments USING btree (market_id);
 --
 
 CREATE INDEX idx_prediction_intents_market_account_open ON public.prediction_intents USING btree (market_id, account_id) WHERE ((cancelled_at IS NULL) AND (fully_matched_at IS NULL) AND (evicted_at IS NULL));
+
+
+--
+-- Name: idx_prism_rewards_net_account_unredeemed; Type: INDEX; Schema: public; Owner: your_db_user
+--
+
+CREATE INDEX idx_prism_rewards_net_account_unredeemed ON public.prism_rewards USING btree (net, dest_account_id, redeemed_at) WHERE (redeemed_at IS NULL);
 
 
 --
@@ -2174,6 +2190,13 @@ ALTER INDEX public.price_history_pkey ATTACH PARTITION public.price_history_p202
 
 
 --
+-- Name: prism_rewards set_prism_rewards_updated_at; Type: TRIGGER; Schema: public; Owner: your_db_user
+--
+
+CREATE TRIGGER set_prism_rewards_updated_at BEFORE UPDATE ON public.prism_rewards FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+
+--
 -- Name: roles trigger_update_updated_at; Type: TRIGGER; Schema: public; Owner: your_db_user
 --
 
@@ -2213,13 +2236,6 @@ CREATE TRIGGER update_markets_updated_at BEFORE UPDATE ON public.markets FOR EAC
 --
 
 CREATE TRIGGER update_order_requests_updated_at BEFORE UPDATE ON public.prediction_intents FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
-
-
---
--- Name: prism_points update_prism_points_updated_at; Type: TRIGGER; Schema: public; Owner: your_db_user
---
-
-CREATE TRIGGER update_prism_points_updated_at BEFORE UPDATE ON public.prism_points FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 
 --

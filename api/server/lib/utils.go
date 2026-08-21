@@ -21,6 +21,7 @@ import (
 	pb_clob "api/gen/clob"
 
 	hiero "github.com/hiero-ledger/hiero-sdk-go/v2/sdk"
+	"github.com/robfig/cron/v3"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -508,4 +509,66 @@ func NormalizeMatchTupleByPriceSign(tuple *[2]*pb_clob.CreateOrderRequestClob) e
 		tuple[1].PriceUsd,
 		tuple[1].PrimarySecondary,
 	)
+}
+
+func CronJobsPerDay(cronStr string) (float64, error) {
+	cronStr = strings.TrimSpace(cronStr)
+	if cronStr == "" {
+		return 0, ErrorLog("empty cron string")
+	}
+
+	parsers := []cron.Parser{
+		cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor),
+		cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor),
+	}
+
+	var (
+		schedule cron.Schedule
+		err      error
+	)
+	for _, parser := range parsers {
+		schedule, err = parser.Parse(cronStr)
+		if err == nil {
+			break
+		}
+	}
+	if err != nil {
+		return 0, ErrorLog("invalid cron string format", "cronStr", cronStr, "error", err)
+	}
+
+	// Count over a full year and normalize to the average number of executions per 24-hour day.
+	// This gives a stable estimate for arbitrary cron expressions, including weekly and monthly schedules.
+	const oneDay = 24 * time.Hour
+	const oneYear = 366 * oneDay
+	start := time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC).Add(-time.Second)
+	end := start.Add(oneYear)
+
+	count := 0
+	next := schedule.Next(start)
+	for next.Before(end) {
+		count++
+		next = schedule.Next(next)
+	}
+
+	return float64(count) / (float64(oneYear) / float64(oneDay)), nil
+}
+
+// isValidHederaAccountID checks if accountId matches the format X.X.X where X is any non-negative integer
+func IsValidHederaAccountID(accountId string) bool {
+	parts := strings.Split(accountId, ".")
+	if len(parts) != 3 {
+		return false
+	}
+	// All three parts must be non-empty and contain only digits
+	for _, part := range parts {
+		if part == "" {
+			return false
+		}
+		for _, ch := range part {
+			if ch < '0' || ch > '9' {
+				return false
+			}
+		}
+	}
+	return true
 }

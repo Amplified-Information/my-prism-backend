@@ -33,7 +33,7 @@ type server struct {
 	predictionIntentsRepository  repositories.PredictionIntentsRepository
 	priceRepository              repositories.PriceRepository
 	prismLomRepository           repositories.PrismLomRepository
-	prismPointsRepository        repositories.PrismPointsRepository
+	prismRewardsRepository       repositories.PrismRewardsRepository
 	smartContractEventRepository repositories.SmartContractEventRepository
 	userRoleRepository           repositories.UserRoleRepository
 
@@ -51,7 +51,8 @@ type server struct {
 	predictionIntentsService   services.PredictionIntentsService
 	priceService               services.PriceService
 	prismService               services.Prism
-	prismPointsService         services.PrismPointsService
+	prismRewardsService        services.PrismRewardsService
+	prismLomService            services.PrismLOMservice
 
 	// don't forget to register in RegisterApiServiceServer grpc call in main()
 }
@@ -88,19 +89,15 @@ func (s *server) GetMarkets(ctx context.Context, req *pb_api.LimitOffsetRequest)
 	return result, err
 }
 
-// func (s *server) GetCategories(ctx context.Context, req *pb_api.Empty) (*pb_api.CategoriesResponse, error) {
-// 	result, err := s.marketsService.GetCategories()
+// @Deprecated(use: CreateMarketv2)
+// func (s *server) CreateMarket(ctx context.Context, req *pb_api.CreateMarketRequest) (*pb_api.CreateMarketResponse, error) {
+// 	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
+// 		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
+// 	}
+
+// 	result, err := s.marketsService.CreateMarket(req)
 // 	return result, err
 // }
-
-func (s *server) CreateMarket(ctx context.Context, req *pb_api.CreateMarketRequest) (*pb_api.CreateMarketResponse, error) {
-	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
-		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
-	}
-
-	result, err := s.marketsService.CreateMarket(req)
-	return result, err
-}
 
 func (s *server) CreateMarketv2(ctx context.Context, req *pb_api.CreateMarketv2Request) (*pb_api.CreateMarketResponse, error) {
 	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
@@ -461,6 +458,42 @@ func (s *server) DeleteCategory(ctx context.Context, req *pb_api.CategoryIdReque
 	}, nil
 }
 
+func (s *server) GetPrism(ctx context.Context, req *pb_api.AccountIdRequest) (*pb_api.PrismResponse, error) {
+	result, err := s.prismRewardsService.GetPrism(req.AccountId, req.Net)
+	return result, err
+}
+
+func (s *server) ClaimPrism(ctx context.Context, req *pb_api.ClaimPrismRequest) (*pb_api.StdResponse, error) {
+	result, err := s.prismRewardsService.ClaimPrism(req.AccountId, req.Net, req.Sig, req.PublicKey, req.KeyType)
+	return result, err
+}
+
+func (s *server) GetLOMrewardsByMarketId(ctx context.Context, req *pb_api.MarketIdRequest) (*pb_api.LOMrewardsResponse, error) {
+	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
+		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
+	}
+
+	result, err := s.prismLomService.GetLOMrewardsByMarketId(req.MarketId)
+	return result, err
+}
+
+func (s *server) GetLOMrewardsByAccountId(ctx context.Context, req *pb_api.AccountIdRequest) (*pb_api.LOMrewardsResponse, error) {
+	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
+		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
+	}
+
+	result, err := s.prismLomService.GetLOMrewardsByAccountId(req.AccountId)
+	return result, err
+}
+func (s *server) SendEntitledPrism(ctx context.Context, req *pb_api.AccountIdRequest) (*pb_api.StdResponse, error) {
+	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
+		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
+	}
+
+	result, err := s.prismRewardsService.SendEntitledPrism(req)
+	return result, err
+}
+
 func main() {
 	lib.InitZapLogger(lib.LOG_INFO)
 	fatal := func(msg string, args ...interface{}) {
@@ -608,12 +641,12 @@ func main() {
 	}
 	defer prismLomRepository.CloseDb()
 
-	prismPointsRepository := repositories.PrismPointsRepository{}
-	err = prismPointsRepository.InitDb()
+	prismRewardsRepository := repositories.PrismRewardsRepository{}
+	err = prismRewardsRepository.InitDb()
 	if err != nil {
 		fatal("Failed to initialize database: %v", err)
 	}
-	defer prismPointsRepository.CloseDb()
+	defer prismRewardsRepository.CloseDb()
 
 	matchesRepository := repositories.MatchesRepository{}
 	err = matchesRepository.InitDb()
@@ -692,21 +725,21 @@ func main() {
 
 	// initialize Positions service
 	positionsService := services.PositionsService{}
-	err = positionsService.Init(&positionsRepository, &marketsRepository, &predictionIntentsRepository, &prismPointsRepository, &smartContractEventRepository, &hederaService, &priceService)
+	err = positionsService.Init(&positionsRepository, &marketsRepository, &predictionIntentsRepository, &prismRewardsRepository, &smartContractEventRepository, &hederaService, &priceService)
 	if err != nil {
 		fatal("Failed to initialize Positions service: %v", err)
 	}
 
 	// initialize PrismPoints service
-	prismPointsService := services.PrismPointsService{}
-	err = prismPointsService.Init(&marketsRepository, &positionsRepository, &prismPointsRepository)
+	prismRewardsService := services.PrismRewardsService{}
+	err = prismRewardsService.Init(&marketsRepository, &positionsRepository, &prismRewardsRepository)
 	if err != nil {
-		fatal("Failed to initialize PrismPoints service: %v", err)
+		fatal("Failed to initialize PrismRewards service: %v", err)
 	}
 
 	// initialize Markets service
 	marketsService := services.MarketsService{}
-	err = marketsService.Init(&marketsRepository, &hederaService, &priceService, &prismPointsService, &categoriesRepository)
+	err = marketsService.Init(&marketsRepository, &hederaService, &priceService, &categoriesRepository)
 	if err != nil {
 		fatal("Failed to initialize Markets service: %v", err)
 	}
@@ -733,7 +766,7 @@ func main() {
 	}
 
 	cronLOMService := services.CronLOMService{}
-	err = cronLOMService.Init(&marketsRepository, &predictionIntentsRepository, &hederaService, &predictionIntentsService, &priceRepository, &prismLomRepository)
+	err = cronLOMService.Init(&marketsRepository, &predictionIntentsRepository, &hederaService, &predictionIntentsService, &priceRepository, &prismLomRepository, &prismRewardsRepository)
 	if err != nil {
 		fatal("Failed to initialize CronLOM service: %v", err)
 	}
@@ -745,6 +778,12 @@ func main() {
 		fatal("Failed to initialize Prism service: %v", err)
 	}
 	// TODO: defer prismService cleanup
+
+	prismLomService := services.PrismLOMservice{}
+	err = prismLomService.Init(&prismLomRepository, &prismRewardsRepository)
+	if err != nil {
+		fatal("Failed to initialize PrismLOM service: %v", err)
+	}
 
 	// Now start gRPC service
 	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%s", os.Getenv("API_SELF_HOST"), os.Getenv("API_SELF_PORT")))
@@ -770,7 +809,7 @@ func main() {
 		predictionIntentsRepository:  predictionIntentsRepository,
 		priceRepository:              priceRepository,
 		prismLomRepository:           prismLomRepository,
-		prismPointsRepository:        prismPointsRepository,
+		prismRewardsRepository:       prismRewardsRepository,
 		smartContractEventRepository: smartContractEventRepository,
 		userRoleRepository:           userRoleRepository,
 
@@ -788,6 +827,7 @@ func main() {
 		predictionIntentsService:   predictionIntentsService,
 		priceService:               priceService,
 		prismService:               prismService,
+		prismLomService:            prismLomService,
 	}
 	// must pass the grpc server to bother internal and the public servers!
 	pb_api.RegisterApiServiceInternalServer(grpcServer, sharedServer)

@@ -32,9 +32,8 @@ static_resources:
           - name: envoy.filters.network.http_connection_manager
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
-              # grpc-web is browser traffic over HTTP/1.1. Allow Envoy to negotiate HTTP/1.1 for the
-              # incoming client connection while keeping the upstream API connection on HTTP/2 when needed.
-              codec_type: AUTO # http1, http2, auto
+              # grpc-web clients connect over HTTP/1.1; the api_service cluster uses HTTP/2 upstream.
+              codec_type: HTTP1 # http1, http2, auto
               stat_prefix: ingress_http
               upgrade_configs:
                 - upgrade_type: websocket

@@ -64,11 +64,11 @@ variable "ssl_cert_arn_wildcard" {
 }
 output "ssl_cert_arn_wildcard" { value = var.ssl_cert_arn_wildcard }
 
-variable "ebs_volume_id" {
+variable "ebs_persistent_volume_id" {
   description = "The EBS volume ID to attach to the data instance"
   type        = string
 }
-output "ebs_volume_id" { value = var.ebs_volume_id }
+output "ebs_persistent_volume_id" { value = var.ebs_persistent_volume_id }
 
 
 
@@ -118,7 +118,7 @@ output "install_base" {
 
 aws s3 cp s3://${var.s3_bucket_deployment}/bootstrap-base.sh /home/admin/bootstrap-base.sh --region ${var.aws_region}
 chown admin:admin /home/admin/bootstrap-base.sh
-bash /home/admin/bootstrap-base.sh ${var.aws_region} ${var.env} 
+bash /home/admin/bootstrap-base.sh ${var.aws_region} ${var.env} || exit 1
 
 EOF
 }
@@ -151,7 +151,7 @@ output "install_data" {
 
 aws s3 cp s3://${var.s3_bucket_deployment}/bootstrap-data.sh /home/admin/bootstrap-data.sh --region ${var.aws_region}
 chown admin:admin /home/admin/bootstrap-data.sh
-bash /home/admin/bootstrap-data.sh
+bash /home/admin/bootstrap-data.sh ${var.ebs_persistent_volume_id} || exit 1
 
 EOF
 }

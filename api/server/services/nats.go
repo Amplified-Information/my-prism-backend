@@ -160,16 +160,6 @@ func (ns *NatsService) HandleOrderMatches() error {
 		// db
 		// Record the match on a database (auditing)
 		/////
-		// isPartial := false
-		// switch msg.Subject {
-		// case lib.NATS_CLOB_MATCHES_PARTIAL:
-		// 	isPartial = true
-		// case lib.NATS_CLOB_MATCHES_FULL:
-		// 	isPartial = false
-		// default:
-		// 	lib.Log(lib.LOG_ERROR, "NATS: Invalid subject")
-		// 	return
-		// }
 
 		_, err := ns.matchesRepository.CreateMatch(
 			// note: orderRequestClobTuple[0] is positive-price leg and [1] is negative-price leg

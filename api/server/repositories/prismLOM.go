@@ -7,7 +7,6 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -45,10 +44,10 @@ func (prismLomRepository *PrismLomRepository) InitDb() error {
 func (prismLomRepository *PrismLomRepository) CreateLOMentryForUserOnMarket(
 	market_id uuid.UUID,
 	account_id string,
-	prediction_intent_tx_id uuid.UUID,
-	total_lom_score float64,
-	cron_ran_at time.Time,
-	hedera_tx_hash string,
+	distance float64,
+	duration float64,
+	size float64,
+	lom_score float64,
 ) error {
 	if prismLomRepository.db == nil {
 		return lib.ErrorLog("database not initialized")
@@ -56,12 +55,38 @@ func (prismLomRepository *PrismLomRepository) CreateLOMentryForUserOnMarket(
 
 	q := sqlc.New(prismLomRepository.db)
 	err := q.CreateLOMentryForUserOnMarket(context.Background(), sqlc.CreateLOMentryForUserOnMarketParams{
-		MarketID:             market_id,
-		AccountID:            account_id,
-		PredictionIntentTxID: prediction_intent_tx_id,
-		TotalLomScore:        total_lom_score,
-		CronRanAt:            cron_ran_at,
-		HederaTxHash:         hedera_tx_hash,
+		MarketID:    market_id,
+		AccountID:   account_id,
+		Distance:    distance,
+		Duration:    duration,
+		DollarValue: size,
+		LomScore:    lom_score,
 	})
 	return err
+}
+
+func (prismLomRepository *PrismLomRepository) GetLOMrewardsByMarketId(market_id string) ([]sqlc.PrismLom, error) {
+	if prismLomRepository.db == nil {
+		return nil, lib.ErrorLog("database not initialized")
+	}
+
+	// ensure market_id is a valid UUID
+	marketIdStr, err := uuid.Parse(market_id)
+	if err != nil {
+		return nil, lib.ErrorLog("invalid market_id: %s", market_id)
+	}
+
+	q := sqlc.New(prismLomRepository.db)
+	result, err := q.GetLOMrewardsByMarketId(context.Background(), marketIdStr)
+	return result, err
+}
+
+func (prismLomRepository *PrismLomRepository) GetLOMrewardsByAccountId(account_id string) ([]sqlc.PrismLom, error) {
+	if prismLomRepository.db == nil {
+		return nil, lib.ErrorLog("database not initialized")
+	}
+
+	q := sqlc.New(prismLomRepository.db)
+	result, err := q.GetLOMrewardsByAccountId(context.Background(), account_id)
+	return result, err
 }

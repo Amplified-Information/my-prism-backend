@@ -1,9 +1,9 @@
 package services
 
 import (
-	sqlc "api/gen/sqlc"
 	"api/server/lib"
 	repositories "api/server/repositories"
+	sqlc "api/gen/sqlc"
 )
 
 type CategoriesService struct {

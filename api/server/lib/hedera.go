@@ -152,7 +152,7 @@ func GetSpenderAllowanceUsd(networkSelected hiero.LedgerID, accountId hiero.Acco
 	return amount, nil
 }
 
-func GetTokenBalance(networkSelected hiero.LedgerID, tokenId hiero.TokenID, accountId hiero.AccountID) (int64, error) {
+func GetTokenBalance(networkSelected hiero.LedgerID, tokenId hiero.TokenID, accountId hiero.AccountID) (uint64, error) {
 	// OK - proceed
 
 	mirrorNodeURL := fmt.Sprintf("https://testnet.mirrornode.hedera.com/api/v1/tokens/%s/balances?account.id=%s", tokenId.String(), accountId.String())
@@ -188,7 +188,7 @@ func GetTokenBalance(networkSelected hiero.LedgerID, tokenId hiero.TokenID, acco
 		Timestamp string `json:"timestamp"`
 		Balances  []struct {
 			Account  string `json:"account"`
-			Balance  int64  `json:"balance"`
+			Balance  uint64 `json:"balance"`
 			Decimals int    `json:"decimals"`
 		} `json:"balances"`
 		Links struct {
@@ -201,7 +201,7 @@ func GetTokenBalance(networkSelected hiero.LedgerID, tokenId hiero.TokenID, acco
 	}
 
 	// Mirror can return an empty balances array when the account has never held this token.
-	var balance int64
+	var balance uint64
 	if len(result.Balances) == 0 {
 		// return 0, LogAndError(LOG_ERROR, "no balances found for account %s and token %s", accountId.String(), tokenId.String())
 		return 0, nil // Return a valid zero balance to avoid surfacing noisy errors upstream.
@@ -213,7 +213,7 @@ func GetTokenBalance(networkSelected hiero.LedgerID, tokenId hiero.TokenID, acco
 	return balance, nil
 }
 
-func GetUsdcBalanceUsd(networkSelected hiero.LedgerID, accountId hiero.AccountID) (int64, error) {
+func GetUsdcBalanceUsd(networkSelected hiero.LedgerID, accountId hiero.AccountID) (uint64, error) {
 	usdcAddressStr := os.Getenv(fmt.Sprintf("%s_USDC_ADDRESS", strings.ToUpper(networkSelected.String())))
 	usdcDecimalsStr := os.Getenv("USDC_DECIMALS")
 

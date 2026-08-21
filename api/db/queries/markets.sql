@@ -63,8 +63,11 @@ LIMIT $1 OFFSET $2;
 
 -- name: GetAllUnresolvedMarkets :many
 SELECT * FROM markets
-WHERE deleted_at IS NULL
-AND resolved_at IS NULL AND closes_at > CURRENT_TIMESTAMP AND is_suspended = FALSE AND is_paused = FALSE
+    WHERE deleted_at IS NULL
+    AND resolved_at IS NULL 
+    AND closes_at > CURRENT_TIMESTAMP 
+    AND is_suspended = FALSE 
+    AND is_paused = FALSE
 ORDER BY created_at ASC;
 -- SELECT
 --   m.*,
@@ -82,8 +85,11 @@ ORDER BY created_at ASC;
 
 -- name: CountUnresolvedMarkets :one
 SELECT COUNT(*) FROM markets
-WHERE deleted_at IS NULL
-AND resolved_at IS NULL AND closes_at > CURRENT_TIMESTAMP AND is_suspended = FALSE AND is_paused = FALSE;
+    WHERE deleted_at IS NULL
+    AND resolved_at IS NULL 
+    AND closes_at > CURRENT_TIMESTAMP 
+    AND is_suspended = FALSE 
+    AND is_paused = FALSE;
 
 
 

@@ -3,14 +3,37 @@
 INSERT INTO prism_lom (
   market_id, 
   account_id, 
-  prediction_intent_tx_id, 
-  total_lom_score, 
-  cron_ran_at,
-  hedera_tx_hash
+  distance,
+  dollar_value,
+  duration,
+  lom_score
 ) VALUES ($1, $2, $3, $4, $5, $6);
 
 
+
+
+
+
+
+
+
 -- READ
+
+
+
+-- name: GetLOMrewardsByMarketId :many
+SELECT * FROM prism_lom
+WHERE market_id = $1
+ORDER BY lom_score DESC;
+
+-- name: GetLOMrewardsByAccountId :many
+SELECT * FROM prism_lom
+WHERE account_id = $1
+ORDER BY lom_score DESC;
+
+
+
+
 
 
 

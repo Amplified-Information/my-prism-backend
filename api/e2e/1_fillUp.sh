@@ -385,9 +385,22 @@ create_prediction_intent() {
 
   CREATE_LAST_TX_ID=$(printf '%s\n' "$request_json" | jq -r '.txId // empty')
 
-  CREATE_LAST_RESPONSE_JSON=$(easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d "$request_json" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.CreatePredictionIntent)
-  CREATE_LAST_ERROR_CODE=$(printf '%s\n' "$CREATE_LAST_RESPONSE_JSON" | jq -r '.errorCode // ""')
-  CREATE_LAST_MESSAGE=$(printf '%s\n' "$CREATE_LAST_RESPONSE_JSON" | jq -r '.message // ""')
+  # Retry on transient gateway errors (e.g. 502 from the grpc-web proxy) before giving up on this order.
+  local max_attempts=3
+  local attempt
+  for ((attempt = 1; attempt <= max_attempts; attempt++)); do
+    CREATE_LAST_RESPONSE_JSON=$(easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d "$request_json" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.CreatePredictionIntent 2>&1)
+    if printf '%s\n' "$CREATE_LAST_RESPONSE_JSON" | jq -e . >/dev/null 2>&1; then
+      break
+    fi
+    if (( attempt < max_attempts )); then
+      echo "Warning: CreatePredictionIntent transient failure (attempt $attempt/$max_attempts): $CREATE_LAST_RESPONSE_JSON" >&2
+      sleep 1
+    fi
+  done
+
+  CREATE_LAST_ERROR_CODE=$(printf '%s\n' "$CREATE_LAST_RESPONSE_JSON" | jq -r '.errorCode // ""' 2>/dev/null)
+  CREATE_LAST_MESSAGE=$(printf '%s\n' "$CREATE_LAST_RESPONSE_JSON" | jq -r '.message // ""' 2>/dev/null)
   printf '%s\n' "$CREATE_LAST_RESPONSE_JSON"
 }
 

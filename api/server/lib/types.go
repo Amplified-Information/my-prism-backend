@@ -39,11 +39,11 @@ const (
 // price/distance/duration tiers:
 type PriceDistanceTier struct {
 	Threshold float64 // percent distance from market price (e.g., 0.20 for 20%)
-	Weight    int
+	Weight    float64
 }
 type OrderDurationTier struct {
 	Duration time.Duration
-	Weight   int
+	Weight   float64
 }
 
 // Zap logger setup

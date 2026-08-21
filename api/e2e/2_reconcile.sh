@@ -173,6 +173,40 @@ fetch_user_portfolio_json() {
   return 1
 }
 
+refresh_account_portfolio_if_missing() {
+  local idx="$1"
+  local account_id="$2"
+  local evm_address="$3"
+  local max_wait="${4:-12}"
+  local attempt
+  local portfolio_json
+  local missing_count
+
+  for ((attempt = 1; attempt <= max_wait; attempt++)); do
+    portfolio_json=$(fetch_user_portfolio_json "$evm_address") || continue
+    missing_count=0
+    for tx_key in "${!run_tx_qty_by_account[@]}"; do
+      [[ "$tx_key" != "$idx|"* ]] && continue
+      tx_id="${tx_key#${idx}|}"
+      if ! printf '%s\n' "$portfolio_json" | jq -e --arg m "$marketId" --arg tx "$tx_id" '
+        ((.openPredictionIntents[$m].openPredictionIntents // []) | map(.txId) | index($tx)) != null
+        or ((.matchedPredictionIntents[$m].matchedPredictionIntents // []) | map(.txId) | index($tx)) != null
+      ' >/dev/null 2>&1; then
+        missing_count=$((missing_count + 1))
+      fi
+    done
+
+    if (( missing_count == 0 )); then
+      portfolio_json_by_index[$idx]="$portfolio_json"
+      return 0
+    fi
+
+    sleep 2
+  done
+
+  return 1
+}
+
 fetch_market_matches_to_map() {
   local limit=1000
   local offset=0
@@ -704,6 +738,18 @@ for i in "${loaded_indices[@]}"; do
   summary_rows+=("$summary_row")
 
   if (( $(echo "$abs_delta_collateral > $tolerance_qty" | bc -l) )) || (( $(echo "$max_abs_delta > $tolerance_qty" | bc -l) )); then
+    evm_address=$(resolve_evm_address "$account_id") || evm_address=""
+    if [[ -n "$evm_address" ]] && ! refresh_account_portfolio_if_missing "$i" "$account_id" "$evm_address" 6; then
+      echo "Warning: account $account_id portfolio did not converge within the retry window; using the last snapshot for mismatch analysis." >&2
+    fi
+    portfolio_json="${portfolio_json_by_index[$i]:-}"
+    if [[ -n "$portfolio_json" ]]; then
+      open_tx_ids=()
+      while IFS=$'\t' read -r open_tx_id; do
+        [[ -z "$open_tx_id" ]] && continue
+        open_tx_ids["$open_tx_id"]=1
+      done < <(printf '%s\n' "$portfolio_json" | jq -r --arg m "$marketId" '.openPredictionIntents[$m].openPredictionIntents[]?.txId // empty')
+    fi
     echo "Error: reconciliation mismatch for $account_id (|deltaCol|=$abs_delta_collateral, |deltaBuy|=$abs_delta_buy_qty, |deltaSell|=$abs_delta_sell_qty, tolerance=$tolerance_qty)."
     echo "Debug details for $account_id:"
     for tx_key in "${!run_tx_qty_by_account[@]}"; do

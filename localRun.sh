@@ -2,42 +2,47 @@
 
 set -e
 
+GITHUB_ORG="prismmarketlabs"
+NAME="prism"
+
+
+
 echo "Starting local DB..."
 cd db
 source loadEnv.sh local
 docker rm prism-db --force
-docker run --pull always -d --name prism-db \
+docker run --pull always -d --name "${NAME}-db" \
   -p 5432:5432 \
   -v /mnt/external/postgresdata:/var/lib/postgresql \
   -e POSTGRES_USER="${DB_UNAME}" \
   -e POSTGRES_PASSWORD="${DB_PWORD}" \
   -e POSTGRES_DB="${DB_NAME}" \
-  ghcr.io/prismmarketlabs/db:latest
+  ghcr.io/"${GITHUB_ORG}"/db:latest
 
 
 
 echo "Starting local EventBus..."
 cd ../eventbus
 source loadEnv.sh local
-docker rm prism-eventbus --force
-docker run --pull always -d --name prism-eventbus \
+docker rm "${NAME}-eventbus" --force
+docker run --pull always -d --name "${NAME}-eventbus" \
   -p 4222:4222 -p 6222:6222 \
-  ghcr.io/prismmarketlabs/eventbus:latest
+  ghcr.io/"${GITHUB_ORG}"/eventbus:latest
 
 
 
 echo "Starting local Proxy..."
 cd ../proxy
 source loadEnv.sh local2
-docker rm prism-proxy --force
-docker run --pull always -d --name prism-proxy --network host \
+docker rm "${NAME}-proxy" --force
+docker run --pull always -d --name "${NAME}-proxy" --network host \
   -p 9901:9901 -p 8090:8090 \
   -e ENVOY_HOST_CLOB="${ENVOY_HOST_CLOB}" \
   -e ENVOY_HOST_API="${ENVOY_HOST_API}" \
   -e ENVOY_HOST_WEB="${ENVOY_HOST_WEB}" \
   -e ENVOY_HOST_WEB_ADMIN="${ENVOY_HOST_WEB_ADMIN}" \
   -e ENVOY_HOST_WEB_LP="${ENVOY_HOST_WEB_LP}" \
-  ghcr.io/prismmarketlabs/proxy:latest
+  ghcr.io/"${GITHUB_ORG}"/proxy:latest
 
 
 
@@ -47,13 +52,13 @@ docker run --pull always -d --name prism-proxy --network host \
 # echo "Starting local modsec..."
 # cd ../modsec
 # source loadEnv.sh local
-# docker run --pull always -d --network host \
+# docker run --pull always -d --name "${NAME}-modsec" --network host \
 #   -p 8090:8080 \
 #   -e BACKEND=${MODSEC_BACKEND} \
 #   -e PARANOIA=${MODSEC_PARANOIA} \
 #   -e ANOMALY_INBOUND=${MODSEC_ANOMALY_INBOUND} \
 #   -e ANOMALY_OUTBOUND=${MODSEC_ANOMALY_OUTBOUND} \
-#   ghcr.io/prismmarketlabs/modsec:latest
+#   ghcr.io/"${GITHUB_ORG}"/modsec:latest
 
 
 
@@ -62,8 +67,8 @@ docker run --pull always -d --name prism-proxy --network host \
 echo "Starting local blocknode..."
 cd ../blocknode
 source loadEnv.sh local
-docker rm prism-blocknode --force
-docker run --pull always -d --name prism-blocknode --network host \
+docker rm "${NAME}-blocknode" --force
+docker run --pull always -d --name "${NAME}-blocknode" --network host \
   -e BN_QUERY_FREQ_SECS="${BN_QUERY_FREQ_SECS}" \
   -e BN_QUERY_LOOKBACK_SECS="${BN_QUERY_LOOKBACK_SECS}" \
   -e BN_SUPPORTED_NETWORKS="${BN_SUPPORTED_NETWORKS}" \
@@ -84,7 +89,7 @@ docker run --pull always -d --name prism-blocknode --network host \
   -e ABI_TESTNET_0_0_9653861="${ABI_TESTNET_0_0_9653861}" \
   -e ABI_TESTNET_0_0_9792499="${ABI_TESTNET_0_0_9792499}" \
   -e ABI_TESTNET_0_0_9891475="${ABI_TESTNET_0_0_9891475}" \
-  ghcr.io/prismmarketlabs/blocknode:latest
+  ghcr.io/"${GITHUB_ORG}"/blocknode:latest
 
 
 docker ps

@@ -22,7 +22,8 @@ const (
 var VolumeResolutionPeriods = []string{"1h", "24h", "7d", "30d"}
 
 var TotalNprismTokens = 100_000_000
-
+var LOMrewardsVestingPeriodDays = 6.0 * 365 // 6 years
+var LOMrewardsPercentOfTokensForLOMrewards = 10.0
 var LaunchDate = time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC)
 
 // prism points configuration:

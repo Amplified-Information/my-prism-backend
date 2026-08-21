@@ -364,6 +364,19 @@ DB_URL=postgres://$DB_UNAME:$DB_PWORD@$DB_HOST:$DB_PORT/$DB_NAME?sslmode=disable
 
 cd api/db
 psql $DB_URL -f seed.sql
+
+# First, locally, do:
+cat ./api/db/seed.sql | xclip -selection clipboard
+# on remote box (data), do:
+vim seed.sql # paste
+
+source 1_loadEnvVars.sh
+DB_HOST=localhost
+DB_PORT=5432
+DB_URL=postgres://$DB_UNAME:$DB_PWORD@$DB_HOST:$DB_PORT/$DB_NAME?sslmode=disable
+echo $DB_URL
+sudo apt-get install postgresql-client -y
+psql $DB_URL -f seed.sql
 ```
 
 N.B. Do NOT run on prod!

@@ -49,6 +49,16 @@ The following resources (static - not to be deleted) should be created manually 
 - x3 (/prism/dev, /prism/uat, prism/prod) AWS Cloudwatch log groups (30 day retention period) - https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#logsV2:log-groups/create-log-group 
 - ~~EIP (elastic IP address)~~
 
+
+## persistent storage
+
+The data bootstrap mounts the EBS volume identified by the Terraform volume ID. On first boot, it automatically formats the device only when it has no filesystem and no detectable filesystem signatures. Existing filesystems and ambiguous devices are never formatted. On later boots or instance replacement, it reuses the existing filesystem:
+
+`sudo /home/admin/bootstrap-data.sh vol-EXISTING_VOLUME_ID`
+
+Do not change the volume ID for an environment unless you intentionally want a new database.
+
+
 ## DNS hosted zone
 
 A DNS hosted zone has been set up.

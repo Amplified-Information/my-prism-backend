@@ -5,7 +5,7 @@ module "shared" {
   # aws_key_bastion = "$ENV-bastion"
   aws_key_internal = "$ENV"
   domain_name = "$DOMAIN_NAME"
-  ebs_volume_id = "$EBS_VOLUME_ID"
+  ebs_persistent_volume_id = "$EBS_PERSISTENT_VOLUME_ID"
   ssl_cert_arn = "$SSL_CERT_ARN"
   ssl_cert_arn_wildcard = "$SSL_CERT_ARN_WILDCARD"
 
@@ -175,12 +175,13 @@ resource "aws_instance" "data_$ENV" {
 
   user_data = <<-EOF
     #!/bin/bash
+    set -euo pipefail
 
     hostnamectl set-hostname data # script needs to know
 
     ${module.shared.install_base}
-    ${module.shared.install_docker_runner}
     ${module.shared.install_data}
+    ${module.shared.install_docker_runner}
 
     # for good measure
     reboot
@@ -194,7 +195,7 @@ resource "aws_instance" "data_$ENV" {
 resource "aws_volume_attachment" "data_${ENV}_volume_attachment" {
   device_name = "/dev/xvdf"
   instance_id = aws_instance.data_$ENV.id
-  volume_id   = module.shared.ebs_volume_id
+  volume_id   = module.shared.ebs_persistent_volume_id
 }
 
 

@@ -4,27 +4,48 @@ import (
 	"api/server/lib"
 	repositories "api/server/repositories"
 	"math"
-	"math/rand"
+	"os"
 	"strconv"
 	"time"
 )
+
+var distance2durationRatio = 2.0     // weight distance points twice as much as duration points when calculating the total LOM score
+var dollarValue2lomScoreRatio = 1.25 // larger dollar values in the orderbook give more PRISM than a lower dollar value LOM score
+var executionMultiplier = 2.0        // if a txId was fully executed during the epoch, the LOM score is multiplied by this factor to reward execution. Partial execution -> pro-rata
+
+var priceDistanceTiers = []lib.PriceDistanceTier{
+	{Threshold: 0.20, Weight: 5.0},
+	{Threshold: 0.10, Weight: 10.0},
+	{Threshold: 0.05, Weight: 30.0},
+	{Threshold: 0.02, Weight: 60.0},
+	{Threshold: 0.01, Weight: 90.0},
+}
+var orderDuration_ignoreFurtherThan = 0.20 // only consider orders within 20% of the market price for duration points
+var orderDurationTiers = []lib.OrderDurationTier{
+	{Duration: 24 * time.Hour, Weight: 15.0},
+	{Duration: 1 * time.Hour, Weight: 10.0},
+	{Duration: 30 * time.Minute, Weight: 2.0},
+	{Duration: 10 * time.Minute, Weight: 1.0},
+}
 
 type CronLOMService struct {
 	priceRepository             *repositories.PriceRepository
 	marketsRepository           *repositories.MarketsRepository
 	predictionIntentsRepository *repositories.PredictionIntentsRepository
 	prismLomRepository          *repositories.PrismLomRepository
+	prismRewardsRepository      *repositories.PrismRewardsRepository
 
 	hederaService            *HederaService
 	predictionIntentsService *PredictionIntentsService
 }
 
-func (cs *CronLOMService) Init(mr *repositories.MarketsRepository, pir *repositories.PredictionIntentsRepository, hs *HederaService, pis *PredictionIntentsService, pr *repositories.PriceRepository, plr *repositories.PrismLomRepository) error {
+func (cs *CronLOMService) Init(mr *repositories.MarketsRepository, pir *repositories.PredictionIntentsRepository, hs *HederaService, pis *PredictionIntentsService, pr *repositories.PriceRepository, plr *repositories.PrismLomRepository, prr *repositories.PrismRewardsRepository) error {
 	// inject deps
 	cs.priceRepository = pr
 	cs.marketsRepository = mr
 	cs.predictionIntentsRepository = pir
 	cs.prismLomRepository = plr
+	cs.prismRewardsRepository = prr
 
 	cs.hederaService = hs
 	cs.predictionIntentsService = pis
@@ -43,67 +64,62 @@ func (cs *CronLOMService) CronJob() {
 
 // See: https://docs.prism.market/protocol/liquidity-mining-limit-order-mining
 func (cs *CronLOMService) CalcLOM() error {
-	lib.Log(lib.LOG_INFO, "CalcLOM...")
+	cronRanAt := time.Now() // need to store this on the prism_lom table to identify the epoch of orders we are calculating the LOM for
+	lib.Log(lib.LOG_INFO, "%s: CalcLOM...", cronRanAt.UTC().Format(time.RFC3339))
 
 	/////
 	// pause for a random duration between 0-55 minutes to mitigate gaming the system by timing orders right before the cron job runs
+	// NO - gamification mitigation is built-in
 	/////
-	randomMinutes := rand.Intn(56) // random integer between 0 and 55 minutes
-	lib.Log(lib.LOG_INFO, "Pausing for a random duration [0-55] minutes to mitigate gaming: %d minute pause...", randomMinutes)
-	lib.Log(lib.LOG_INFO, "CronLOMService: Sleeping...")
-	time.Sleep(time.Duration(randomMinutes) * time.Minute)
-	lib.Log(lib.LOG_INFO, "CronLOMService: Awake")
-	lib.Log(lib.LOG_INFO, "CronLOMService: Resuming CalcLOM after a %d minute pause...", randomMinutes)
-	cronRanAt := time.Now() // need to store this on the prism_lom table to identify the epoch of orders we are calculating the LOM for
+	// randomMinutes := rand.Intn(56) // random integer between 0 and 55 minutes
+	// lib.Log(lib.LOG_INFO, "Pausing for a random duration [0-55] minutes to mitigate gaming: %d minute pause...", randomMinutes)
+	// lib.Log(lib.LOG_INFO, "CronLOMService: Sleeping...")
+	// time.Sleep(time.Duration(randomMinutes) * time.Minute)
+	// lib.Log(lib.LOG_INFO, "CronLOMService: Awake")
+	// lib.Log(lib.LOG_INFO, "CronLOMService: Resuming CalcLOM after a %d minute pause...", randomMinutes)
 
-	// TODO - centralise this configuration information:
-	var vestingPeriodYears = 6.0
-	if lib.LaunchDate.After(time.Now().AddDate(int(vestingPeriodYears), 0, 0)) {
+	if lib.LaunchDate.After(time.Now().AddDate(0, 0, int(lib.LOMrewardsVestingPeriodDays))) {
 		return lib.ErrorLog("LOM initiative has finished. Date is too far in the future.")
 	}
-
-	var PRISMperDay = (0.1 * float64(lib.TotalNprismTokens)) / (vestingPeriodYears * 365) // 10% of 1 billion PRISM distributed per year, divided by 365 to get daily distribution
-	var prismToBeAllocatedThisRun = PRISMperDay / 24                                      // TODO: derive based on cron string                                   // since this cron runs every hour, we allocate 1/24th of the daily PRISM allocation each run
-
-	var distance2durationRatio = 2.0     // weight distance points twice as much as duration points when calculating the total LOM score
-	var dollarValue2lomScoreRatio = 1.25 // larger dollar values in the orderbook give more PRISM than a lower dollar value LOM score
-
-	// var executionBonusPercentge = 10
-
-	////
-	// set up the weightings
-	/////
-	var priceDistanceTiers = []lib.PriceDistanceTier{
-		{Threshold: 0.20, Weight: 5},
-		{Threshold: 0.10, Weight: 10},
-		{Threshold: 0.05, Weight: 30},
-		{Threshold: 0.02, Weight: 60},
-		{Threshold: 0.01, Weight: 90},
-	}
-	orderDurationMaxPercentageFromMarketPrice := 0.20 // only consider orders within 20% of the market price for duration points
-	var orderDurationTiers = []lib.OrderDurationTier{
-		{Duration: 24 * time.Hour, Weight: 15},
-		{Duration: 1 * time.Hour, Weight: 10},
-		{Duration: 30 * time.Minute, Weight: 2},
-		{Duration: 10 * time.Minute, Weight: 1},
+	if lib.LaunchDate.After(time.Now()) {
+		return lib.ErrorLog("LOM initiative has not started yet. Date is too far in the past.")
 	}
 
-	// Map: marketID -> accountID -> { dollarValue, lom score }
+	var PRISMperDay = ((lib.LOMrewardsPercentOfTokensForLOMrewards / 100) * float64(lib.TotalNprismTokens)) / lib.LOMrewardsVestingPeriodDays
+
+	// calc number of cron jobs per day based off of the CRON_STR_LOM string
+	var cronJobsPerDay = math.MaxFloat64
+	var cronStr = os.Getenv("CRON_STR_LOM")
+	cronJobsPerDay, err := lib.CronJobsPerDay(cronStr)
+	if err != nil {
+		lib.Log(lib.LOG_ERROR, "Failed to convert CRON_STR_LOM to # cron jobs per day %v", err)
+		return err
+	}
+
+	var prismToBeAllocatedThisRun = PRISMperDay / cronJobsPerDay // since this cron runs every hour, we allocate 1/24th of the daily PRISM allocation each run
+
+	// Map: marketID -> accountID -> { size points, lom score }
 	type UserLOMSummary struct {
-		DollarValue float64
-		LOMScore    float64
+		SizePoints float64
+		LOMScore   float64
 	}
 	lom_scores := make(map[string]map[string]UserLOMSummary)
+	netByMarketID := make(map[string]string)
 
-	markets, err := cs.marketsRepository.GetAllUnresolvedMarkets()
+	markets, err := cs.marketsRepository.GetAllUnresolvedMarkets() // N.B. unresolved markets
 	if err != nil {
 		lib.Log(lib.LOG_ERROR, "Failed to fetch unresolved markets: %v", err)
 		return err
 	}
 	lib.Log(lib.LOG_INFO, "Fetched %d unresolved markets", len(markets))
 
+	/////
+	// loop through all active markets:
+	// See: https://docs.prism.market/protocol/liquidity-mining-limit-order-mining
+	/////
 	for _, market := range markets {
 		lib.Log(lib.LOG_INFO, "Calculating LOM for market ID %s", market.MarketID.String())
+		netByMarketID[market.MarketID.String()] = market.Net
 
 		// get the current market price:
 		currentMarketPriceStr, err := cs.priceRepository.GetLatestPriceByMarket(market.MarketID.String())
@@ -142,19 +158,24 @@ func (cs *CronLOMService) CalcLOM() error {
 				continue
 			}
 
-			dollarValueBuyOrdersForUser := 0.0
-			dollarValueSellOrdersForUser := 0.0
-			totalDistancePointsForUser := 0
-			totalDurationPointsForUser := 0
+			// 1. Distance
+			totalDistancePointsForUser := 0.0
+			// 2. Size
+			totalSizePointsForUser := 0.0
+			// 3. Duration
+			totalDurationPointsForUser := 0.0
 
 			for _, pi := range predictionIntentsForUserInMarket {
-				dollarValueBuyOrdersForUser += math.Abs(pi.PriceUsd * pi.QtyRem)
+				// exclude secondary orders:
+				if pi.PrimarySecondary == "s" {
+					continue
+				}
 
 				/////
-				// Calculate *distance* from market price
+				// 1. *distance* from market price
 				/////
 				distance := math.Abs((pi.PriceUsd - currentMarketPrice) / currentMarketPrice)
-				distancePoints := 0
+				distancePoints := 0.0
 				for _, tier := range priceDistanceTiers {
 					if distance <= tier.Threshold && tier.Weight > distancePoints {
 						distancePoints = tier.Weight // override the previous value in the loop
@@ -163,34 +184,45 @@ func (cs *CronLOMService) CalcLOM() error {
 				totalDistancePointsForUser += distancePoints
 
 				/////
-				// Calculate *duration* the order has been sitting in the order book
+				// 2. *size* of the order in USD
+				/////
+				orderSizeUsd := math.Abs(pi.PriceUsd * pi.QtyRem)
+				orderSizePoints := calculateOrderSizePoints(orderSizeUsd, pi.QtyOrig, pi.QtyRem)
+				totalSizePointsForUser += orderSizePoints
+				lib.Log(lib.LOG_INFO, "totalSizePointsForUser = %f", totalSizePointsForUser)
+
+				/////
+				// 3. *duration* the order has been sitting in the order book
 				/////
 				// accounted for in GetAllOpenPredictionIntentsByMarketIdAndAccountId:
 				// - exclude orders that have been matched (fully_matched_at)
 				// - exclude orders that have been cancelled (cancelled_at)
 				// - exclude orders that have been evicted (evicted_at)
 				//
-				// - exclude order that are far away from the market price (orderDurationMaxPercentageFromMarketPrice)
+				// - exclude order that are far away from the market price (orderDuration_ignoreFurtherThan)
 				// - duration calculation is based on: created_at
 
-				if distance > orderDurationMaxPercentageFromMarketPrice {
+				if distance > orderDuration_ignoreFurtherThan {
 					continue // skip duration points calculation for orders that are too far from the market price
-				}
-
-				orderAge := time.Since(pi.CreatedAt)
-				durationPoints := 0
-				for _, tier := range orderDurationTiers {
-					if orderAge >= tier.Duration && tier.Weight > durationPoints {
-						durationPoints = tier.Weight // override the previous value in the loop
+				} else {
+					orderAge := time.Since(pi.CreatedAt)
+					durationPoints := 0.0
+					for _, tier := range orderDurationTiers {
+						if orderAge >= tier.Duration && tier.Weight > durationPoints {
+							durationPoints = tier.Weight // override the previous value in the loop
+						}
 					}
+					totalDurationPointsForUser += durationPoints
 				}
-				totalDurationPointsForUser += durationPoints
 			}
 
 			// add the UserLomSummary object for this market_id and account_id
+			lomScoreForUserInMarket := (distance2durationRatio * totalDistancePointsForUser) + totalDurationPointsForUser
+			lomScoreForUserInMarket += dollarValue2lomScoreRatio * totalSizePointsForUser
+
 			var lomSummaryForUserInMarket = UserLOMSummary{
-				DollarValue: dollarValueBuyOrdersForUser + dollarValueSellOrdersForUser,
-				LOMScore:    float64(distance2durationRatio) * (float64(totalDistancePointsForUser) + float64(totalDurationPointsForUser)),
+				SizePoints: totalSizePointsForUser,
+				LOMScore:   lomScoreForUserInMarket,
 			}
 			var market_id = market.MarketID.String()
 			if _, ok := lom_scores[accountIdStr]; !ok { // if the account_id key doesn't exist in lom_scores, initialize it with an empty map
@@ -198,24 +230,43 @@ func (cs *CronLOMService) CalcLOM() error {
 			}
 			lom_scores[accountIdStr][market_id] = lomSummaryForUserInMarket
 
-			lib.Log(lib.LOG_INFO, "LOM for account ID %s in market ID %s: %f (buyOrders: $%f, sellOrders: $%f, distance points: %d, duration points: %d). Total amount USD in this market: %f", accountIdStr, market.MarketID.String(), lomSummaryForUserInMarket.LOMScore, dollarValueBuyOrdersForUser, dollarValueSellOrdersForUser, totalDistancePointsForUser, totalDurationPointsForUser, totalAmountInMarketUsd)
+			lib.Log(lib.LOG_INFO, "LOM for account ID %s in market ID %s: %f (orders: $%f, distance points: %f, duration points: %f). size: %f", accountIdStr, market.MarketID.String(), lomSummaryForUserInMarket.LOMScore, totalSizePointsForUser, totalDistancePointsForUser, totalDurationPointsForUser, totalAmountInMarketUsd)
+
+			// Now log the LOM score for this account/marketId in the database (prism_lom table):
+			err = cs.prismLomRepository.CreateLOMentryForUserOnMarket(
+				market.MarketID,
+				accountIdStr,
+				totalDistancePointsForUser,
+				totalDurationPointsForUser,
+				totalSizePointsForUser,
+				lomScoreForUserInMarket,
+			)
+			if err != nil {
+				lib.LogAndError(lib.LOG_ERROR, "Failed to create LOM entry in database for account ID %s in market ID %s: %v", accountIdStr, market.MarketID.String(), err)
+			}
 		}
 	}
 
+	//
 	// second pass - calculate the total LOM score and DollarValue for each user across all markets
-	totalDollarValue := 0.0
-	totalLOMScore := 0.0
+	// “Across all markets, how much did each account contribute, and what percentage of this run’s PRISM budget should they receive?”
+	//
 	totalDollarValueByAccount := make(map[string]float64)
 	totalLOMScoreByAccount := make(map[string]float64)
 	compoundedLOMByAccount := make(map[string]float64)
+
+	totalSize := 0.0
+	totalLOMScore := 0.0
 	for accountID, marketMap := range lom_scores {
 		for _, summary := range marketMap {
-			totalDollarValue += summary.DollarValue
+			totalSize += summary.SizePoints
 			totalLOMScore += summary.LOMScore
-			totalDollarValueByAccount[accountID] += summary.DollarValue
+			totalDollarValueByAccount[accountID] += summary.SizePoints
 			totalLOMScoreByAccount[accountID] += summary.LOMScore
 		}
-		compoundedLOMByAccount[accountID] = dollarValue2lomScoreRatio*totalDollarValueByAccount[accountID] + totalLOMScoreByAccount[accountID]
+		compounded := dollarValue2lomScoreRatio*totalDollarValueByAccount[accountID] + totalLOMScoreByAccount[accountID]
+		compoundedLOMByAccount[accountID] = compounded
+
 	}
 	// Now sum all compoundedLOMByAccount values for denominator
 	totalLOMScoreCompounded := 0.0
@@ -223,61 +274,98 @@ func (cs *CronLOMService) CalcLOM() error {
 		totalLOMScoreCompounded += v
 	}
 
-	// TODO - apply the execution bonus (in proportion to dollar amount):
-	// if no execution bonus to be allocated, roll it forward
-
+	//
 	// Final pass: print totals and send (schedule for send) PRISM
-	lib.Log(lib.LOG_INFO, "Total DollarValue across all accountIds and markets: %.2f", totalDollarValue)
+	//
+	lib.Log(lib.LOG_INFO, "Total size across all accountIds and markets: %.2f", totalSize)
 	lib.Log(lib.LOG_INFO, "Total LOMScore across all accountIds and markets: %.2f", totalLOMScore)
 	lib.Log(lib.LOG_INFO, "-> PRISM tokens to be allocated to %d accountIds in this epoch", len(lom_scores))
 	for accountID := range lom_scores {
+		net := ""
+		for marketID := range lom_scores[accountID] {
+			marketNet := netByMarketID[marketID]
+			if net == "" {
+				net = marketNet
+			} else if net != marketNet {
+				lib.Log(lib.LOG_ERROR, "Skipping PRISM reward for account ID %s: LOM spans multiple networks (%s, %s)", accountID, net, marketNet)
+				net = ""
+				break
+			}
+		}
+		if net == "" {
+			continue
+		}
+
 		dollarTotalByAccount := totalDollarValueByAccount[accountID]
 		lomTotalByAccount := totalLOMScoreByAccount[accountID]
-		lib.Log(lib.LOG_INFO, "Account %s: %% of DollarValueTotal=%.2f, %% of LOMScoreTotal=%.2f", accountID, dollarTotalByAccount/totalDollarValue*100, lomTotalByAccount/totalLOMScore*100)
+		lib.Log(lib.LOG_INFO, "Account %s: %% of SizeTotal=%.2f, %% of LOMScoreTotal=%.2f", accountID, dollarTotalByAccount/totalSize*100, lomTotalByAccount/totalLOMScore*100)
 
 		compoundedLOMForUser := compoundedLOMByAccount[accountID]
 		prismToSendUser := 0.0
 		if totalLOMScoreCompounded > 0 {
 			prismToSendUser = prismToBeAllocatedThisRun * (compoundedLOMForUser / totalLOMScoreCompounded)
 		}
+
+		// sanity check the numbers (bounds) before sending, to avoid any bugs that could lead to huge unintended transfers
+		if !sanityCheckPrismAllocation(accountID, prismToSendUser, prismToBeAllocatedThisRun) {
+			continue
+		}
+
 		lib.Log(lib.LOG_INFO, "*** PRISM available to be allocated today: %f", PRISMperDay)
 		lib.Log(lib.LOG_INFO, "*** PRISM available to be allocated this run: %f", prismToBeAllocatedThisRun)
 		lib.Log(lib.LOG_INFO, "*** Transfer %f PRISM (%%%f.2 of the allocation) to accountId: %s (epoch: %s)", prismToSendUser, prismToSendUser/prismToBeAllocatedThisRun*100, accountID, cronRanAt.UTC().Format(time.RFC3339))
 
-		// sanity check the numbers (bounds) before sending, to avoid any bugs that could lead to huge unintended transfers
-		if prismToSendUser < 0 || prismToSendUser > prismToBeAllocatedThisRun {
-			lib.Log(lib.LOG_ERROR, "ERROR: Sanity check failed for account ID %s: prismToSendUser=%f, prismToBeAllocatedThisRun=%f", accountID, prismToSendUser, prismToBeAllocatedThisRun)
-			continue
+		/////
+		// Record the PRISM allocation in the database (prism_rewards table) for this accountId, but do not send it yet. The user will have to redeem it via the web UI.
+		/////
+		tokenDecimalsStr := os.Getenv("TOKEN_DECIMALS")
+		TOKEN_DECIMALS, err := strconv.Atoi(tokenDecimalsStr)
+		if err != nil {
+			lib.Log(lib.LOG_ERROR, "Failed to parse TOKEN_DECIMALS from env: %v.", err)
+			return err
 		}
 
-		/////
-		// Schedule the sending of the PRISM tokens:
-		/////
-		// TODO - handle multiple environments!
-		// hederaTxHash := "<TBD>"
-		// cs.hederaService.SendHTStokens(networkSelected, tokenId, recipientAccountId, prismToSendUser, nDecimals)
+		CreatePrismRewardErr := cs.prismRewardsRepository.CreatePrismReward(
+			net,
+			accountID,
+			int64(prismToSendUser*math.Pow10(TOKEN_DECIMALS)),
+			compoundedLOMForUser/totalLOMScoreCompounded,
+			cronRanAt,
+		)
+		if CreatePrismRewardErr != nil {
+			lib.Log(lib.LOG_ERROR, "Failed to create PRISM reward in the db for account ID %s: %v", accountID, CreatePrismRewardErr)
+			continue
+		}
+		lib.Log(lib.LOG_INFO, "Successfully marked PRISM reward in the db for account ID %s", accountID)
 
-		/////
-		// Log the aggregate LOM result for this account to the database.
-		// The table enforces a non-null UUID pair, so for this aggregate snapshot we
-		// record a sentinel UUID for both the market and prediction-intent tx.
-		/////
-		// marketUUID := uuid.Nil           // n/a - aggregate
-		// predictionIntentTxID := uuid.Nil // n/a - aggregate
-		// hederaTxHash := ""
-		// err := cs.prismLomRepository.CreateLOMentryForUserOnMarket(
-		// 	marketUUID,
-		// 	accountID,
-		// 	predictionIntentTxID,
-		// 	compoundedLOMForUser,
-		// 	cronRanAt,
-		// 	hederaTxHash,
-		// )
-		// if err != nil {
-		// 	lib.LogAndError(lib.LOG_ERROR, "Failed to create LOM entry in database for account ID %s: %v", accountID, err)
-		// }
 	}
 
 	return nil
 
+}
+
+func calculateOrderSizePoints(orderSizeUsd, qtyOrig, qtyRem float64) float64 {
+	baseSizePoints := orderSizeUsd
+	if qtyOrig <= 0 {
+		return baseSizePoints
+	}
+
+	ratioMatched := 1 - (qtyRem / qtyOrig)
+	if ratioMatched < 0 {
+		ratioMatched = 0
+	}
+	if ratioMatched > 1 {
+		ratioMatched = 1
+	}
+
+	executionBonus := orderSizeUsd * (executionMultiplier - 1) * ratioMatched
+	return baseSizePoints + executionBonus
+}
+
+func sanityCheckPrismAllocation(accountID string, prismToSendUser, prismToBeAllocatedThisRun float64) bool {
+	if prismToSendUser < 0 || prismToSendUser > prismToBeAllocatedThisRun {
+		lib.Log(lib.LOG_ERROR, "ERROR: Sanity check failed for account ID %s: prismToSendUser=%f, prismToBeAllocatedThisRun=%f", accountID, prismToSendUser, prismToBeAllocatedThisRun)
+		return false
+	}
+	return true
 }

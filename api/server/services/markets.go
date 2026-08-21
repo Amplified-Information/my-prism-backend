@@ -18,16 +18,14 @@ type MarketsService struct {
 	marketsRepository    *repositories.MarketsRepository
 	hederaService        *HederaService
 	priceService         *PriceService
-	prismPointsService   *PrismPointsService
 	priceRepository      *repositories.PriceRepository
 	categoriesRepository *repositories.CategoriesRepository
 }
 
-func (ms *MarketsService) Init(marketsRepository *repositories.MarketsRepository, hederaService *HederaService, priceService *PriceService, prismPointsService *PrismPointsService, categoriesRepository *repositories.CategoriesRepository) error {
+func (ms *MarketsService) Init(marketsRepository *repositories.MarketsRepository, hederaService *HederaService, priceService *PriceService, categoriesRepository *repositories.CategoriesRepository) error {
 	ms.marketsRepository = marketsRepository
 	ms.hederaService = hederaService
 	ms.priceService = priceService
-	ms.prismPointsService = prismPointsService
 	ms.priceRepository = priceService.priceRepository
 	ms.categoriesRepository = categoriesRepository
 
@@ -435,13 +433,15 @@ func (ms *MarketsService) ResolveMarket(marketId string, outcome int32) (bool, e
 	}
 
 	// step 4 - award Prism points - https://docs.prism.market/protocol/prism-points-campaign
-	isOK, err = ms.prismPointsService.AwardPrismPoints(marketId)
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "failed to award Prism points: %v", err)
-	}
-	if !isOK {
-		return false, lib.LogAndError(lib.LOG_ERROR, "failed to award Prism points for unknown reasons")
-	}
+	// No. This is done automatically now in cronLOM.go
+	//////
+	// isOK, err = ms.prismPointsService.AwardPrismPoints(marketId)
+	// if err != nil {
+	// 	return false, lib.LogAndError(lib.LOG_ERROR, "failed to award Prism points: %v", err)
+	// }
+	// if !isOK {
+	// 	return false, lib.LogAndError(lib.LOG_ERROR, "failed to award Prism points for unknown reasons")
+	// }
 
 	// set 5 - log an event on HCS:
 	err = ms.hederaService.LogMarketResolvedEvent(market.Net, marketId, outcome)

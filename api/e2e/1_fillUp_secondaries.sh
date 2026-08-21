@@ -342,9 +342,22 @@ for i in "${!account_ids[@]}"; do
 		echo "[submit $account_progress/$accounts_total] Account $account_id token=$token side=$side qty=$qty price=$price: submitting CreatePredictionIntent..."
 
 		create_prediction_intent "$i" "$price" "$qty" "s" >/dev/null || {
-			echo "Warning: CreatePredictionIntent transport failure for account $account_id token=$token"
-			continue
+			echo "PANIC: CreatePredictionIntent failed for account $account_id token=$token side=$side qty=$qty price=$price" >&2
+			echo "PANIC: transport or API error returned by CreatePredictionIntent; aborting run." >&2
+			exit 1
 		}
+
+		if [[ -z "$CREATE_LAST_TX_ID" || "$CREATE_LAST_TX_ID" == "null" || "$CREATE_LAST_TX_ID" == "" ]]; then
+			echo "PANIC: CreatePredictionIntent returned no txId for account $account_id token=$token side=$side qty=$qty price=$price" >&2
+			echo "PANIC: API response: $CREATE_LAST_RESPONSE_JSON" >&2
+			exit 1
+		fi
+
+		if [[ "$CREATE_LAST_ERROR_CODE" != "0" ]]; then
+			echo "PANIC: CreatePredictionIntent returned errorCode=$CREATE_LAST_ERROR_CODE for account $account_id token=$token side=$side qty=$qty price=$price" >&2
+			echo "PANIC: API message: $CREATE_LAST_MESSAGE" >&2
+			exit 1
+		fi
 
 		row="$(printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' "$account_id" "$token" "$held_raw" "$sell_raw" "$qty" "$price" "$side" "$CREATE_LAST_TX_ID" "$CREATE_LAST_ERROR_CODE" "$CREATE_LAST_MESSAGE")"
 		submitted_rows+=("$row")
