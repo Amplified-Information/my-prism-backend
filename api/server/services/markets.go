@@ -80,6 +80,7 @@ func (ms *MarketsService) buildMarketResponse(market *sqlc.Market, priceUsd floa
 		HexColorYes:     market.HexColorYes.String,
 		HexColorNo:      market.HexColorNo.String,
 		RakePercent:     rakePercent,
+		IsLomEnabled:    market.IsLomEnabled,
 	}, nil
 }
 
@@ -183,7 +184,7 @@ func (ms *MarketsService) CreateMarket(req *pb_api.CreateMarketRequest) (*pb_api
 	aliasNo := ""
 	hexColorYes := ""
 	hexColorNo := ""
-	market, err := ms.marketsRepository.CreateMarket(req.MarketId, req.Net, req.ImageUrl, req.Statement, closesAt, req.Description, req.Rules, contractID.String(), aliasYes, aliasNo, hexColorYes, hexColorNo)
+	market, err := ms.marketsRepository.CreateMarket(req.MarketId, req.Net, req.ImageUrl, req.Statement, closesAt, req.Description, req.Rules, contractID.String(), aliasYes, aliasNo, hexColorYes, hexColorNo, true)
 	if err != nil {
 		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to create a new market row (marketId=%s) on the db: %v", req.MarketId, err)
 	}
@@ -246,6 +247,12 @@ func (ms *MarketsService) CreateMarketv2(req *pb_api.CreateMarketv2Request) (*pb
 		hexColorNo = *req.HexColorNo
 	}
 
+	// matches the markets.is_lom_enabled column default
+	isLomEnabled := true
+	if req.IsLomEnabled != nil {
+		isLomEnabled = *req.IsLomEnabled
+	}
+
 	/////
 	// OK - 3 steps to create a new market
 	/////
@@ -276,7 +283,7 @@ func (ms *MarketsService) CreateMarketv2(req *pb_api.CreateMarketv2Request) (*pb
 		// YES, use the current X_SMART_CONTRACT_ID loaded from env vars - we're creating a new market
 		os.Getenv(fmt.Sprintf("%s_SMART_CONTRACT_ID", strings.ToUpper(req.Net))),
 	)
-	market, err := ms.marketsRepository.CreateMarket(req.MarketId, req.Net, imgUrl, req.Statement, closesAt, req.Description, req.Rules, contractID.String(), aliasYes, aliasNo, hexColorYes, hexColorNo)
+	market, err := ms.marketsRepository.CreateMarket(req.MarketId, req.Net, imgUrl, req.Statement, closesAt, req.Description, req.Rules, contractID.String(), aliasYes, aliasNo, hexColorYes, hexColorNo, isLomEnabled)
 	if err != nil {
 		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to create a new market row (marketId=%s) on the db: %v", req.MarketId, err)
 	}
@@ -510,8 +517,12 @@ func (ms *MarketsService) PatchMarket(req *pb_api.PatchMarketRequest) (*pb_api.M
 	if req.HexColorNo != nil {
 		hexColorNo = *req.HexColorNo
 	}
+	isLomEnabled := currentMarket.IsLomEnabled
+	if req.IsLomEnabled != nil {
+		isLomEnabled = *req.IsLomEnabled
+	}
 
-	market, err := ms.marketsRepository.PatchMarket(req.MarketId, imageUrl, description, rules, aliasYes, aliasNo, hexColorYes, hexColorNo)
+	market, err := ms.marketsRepository.PatchMarket(req.MarketId, imageUrl, description, rules, aliasYes, aliasNo, hexColorYes, hexColorNo, isLomEnabled)
 	if err != nil {
 		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to patch market: %v", err)
 	}

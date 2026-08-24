@@ -118,6 +118,11 @@ func (cs *CronLOMService) CalcLOM() error {
 	// See: https://docs.prism.market/protocol/liquidity-mining-limit-order-mining
 	/////
 	for _, market := range markets {
+		if market.IsLomEnabled == false {
+			lib.Log(lib.LOG_INFO, "Skipping market ID %s: LOM is disabled for this market", market.MarketID.String())
+			continue
+		}
+
 		lib.Log(lib.LOG_INFO, "Calculating LOM for market ID %s", market.MarketID.String())
 		netByMarketID[market.MarketID.String()] = market.Net
 

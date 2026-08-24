@@ -1,7 +1,5 @@
 # services:
-#   web:
-#     image: ghcr.io/prismmarketlabs/web:0.6.5
-  # api:
+  # api: # bound to versions: web, web.admin, web.lp
   #   #image: ghcr.io/prismmarketlabs/api:0.1.0
   #   deploy:
   #     replicas: 0
@@ -9,3 +7,5 @@
   #   #image: ghcr.io/prismmarketlabs/clob:0.1.0
   #   deploy:
   #     replicas: 0
+  #   web: # bound to versions: api
+  #     image: ghcr.io/prismmarketlabs/web:0.6.5

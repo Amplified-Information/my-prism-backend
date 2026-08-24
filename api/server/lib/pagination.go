@@ -28,7 +28,7 @@ func ClampLimit(limit int32) int32 {
 
 // NewPagination reports the page the caller actually got, so clients can page without
 // guessing whether a short page means "end of data" or "limit was clamped".
-func NewPagination(limit int32, offset int32, total int64, returned int) *pb_api.Pagination {
+func NewPagination(limit int32, offset int32, total int64, returned int) *pb_api.PaginationRes {
 	consumed := int64(offset) + int64(returned)
 	hasMore := consumed < total
 
@@ -37,7 +37,7 @@ func NewPagination(limit int32, offset int32, total int64, returned int) *pb_api
 		nextOffset = int32(consumed)
 	}
 
-	return &pb_api.Pagination{
+	return &pb_api.PaginationRes{
 		Limit:      limit,
 		Offset:     offset,
 		Total:      total,

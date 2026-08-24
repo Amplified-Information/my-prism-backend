@@ -116,7 +116,7 @@ func (marketsRepository *MarketsRepository) GetCategories() ([]sqlc.Category, er
 	return categories, nil
 }
 
-func (marketsRepository *MarketsRepository) CreateMarket(marketId string, _net string, _imageUrl string, _statement string, closesAt time.Time, _description string, _rules string, smartContractId string, aliasYes string, aliasNo string, hexColorYes string, hexColorNo string) (*sqlc.Market, error) {
+func (marketsRepository *MarketsRepository) CreateMarket(marketId string, _net string, _imageUrl string, _statement string, closesAt time.Time, _description string, _rules string, smartContractId string, aliasYes string, aliasNo string, hexColorYes string, hexColorNo string, isLomEnabled bool) (*sqlc.Market, error) {
 	if marketsRepository.db == nil {
 		return nil, lib.ErrorLog("database not initialized")
 	}
@@ -166,6 +166,7 @@ func (marketsRepository *MarketsRepository) CreateMarket(marketId string, _net s
 		AliasNo:         sql.NullString{String: aliasNo, Valid: aliasNo != ""},
 		HexColorYes:     sql.NullString{String: hexColorYes, Valid: hexColorYes != ""},
 		HexColorNo:      sql.NullString{String: hexColorNo, Valid: hexColorNo != ""},
+		IsLomEnabled:    isLomEnabled,
 	})
 	if err != nil {
 		tx.Rollback() // Rollback the transaction on error
@@ -180,7 +181,7 @@ func (marketsRepository *MarketsRepository) CreateMarket(marketId string, _net s
 	return &market, nil
 }
 
-func (marketsRepository *MarketsRepository) PatchMarket(marketId string, imageUrl string, description string, rules string, aliasYes string, aliasNo string, hexColorYes string, hexColorNo string) (*sqlc.Market, error) {
+func (marketsRepository *MarketsRepository) PatchMarket(marketId string, imageUrl string, description string, rules string, aliasYes string, aliasNo string, hexColorYes string, hexColorNo string, isLomEnabled bool) (*sqlc.Market, error) {
 	if marketsRepository.db == nil {
 		return nil, lib.ErrorLog("database not initialized")
 	}
@@ -195,14 +196,15 @@ func (marketsRepository *MarketsRepository) PatchMarket(marketId string, imageUr
 	rules = strings.TrimSpace(rules)
 	q := sqlc.New(marketsRepository.db)
 	market, err := q.PatchMarket(context.Background(), sqlc.PatchMarketParams{
-		MarketID: marketUUID,
-		Column2:  sql.NullString{String: imageUrl, Valid: imageUrl != ""},
-		Column3:  sql.NullString{String: description, Valid: description != ""},
-		Column4:  sql.NullString{String: rules, Valid: rules != ""},
-		Column5:  sql.NullString{String: aliasYes, Valid: aliasYes != ""},
-		Column6:  sql.NullString{String: aliasNo, Valid: aliasNo != ""},
-		Column7:  sql.NullString{String: hexColorYes, Valid: hexColorYes != ""},
-		Column8:  sql.NullString{String: hexColorNo, Valid: hexColorNo != ""},
+		MarketID:     marketUUID,
+		Column2:      sql.NullString{String: imageUrl, Valid: imageUrl != ""},
+		Column3:      sql.NullString{String: description, Valid: description != ""},
+		Column4:      sql.NullString{String: rules, Valid: rules != ""},
+		Column5:      sql.NullString{String: aliasYes, Valid: aliasYes != ""},
+		Column6:      sql.NullString{String: aliasNo, Valid: aliasNo != ""},
+		Column7:      sql.NullString{String: hexColorYes, Valid: hexColorYes != ""},
+		Column8:      sql.NullString{String: hexColorNo, Valid: hexColorNo != ""},
+		IsLomEnabled: isLomEnabled,
 	})
 	if err != nil {
 		return nil, lib.ErrorLog("PatchMarket failed", "error", err, "marketId", marketId)
