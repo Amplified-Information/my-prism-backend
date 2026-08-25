@@ -32,20 +32,7 @@ var SigSchemeDateRanges = [][2]int64{
 var LIMIT int32 = 50
 var OFFSET int32 = 0
 
-// ///
-// PRISM points
-// ///
-const TotalNprismTokens = 100_000_000
-const LOMrewardsVestingPeriodDays = 6.0 * 365 // 6 years
-const LOMrewardsPercentOfTokensForLOMrewards = 10.0
-
 var LaunchDate = time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC)
 
-// prism points configuration:
-// var Seasons = [][2]int64{
-// 	{1764374400, 1772419199}, // season 0: 1st Apr 2026 00:00:00 to 30th Jun 2026 23:59:59
-// 	{1772419200, 1780377599}, // season 1: 1st Jul 2026 00:00:00 to 30th Sep 2026 23:59:59
-// 	{1780377600, 1788326399}, // season 2: 1st Oct 2026 00:00:00 to 31st Dec 2026 23:59:59
-// 	{1788326400, 1796207999}, // season 3: 1st Jan 2027 00:00:00 to 31st Mar 2027 23:59:59
-// 	{1796208000, 1804089599}, // season 4: 1st Apr 2027 00:00:00 to 30th Jun 2027 23:59:59
-// }
+const TotalNprismTokens = 100_000_000
+

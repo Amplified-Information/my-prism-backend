@@ -53,6 +53,7 @@ type server struct {
 	prismService               services.Prism
 	prismRewardsService        services.PrismRewardsService
 	prismLomService            services.PrismLOMservice
+	cronRewardsCampaignService services.CronRewardsCampaignService
 
 	// don't forget to register in RegisterApiServiceServer grpc call in main()
 }
@@ -799,6 +800,12 @@ func main() {
 		fatal("Failed to initialize PrismLOM service: %v", err)
 	}
 
+	cronRewardsCampaignService := services.CronRewardsCampaignService{}
+	err = cronRewardsCampaignService.Init(&hederaService, &predictionIntentsService, &prismRewardsRepository)
+	if err != nil {
+		fatal("Failed to initialize CronRewardsCampaign service: %v", err)
+	}
+
 	// Now start gRPC service
 	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%s", os.Getenv("API_SELF_HOST"), os.Getenv("API_SELF_PORT")))
 	if err != nil {
@@ -861,6 +868,11 @@ func main() {
 	}
 
 	_, err = c.AddFunc(os.Getenv("CRON_STR_LOM"), cronLOMService.CronJob)
+	if err != nil {
+		fatal("Failed to schedule cron job: %v", err)
+	}
+
+	_, err = c.AddFunc(os.Getenv("CRON_STR_REWARDS_CAMPAIGN"), cronRewardsCampaignService.CronJob)
 	if err != nil {
 		fatal("Failed to schedule cron job: %v", err)
 	}

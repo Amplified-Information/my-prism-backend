@@ -1,11 +1,11 @@
 services:
   api: # bound to versions: web, web.admin, web.lp
-    image: ghcr.io/prismmarketlabs/api:0.7.3
+    image: ghcr.io/prismmarketlabs/api:0.7.4
   clob:
     image: ghcr.io/prismmarketlabs/clob:0.3.9
   web: # bound to versions: api
-    image: ghcr.io/prismmarketlabs/web:0.8.16
+    image: ghcr.io/prismmarketlabs/web:0.8.17
   web.admin: # bound to versions: api
-    image: ghcr.io/prismmarketlabs/web.admin:0.2.7
+    image: ghcr.io/prismmarketlabs/web.admin:0.2.8
   web.lp: # bound to versions: api
     image: ghcr.io/prismmarketlabs/web.lp:0.4.8

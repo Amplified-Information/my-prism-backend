@@ -46,18 +46,20 @@ func (prismRewardsRepository *PrismRewardsRepository) CreatePrismReward(
 	nPrismScaled int64,
 	ratioOfAllocation float64,
 	cronRanAt time.Time,
+	campaignID int64,
 ) error {
 	if prismRewardsRepository.db == nil {
 		return lib.ErrorLog("database not initialized")
 	}
 
 	q := sqlc.New(prismRewardsRepository.db)
-	err := q.CreatePrismReward(context.Background(), sqlc.CreatePrismRewardParams{
+	err := q.CreatePrismReward(context.Background(), sqlc.CreatePrismRewardParams{ // schedule PRISM send/redeem
 		Net:               net,
 		DestAccountID:     destAccountID,
 		NPrismScaled:      nPrismScaled,
 		RatioOfAllocation: ratioOfAllocation,
 		CronRanAt:         sql.NullTime{Time: cronRanAt, Valid: true},
+		CampaignID:        campaignID,
 	})
 	if err != nil {
 		return lib.ErrorLog("failed to create prism reward", "error", err)

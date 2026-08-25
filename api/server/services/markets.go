@@ -439,8 +439,9 @@ func (ms *MarketsService) ResolveMarket(marketId string, outcome int32) (bool, e
 		return false, lib.LogAndError(lib.LOG_ERROR, "failed to resolve market on CLOB: %v", err)
 	}
 
-	// step 4 - award Prism points - https://docs.prism.market/protocol/prism-points-campaign
-	// No. This is done automatically now in cronLOM.go
+	// TODO
+	// step 4 - award Prism "points" - https://docs.prism.market/protocol/prism-points-campaign
+	// This should be done in a separate service
 	//////
 	// isOK, err = ms.prismPointsService.AwardPrismPoints(marketId)
 	// if err != nil {

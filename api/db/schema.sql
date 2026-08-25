@@ -1040,6 +1040,7 @@ CREATE TABLE public.prism_rewards (
     updated_at timestamp without time zone DEFAULT now() NOT NULL,
     is_redeemable boolean DEFAULT false NOT NULL,
     net character varying(255) DEFAULT 'testnet'::character varying NOT NULL,
+    campaign_id bigint DEFAULT 1 NOT NULL,
     CONSTRAINT prism_rewards_dest_account_id_check CHECK (((dest_account_id)::text ~ '^[0-9]+\.[0-9]+\.[0-9]+$'::text)),
     CONSTRAINT prism_rewards_n_prism_scaled_check CHECK ((n_prism_scaled >= 0)),
     CONSTRAINT prism_rewards_net_check CHECK (((net)::text = ANY ((ARRAY['mainnet'::character varying, 'testnet'::character varying])::text[]))),

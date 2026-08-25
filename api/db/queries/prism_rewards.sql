@@ -5,9 +5,10 @@ INSERT INTO prism_rewards (
   dest_account_id,
   n_prism_scaled,
   ratio_of_allocation,
-  cron_ran_at
+  cron_ran_at,
+  campaign_id
 ) VALUES (
-  $1, $2, $3, $4, $5
+  $1, $2, $3, $4, $5, $6
 ) RETURNING *;
 
 

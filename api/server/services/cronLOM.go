@@ -9,6 +9,25 @@ import (
 	"time"
 )
 
+/////
+// campaign_id = 1
+/////
+
+const LOMrewardsAllocationAbsolute = 30_000_000 // 30 million PRISM tokens allocated for LOM rewards over the 6 year vesting period
+
+var LOMrewardsVestingSchedule = []struct {
+	Year int
+	N    int
+}{
+	{Year: 1, N: 8_600_000},
+	{Year: 2, N: 7_200_000},
+	{Year: 3, N: 5_400_000},
+	{Year: 4, N: 4_375_000},
+	{Year: 5, N: 3_200_000},
+	{Year: 6, N: 1_225_000},
+	// sum: 30_000_000
+}
+
 var distance2durationRatio = 2.0     // weight distance points twice as much as duration points when calculating the total LOM score
 var dollarValue2lomScoreRatio = 1.25 // larger dollar values in the orderbook give more PRISM than a lower dollar value LOM score
 var executionMultiplier = 2.0        // if a txId was fully executed during the epoch, the LOM score is multiplied by this factor to reward execution. Partial execution -> pro-rata
@@ -78,14 +97,15 @@ func (cs *CronLOMService) CalcLOM() error {
 	// lib.Log(lib.LOG_INFO, "CronLOMService: Awake")
 	// lib.Log(lib.LOG_INFO, "CronLOMService: Resuming CalcLOM after a %d minute pause...", randomMinutes)
 
-	if lib.LaunchDate.After(time.Now().AddDate(0, 0, int(lib.LOMrewardsVestingPeriodDays))) {
+	now := time.Now()
+	if now.After(lib.LaunchDate.AddDate(len(LOMrewardsVestingSchedule), 0, 0)) {
 		return lib.ErrorLog("LOM initiative has finished. Date is too far in the future.")
 	}
-	if lib.LaunchDate.After(time.Now()) {
+	if lib.LaunchDate.After(now) {
 		return lib.ErrorLog("LOM initiative has not started yet. Date is too far in the past.")
 	}
 
-	var PRISMperDay = ((lib.LOMrewardsPercentOfTokensForLOMrewards / 100) * float64(lib.TotalNprismTokens)) / lib.LOMrewardsVestingPeriodDays
+	var PRISMperDay = lomRewardsPerDayAtTime(now)
 
 	// calc number of cron jobs per day based off of the CRON_STR_LOM string
 	var cronJobsPerDay = math.MaxFloat64
@@ -330,12 +350,13 @@ func (cs *CronLOMService) CalcLOM() error {
 			return err
 		}
 
-		CreatePrismRewardErr := cs.prismRewardsRepository.CreatePrismReward(
+		CreatePrismRewardErr := cs.prismRewardsRepository.CreatePrismReward( // schedule PRISM send/redeem
 			net,
 			accountID,
 			int64(prismToSendUser*math.Pow10(TOKEN_DECIMALS)),
 			compoundedLOMForUser/totalLOMScoreCompounded,
 			cronRanAt,
+			1, // campaign_id = 1 for LOM
 		)
 		if CreatePrismRewardErr != nil {
 			lib.Log(lib.LOG_ERROR, "Failed to create PRISM reward in the db for account ID %s: %v", accountID, CreatePrismRewardErr)
@@ -373,4 +394,48 @@ func sanityCheckPrismAllocation(accountID string, prismToSendUser, prismToBeAllo
 		return false
 	}
 	return true
+}
+
+/////
+// helper functions to calculate the total LOM score and PRISM allocation for each accountId across all markets
+/////
+
+func lomRewardsVestingScheduleTotal() int {
+	total := 0
+	for _, entry := range LOMrewardsVestingSchedule {
+		total += entry.N
+	}
+	return total
+}
+
+func lomRewardsForYearAtTime(at time.Time) float64 {
+	if at.Before(lib.LaunchDate) {
+		return 0
+	}
+
+	yearIndex := at.Year() - lib.LaunchDate.Year()
+	if at.Before(lib.LaunchDate.AddDate(yearIndex, 0, 0)) {
+		yearIndex--
+	}
+	if yearIndex < 0 {
+		return 0
+	}
+	if yearIndex >= len(LOMrewardsVestingSchedule) {
+		return 0
+	}
+	return float64(LOMrewardsVestingSchedule[yearIndex].N)
+}
+
+func lomRewardsPerDayAtTime(at time.Time) float64 {
+	allocationForCurrentYear := lomRewardsForYearAtTime(at)
+	if allocationForCurrentYear <= 0 {
+		return 0
+	}
+	return allocationForCurrentYear / 365.0
+}
+
+func init() {
+	if total := lomRewardsVestingScheduleTotal(); total != LOMrewardsAllocationAbsolute {
+		panic("LOM rewards vesting schedule total does not match LOMrewardsAllocationAbsolute")
+	}
 }
