@@ -22,16 +22,7 @@ if [[ ! -f "$ENV_FILE" ]]; then
 fi
 
 env_get() {
-  local key="$1"
-  awk -F '=' -v k="$key" '
-    $1==k {
-      val=substr($0, index($0, "=")+1)
-      sub(/^[[:space:]]+/, "", val)
-      sub(/[[:space:]]+$/, "", val)
-      print val
-      exit
-    }
-  ' "$ENV_FILE"
+  e2e_env_get "$1"
 }
 
 if ! command -v easyrpc &> /dev/null; then
@@ -140,14 +131,6 @@ add_float() {
   local a="$1"
   local b="$2"
   awk -v x="$a" -v y="$b" 'BEGIN { printf "%.6f", x + y }'
-}
-
-resolve_evm_address() {
-  local account_id="$1"
-  local mirror_base="https://${network}.mirrornode.hedera.com"
-  local account_json
-  account_json=$(curl -sfL "$mirror_base/api/v1/accounts/$account_id") || return 1
-  printf '%s\n' "$account_json" | sed -n 's/.*"evm_address"[[:space:]]*:[[:space:]]*"0x\{0,1\}\([0-9a-fA-F]\{40\}\)".*/\1/p' | head -n 1 | tr 'A-F' 'a-f'
 }
 
 fetch_user_portfolio_json() {
@@ -460,10 +443,18 @@ done
 
 orders_file_path="${orders_file:-$OUT_DIR/fillup_orders_${marketId}.tsv}"
 tolerance_qty="0.000500"
+expected_orders_file="fillup_orders_${marketId}.tsv"
+orders_file_name="${orders_file_path##*/}"
 
 echo "Using state file: $state_file"
 echo "Run timestamp: ${run_timestamp:-unknown}"
 echo "Reconciling market: $marketId on network: $network"
+
+if [[ "$orders_file_name" != "$expected_orders_file" ]]; then
+  echo "Error: order ledger does not match market $marketId: $orders_file_path"
+  echo "Run ./1_fillUp.sh for market $marketId to generate a matching state and ledger."
+  exit 1
+fi
 
 if [[ -f "$orders_file_path" ]]; then
   build_expected_open_state_from_ledger "$orders_file_path" "$tolerance_qty"
@@ -485,7 +476,7 @@ for i in "${loaded_indices[@]}"; do
   account_id="${account_ids[$i]}"
   [[ -z "$account_id" ]] && continue
 
-  evm_address=$(resolve_evm_address "$account_id")
+  evm_address=$(e2e_resolve_evm_address "$account_id")
   if [[ -z "$evm_address" ]]; then
     echo "Error: failed to resolve evmAddress for account $account_id via https://${network}.mirrornode.hedera.com."
     prefetch_failed=1
@@ -738,7 +729,7 @@ for i in "${loaded_indices[@]}"; do
   summary_rows+=("$summary_row")
 
   if (( $(echo "$abs_delta_collateral > $tolerance_qty" | bc -l) )) || (( $(echo "$max_abs_delta > $tolerance_qty" | bc -l) )); then
-    evm_address=$(resolve_evm_address "$account_id") || evm_address=""
+    evm_address=$(e2e_resolve_evm_address "$account_id") || evm_address=""
     if [[ -n "$evm_address" ]] && ! refresh_account_portfolio_if_missing "$i" "$account_id" "$evm_address" 6; then
       echo "Warning: account $account_id portfolio did not converge within the retry window; using the last snapshot for mismatch analysis." >&2
     fi

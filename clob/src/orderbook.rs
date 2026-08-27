@@ -2,7 +2,6 @@ use tokio::sync::RwLock;
 use std::{sync::Arc, collections::{HashMap, HashSet}};
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
-use log;
 
 // Global LUT to ensure unique tx_id's
 static TX_ID_LUT: Lazy<Mutex<HashSet<String>>> = Lazy::new(|| Mutex::new(HashSet::new()));
@@ -43,7 +42,7 @@ impl OrderBookService {
         order_books.insert(market_id.to_lowercase(), Arc::new(RwLock::new(OrderBook::new(&self.nats_service))));
 
         log::info!("New market \"{}\" added to OrderBookService", market_id.to_lowercase());
-        return Ok(true);
+        Ok(true)
     }
 
     // pub async fn remove_market(&self, market_id: &str) {

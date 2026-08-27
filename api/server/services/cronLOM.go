@@ -350,7 +350,7 @@ func (cs *CronLOMService) CalcLOM() error {
 			return err
 		}
 
-		CreatePrismRewardErr := cs.prismRewardsRepository.CreatePrismReward( // schedule PRISM send/redeem
+		CreatePrismRewardErr := cs.prismRewardsRepository.CreatePrismReward( // schedule PRISM send/redeem 
 			net,
 			accountID,
 			int64(prismToSendUser*math.Pow10(TOKEN_DECIMALS)),

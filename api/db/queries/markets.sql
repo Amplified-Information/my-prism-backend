@@ -93,6 +93,17 @@ SELECT COUNT(*) FROM markets
 
 
 
+-- name: GetResolvedMarketsAfter :many
+SELECT * FROM markets
+WHERE resolved_at IS NOT NULL
+AND resolved_at > $1
+AND deleted_at IS NULL
+AND is_suspended = FALSE
+AND is_paused = FALSE
+ORDER BY resolved_at DESC;
+
+
+
 
 
 

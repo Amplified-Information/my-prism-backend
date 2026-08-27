@@ -15,6 +15,10 @@ cd api
 cd api
 source loadEnv.sh local
 go run ./server/
+
+
+# run unit tests:
+go test ./..
 ```
 
 **Note:**

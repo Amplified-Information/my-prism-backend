@@ -127,7 +127,39 @@ RETURNING *;
 
 
 
+
+
+
 -- READ
+
+-- name: GetPositionsByMarketId :many
+SELECT positions.*
+FROM positions
+JOIN markets ON positions.market_id = markets.market_id
+WHERE positions.market_id = $1
+  AND markets.deleted_at IS NULL
+  AND markets.is_suspended = FALSE 
+  AND markets.is_paused = FALSE;
+
+-- name: GetPositionsByMarketIdNotResolved :many
+SELECT positions.*
+FROM positions
+JOIN markets ON positions.market_id = markets.market_id
+WHERE positions.market_id = $1
+  AND markets.resolved_at IS NULL 
+  AND markets.deleted_at IS NULL
+  AND markets.is_suspended = FALSE 
+  AND markets.is_paused = FALSE;
+
+-- -- name: GetPositionsByMarketIdResolved :many
+-- SELECT positions.*
+-- FROM positions
+-- JOIN markets ON positions.market_id = markets.market_id
+-- WHERE positions.market_id = $1
+--   AND markets.resolved_at IS NOT NULL 
+--   AND markets.deleted_at IS NULL
+--   AND markets.is_suspended = FALSE 
+--   AND markets.is_paused = FALSE;
 
 -- name: GetUserPositions :many
 SELECT
@@ -180,17 +212,6 @@ LIMIT $1 OFFSET $2;
 SELECT COUNT(*)
 FROM positions;
 
-
--- name: GetPositionsByMarketIdNoPointsAwardedMarketNotResolved :many
-SELECT positions.*
-FROM positions
-JOIN markets ON positions.market_id = markets.market_id
-WHERE positions.market_id = $1
-  AND positions.points_awarded_at IS NULL
-  AND markets.deleted_at IS NULL
-  AND markets.resolved_at IS NULL 
-  AND markets.is_suspended = FALSE 
-  AND markets.is_paused = FALSE;
 
 -- name: GetCostBasisForUserOnMarket :one
 SELECT p.cost_basis_price_yes_usd, p.cost_basis_price_no_usd

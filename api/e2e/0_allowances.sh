@@ -52,16 +52,7 @@ if [[ ! -d "$SCS_DIR/node_modules" ]]; then
 fi
 
 env_get() {
-	local key="$1"
-	awk -F '=' -v k="$key" '
-		$1==k {
-			val=substr($0, index($0, "=")+1)
-			sub(/^[[:space:]]+/, "", val)
-			sub(/[[:space:]]+$/, "", val)
-			print val
-			exit
-		}
-	' "$ENV_FILE"
+	e2e_env_get "$1"
 }
 
 net_from_env=$(env_get "NET")
@@ -171,14 +162,6 @@ if [[ $loaded_accounts -eq 0 ]]; then
 	echo "No private keys found in .env file."
 	exit 1
 fi
-
-resolve_evm_address() {
-	local account_id="$1"
-	local mirror_base="https://${network}.mirrornode.hedera.com"
-	local account_json
-	account_json=$(curl -sfL "$mirror_base/api/v1/accounts/$account_id") || return 1
-	printf '%s\n' "$account_json" | sed -n 's/.*"evm_address"[[:space:]]*:[[:space:]]*"0x\{0,1\}\([0-9a-fA-F]\{40\}\)".*/\1/p' | head -n 1 | tr 'A-F' 'a-f'
-}
 
 read_balance_line() {
 	local account_id="$1"

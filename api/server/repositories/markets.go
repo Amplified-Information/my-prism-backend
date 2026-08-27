@@ -319,3 +319,17 @@ func (marketsRepository *MarketsRepository) SoftDeleteMarket(marketId string) (b
 
 	return true, nil
 }
+
+func (marketsRepository *MarketsRepository) GetResolvedMarketsAfter(after time.Time) ([]sqlc.Market, error) {
+	if marketsRepository.db == nil {
+		return nil, lib.ErrorLog("database not initialized")
+	}
+
+	q := sqlc.New(marketsRepository.db)
+	markets, err := q.GetResolvedMarketsAfter(context.Background(), sql.NullTime{Time: after, Valid: true})
+	if err != nil {
+		return nil, lib.ErrorLog("GetResolvedMarketsAfter failed", "error", err, "after", after)
+	}
+
+	return markets, nil
+}

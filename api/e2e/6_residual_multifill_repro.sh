@@ -79,24 +79,7 @@ portfolio_snapshot() {
 }
 
 env_get() {
-  local key="$1"
-  awk -F '=' -v k="$key" '
-    $1==k {
-      val=substr($0, index($0, "=")+1)
-      sub(/^[[:space:]]+/, "", val)
-      sub(/[[:space:]]+$/, "", val)
-      print val
-      exit
-    }
-  ' "$ENV_FILE"
-}
-
-resolve_evm_address() {
-  local account_id="$1"
-  local mirror_base="$2"
-  local account_json
-  account_json=$(curl -sfL "$mirror_base/api/v1/accounts/$account_id") || return 1
-  printf '%s\n' "$account_json" | sed -n 's/.*"evm_address"[[:space:]]*:[[:space:]]*"0x\{0,1\}\([0-9a-fA-F]\{40\}\)".*/\1/p' | head -n 1 | tr 'A-F' 'a-f'
+  e2e_env_get "$1"
 }
 
 create_prediction_intent() {
@@ -118,9 +101,16 @@ create_prediction_intent() {
 
   CREATE_LAST_TX_ID=$(printf '%s\n' "$request_json" | jq -r '.txId // empty')
   CREATE_LAST_RESPONSE_JSON=$(easyrpc c "${grpc_flags[@]}" "${grpc_meta[@]}" -a "$grpc_addr" -d "$request_json" -i "$PROTO_DIR" -p api.proto api.ApiServicePublic.CreatePredictionIntent)
+  if [[ -z "$CREATE_LAST_TX_ID" ]]; then
+    CREATE_LAST_TX_ID=$(printf '%s\n' "$CREATE_LAST_RESPONSE_JSON" | jq -r 'try ((.message // "") | capture("(?<tx>[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})").tx) catch empty')
+  fi
   CREATE_LAST_ERROR_CODE=$(printf '%s\n' "$CREATE_LAST_RESPONSE_JSON" | jq -r '.errorCode // ""')
   CREATE_LAST_MESSAGE=$(printf '%s\n' "$CREATE_LAST_RESPONSE_JSON" | jq -r '.message // ""')
   printf '%s\n' "$CREATE_LAST_RESPONSE_JSON"
+}
+
+extract_tx_id() {
+  jq -r 'try (.txId // ((.message // "") | capture("(?<tx>[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})").tx)) catch empty'
 }
 
 fetch_user_portfolio_json() {
@@ -140,6 +130,16 @@ snapshot_yes_raw() {
 snapshot_no_raw() {
   local portfolio_json="$1"
   printf '%s\n' "$portfolio_json" | jq -r --arg m "$marketId" '(.positions[$m].position.no // 0)'
+}
+
+snapshot_maker_raw() {
+  local portfolio_json="$1"
+  local maker_token="${RESIDUAL_MAKER_TOKEN:-yes}"
+  if [[ "$maker_token" == "no" ]]; then
+    snapshot_no_raw "$portfolio_json"
+  else
+    snapshot_yes_raw "$portfolio_json"
+  fi
 }
 
 snapshot_open_count() {
@@ -255,14 +255,21 @@ for idx in 0 1; do
   fi
 done
 
-evm_a=$(resolve_evm_address "${account_ids[0]}" "$mirror_base")
-evm_b=$(resolve_evm_address "${account_ids[1]}" "$mirror_base")
+evm_a=$(e2e_resolve_evm_address "${account_ids[0]}" "$mirror_base")
+evm_b=$(e2e_resolve_evm_address "${account_ids[1]}" "$mirror_base")
 if [[ -z "$evm_a" || -z "$evm_b" ]]; then
   echo "Failed to resolve EVM addresses via mirror node"
   exit 1
 fi
 
-price=0.05
+price="${RESIDUAL_PRICE:-0.05}"
+rest_price="${RESIDUAL_REST_PRICE:-$price}"
+take_price="${RESIDUAL_TAKE_PRICE:--$price}"
+maker_token="${RESIDUAL_MAKER_TOKEN:-yes}"
+if [[ "$maker_token" != "yes" && "$maker_token" != "no" ]]; then
+  echo "Error: RESIDUAL_MAKER_TOKEN must be yes or no."
+  exit 1
+fi
 rest_qty=1.0
 partial_qty=0.4
 second_qty=1.0
@@ -274,16 +281,21 @@ Residual repro target
   A:         ${account_ids[0]}
   B:         ${account_ids[1]}
   price:     $price
-  sequence:  rest 1.0, take 0.4, take 1.0
+  sequence:  rest $rest_price x 1.0, take $take_price x 0.4, take $take_price x 1.0
 EOF
 
 before_a=$(fetch_user_portfolio_json "$evm_a")
 before_b=$(fetch_user_portfolio_json "$evm_b")
-before_a_yes_raw=$(snapshot_yes_raw "$before_a")
+before_a_yes_raw=$(snapshot_maker_raw "$before_a")
 before_b_no_raw=$(snapshot_no_raw "$before_b")
+if [[ "$(snapshot_open_count "$before_a")" -ne 0 || "$(snapshot_open_count "$before_b")" -ne 0 ]]; then
+  echo "Error: residual repro requires an empty order book for both test accounts."
+  echo "Cancel existing orders or use a fresh market before rerunning."
+  exit 1
+fi
 
-rest=$(create_prediction_intent 0 "$price" "$rest_qty" "p")
-rest_tx=$(printf '%s\n' "$rest" | jq -r '.txId // empty')
+rest=$(create_prediction_intent 0 "$rest_price" "$rest_qty" "p")
+rest_tx=$(printf '%s\n' "$rest" | extract_tx_id)
 rest_err=$(printf '%s\n' "$rest" | jq -r '.errorCode // ""')
 rest_msg=$(printf '%s\n' "$rest" | jq -r '.message // ""')
 echo "rest tx=$rest_tx err=$rest_err msg=$rest_msg"
@@ -295,11 +307,11 @@ after_rest_a_open=$(snapshot_open_count "$after_rest_a")
 after_rest_a_matched=$(snapshot_matched_count "$after_rest_a")
 after_rest_b_open=$(snapshot_open_count "$after_rest_b")
 after_rest_b_matched=$(snapshot_matched_count "$after_rest_b")
-after_rest_a_yes_raw=$(snapshot_yes_raw "$after_rest_a")
+after_rest_a_yes_raw=$(snapshot_maker_raw "$after_rest_a")
 after_rest_b_no_raw=$(snapshot_no_raw "$after_rest_b")
 
-partial=$(create_prediction_intent 1 "-$price" "$partial_qty" "p")
-partial_tx=$(printf '%s\n' "$partial" | jq -r '.txId // empty')
+partial=$(create_prediction_intent 1 "$take_price" "$partial_qty" "p")
+partial_tx=$(printf '%s\n' "$partial" | extract_tx_id)
 partial_err=$(printf '%s\n' "$partial" | jq -r '.errorCode // ""')
 partial_msg=$(printf '%s\n' "$partial" | jq -r '.message // ""')
 echo "partial tx=$partial_tx err=$partial_err msg=$partial_msg"
@@ -311,11 +323,11 @@ after_partial_a_open=$(snapshot_open_count "$after_partial_a")
 after_partial_a_matched=$(snapshot_matched_count "$after_partial_a")
 after_partial_b_open=$(snapshot_open_count "$after_partial_b")
 after_partial_b_matched=$(snapshot_matched_count "$after_partial_b")
-after_partial_a_yes_raw=$(snapshot_yes_raw "$after_partial_a")
+after_partial_a_yes_raw=$(snapshot_maker_raw "$after_partial_a")
 after_partial_b_no_raw=$(snapshot_no_raw "$after_partial_b")
 
-second=$(create_prediction_intent 1 "-$price" "$second_qty" "p")
-second_tx=$(printf '%s\n' "$second" | jq -r '.txId // empty')
+second=$(create_prediction_intent 1 "$take_price" "$second_qty" "p")
+second_tx=$(printf '%s\n' "$second" | extract_tx_id)
 second_err=$(printf '%s\n' "$second" | jq -r '.errorCode // ""')
 second_msg=$(printf '%s\n' "$second" | jq -r '.message // ""')
 echo "second tx=$second_tx err=$second_err msg=$second_msg"
@@ -327,7 +339,7 @@ after_second_a_open=$(snapshot_open_count "$after_second_a")
 after_second_a_matched=$(snapshot_matched_count "$after_second_a")
 after_second_b_open=$(snapshot_open_count "$after_second_b")
 after_second_b_matched=$(snapshot_matched_count "$after_second_b")
-after_second_a_yes_raw=$(snapshot_yes_raw "$after_second_a")
+after_second_a_yes_raw=$(snapshot_maker_raw "$after_second_a")
 after_second_b_no_raw=$(snapshot_no_raw "$after_second_b")
 after_second_rest_open_qty=$(snapshot_open_qty_for_tx "$after_second_a" "$rest_tx")
 after_second_second_open_qty=$(snapshot_open_qty_for_tx "$after_second_b" "$second_tx")
@@ -365,6 +377,8 @@ step2_expected_bug_raw=$(awk -v p="$price" -v q="$second_qty" 'BEGIN { printf "%
 
 step1_actual_raw=$(awk -v a="$after_partial_a_yes_raw" -v b="$after_rest_a_yes_raw" 'BEGIN { printf "%.0f", a - b }')
 step2_actual_raw=$(awk -v a="$after_second_a_yes_raw" -v b="$after_partial_a_yes_raw" 'BEGIN { printf "%.0f", a - b }')
+total_actual_raw=$(awk -v a="$after_second_a_yes_raw" -v b="$before_a_yes_raw" 'BEGIN { printf "%.0f", a - b }')
+signed_rest_raw=$(awk -v p="$price" -v q="$rest_qty" 'BEGIN { printf "%.0f", (p * q) * 1000000 }')
 
 rest_open_after=$(printf '%s\n' "$after_second_a" | jq -r --arg m "$marketId" --arg tx "$rest_tx" '.openPredictionIntents[$m].openPredictionIntents[]? | select(.txId == $tx) | .txId' 2>/dev/null | head -n 1)
 
@@ -386,6 +400,8 @@ printf '  step1 expected raw: %s\n' "$step1_expected_raw"
 printf '  step2 actual raw: %s\n' "$step2_actual_raw"
 printf '  step2 expected residual raw: %s\n' "$step2_expected_residual_raw"
 printf '  step2 bug-shaped raw: %s\n' "$step2_expected_bug_raw"
+printf '  total maker %s delta raw: %s\n' "${maker_token^^}" "$total_actual_raw"
+printf '  signed maker cap raw: %s\n' "$signed_rest_raw"
 printf '  rest open after final step: %s\n' "$after_second_rest_open_qty"
 printf '  second tx open after final step: %s\n' "$after_second_second_open_qty"
 
@@ -404,13 +420,18 @@ if awk -v actual="$after_second_second_open_qty" -v expected="$partial_qty" 'BEG
   second_residual_open_expected=true
 fi
 
-if [ "$step2_residual_matches_expected" = true ] && [ "$rest_residual_open_expected" = true ] && [ "$second_residual_open_expected" = true ]; then
+maker_position_within_signed_cap=false
+if awk -v actual="$total_actual_raw" -v expected="$signed_rest_raw" 'BEGIN { exit !(actual <= expected) }'; then
+  maker_position_within_signed_cap=true
+fi
+
+if [[ "$step2_residual_matches_expected" == true ]] && [[ "$rest_residual_open_expected" == true ]] && [[ "$second_residual_open_expected" == true ]] && [[ "$maker_position_within_signed_cap" == true ]]; then
   echo "NO BUG: the residual remained open exactly as expected after the second fill."
   exit 0
 fi
 
-if [ "$step2_residual_matches_expected" = true ] && [ "$rest_residual_open_expected" = true ] && [ "$second_residual_open_expected" = false ]; then
-  echo "BUG REPRODUCED: the second order closed out instead of leaving the residual open quantity."
+if [[ "$maker_position_within_signed_cap" == false ]] || [[ "$step2_residual_matches_expected" == false ]] || [[ "$rest_residual_open_expected" == false ]] || [[ "$second_residual_open_expected" == false ]]; then
+  echo "BUG REPRODUCED: fill state exceeded the signed maker cap or did not preserve the expected residual."
   exit 1
 fi
 

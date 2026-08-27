@@ -25,8 +25,7 @@ interface IHederaAccountService {
 prism.market prediction market smart contract
 */
 contract Prism {
-  // For USDC addresses, see: https://www.circle.com/multi-chain-usdc/hedera
-  IERC20 public immutable collateralToken;
+  IERC20 public immutable collateralToken;   // For USDC addresses, see: https://www.circle.com/multi-chain-usdc/hedera
 
   IHederaTokenService constant HTS = IHederaTokenService(address(0x167));
   IHederaAccountService constant HAS = IHederaAccountService(address(0x16a));
@@ -37,7 +36,7 @@ contract Prism {
   mapping(address => bool) public associatedTokens;
 
   mapping(uint128 => string) public statements;
-  mapping(uint128 => uint8) public outcomes; // 0 = NO wins, 1 = YES wins, 2 = EmergClose5050
+  mapping(uint128 => uint8) public outcomes;   // 0 = NO wins, 1 = YES wins, 2 = EmergClose5050
   mapping(uint128 => uint256) public resolutionTimes;
   mapping(uint128 => uint256) public totalCollateralUsd;
   mapping(uint128 => uint256) public totalYesTokensOutstanding;
@@ -71,9 +70,9 @@ contract Prism {
     oracle = msg.sender;
     dao = msg.sender;
 
-    marketCreationFeeUsdc = 100000; // defaults to 0.10 USDC (6 decimals)
+    marketCreationFeeUsdc = 100000;   // defaults to 0.10 USDC (6 decimals)
     collateralTokenNdecimals = 6;   // defaults to 6
-    rakePercentScaled100 = 200; // defaults to 2%
+    rakePercentScaled100 = 200;   // defaults to 2%
   }
 
   /**
@@ -94,7 +93,7 @@ contract Prism {
     require(collateralToken.transfer(owner, marketCreationFeeUsdc), "Fee transfer failed");
     
     statements[marketId] = _statement;
-    outcomes[marketId] = 0; // initialize to NO/default until explicitly resolved
+    outcomes[marketId] = 0;   // initialize to NO/default until explicitly resolved
     resolutionTimes[marketId] = 0;
     totalCollateralUsd[marketId] = 0;
     totalYesTokensOutstanding[marketId] = 0;
@@ -104,7 +103,7 @@ contract Prism {
   }
 
   function setMarketCreationFee(uint256 _marketCreationFeeUsdc) external onlyOwner {
-    marketCreationFeeUsdc = _marketCreationFeeUsdc; // including nDecimals
+    marketCreationFeeUsdc = _marketCreationFeeUsdc;   // including nDecimals
   }
 
   /**
@@ -201,7 +200,7 @@ contract Prism {
     } else {
       // positive+primary => BUY YES
       require(collateralToken.transferFrom(signerSlot0, address(this), settlementUsdAbsScaled), "Transfer from YES buyer failed");
-      yesTokens[marketId][signerSlot0] += settlementUsdAbsScaled; // 1:1 mapping of collateral qty to position tokens
+      yesTokens[marketId][signerSlot0] += settlementUsdAbsScaled;   // 1:1 mapping of collateral qty to position tokens
       totalYesTokensOutstanding[marketId] += settlementUsdAbsScaled;
       totalCollateralUsd[marketId] += settlementUsdAbsScaled;
     }
@@ -218,7 +217,7 @@ contract Prism {
     } else {
       // negative+primary => BUY NO
       require(collateralToken.transferFrom(signerSlot1, address(this), settlementUsdAbsScaled), "Transfer from NO buyer failed");
-      noTokens[marketId][signerSlot1] += settlementUsdAbsScaled; // 1:1 mapping of collateral qty to position tokens
+      noTokens[marketId][signerSlot1] += settlementUsdAbsScaled;   // 1:1 mapping of collateral qty to position tokens
       totalNoTokensOutstanding[marketId] += settlementUsdAbsScaled;
       totalCollateralUsd[marketId] += settlementUsdAbsScaled;
     }
@@ -226,7 +225,7 @@ contract Prism {
     emit PositionTokensPurchased(marketId, signerSlot0, settlementUsdAbsScaled, settlementUsdAbsScaled, primarySecondarySlot0);
     emit PositionTokensPurchased(marketId, signerSlot1, settlementUsdAbsScaled, settlementUsdAbsScaled, primarySecondarySlot1);
 
-    return (yesTokens[marketId][signerSlot0], noTokens[marketId][signerSlot0], yesTokens[marketId][signerSlot1], noTokens[marketId][signerSlot1]); // return current balances
+    return (yesTokens[marketId][signerSlot0], noTokens[marketId][signerSlot0], yesTokens[marketId][signerSlot1], noTokens[marketId][signerSlot1]);   // return current balances
   }
 
   /**
@@ -267,13 +266,13 @@ contract Prism {
     uint256 noBalance = noTokens[marketId][winner];
     uint256 claimUnits;
     uint256 totalClaimUnits;
-    if (outcomes[marketId] == 1) { // YES outcome
+    if (outcomes[marketId] == 1) {   // YES outcome
       claimUnits = yesBalance;
       totalClaimUnits = totalYesTokensOutstanding[marketId];
-    } else if (outcomes[marketId] == 0) { // NO outcome
+    } else if (outcomes[marketId] == 0) {   // NO outcome
       claimUnits = noBalance;
       totalClaimUnits = totalNoTokensOutstanding[marketId];
-    } else if (outcomes[marketId] == 2) { // EmergClose5050 outcome - all outstanding position tokens share the remaining market pot.
+    } else if (outcomes[marketId] == 2) {   // EmergClose5050 outcome - all outstanding position tokens share the remaining market pot.
       claimUnits = yesBalance + noBalance;
       totalClaimUnits = totalYesTokensOutstanding[marketId] + totalNoTokensOutstanding[marketId];
     } else {
@@ -320,7 +319,7 @@ contract Prism {
     
     emit WinningsRedeemed(marketId, winner, payoutAmount /* excluding rake */);
 
-    return payoutAmount; // payoutAmount === amountUSDC (1:1 mapping after rake)
+    return payoutAmount;   // payoutAmount === amountUSDC (1:1 mapping after rake)
   }
 
   /**
@@ -404,7 +403,7 @@ contract Prism {
     require(resolutionTimes[marketId] == 0, "Market already resolved");
 
     resolutionTimes[marketId] = block.timestamp;
-    outcomes[marketId] = 2; // emergency close with 50/50 payout (EmergClose5050)
+    outcomes[marketId] = 2;   // emergency close with 50/50 payout (EmergClose5050)
 
     emit MarketResolved(marketId, 2);
   }

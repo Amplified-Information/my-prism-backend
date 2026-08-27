@@ -17,16 +17,7 @@ if [[ ! -f "$ENV_FILE" ]]; then
 fi
 
 env_get() {
-	local key="$1"
-	awk -F '=' -v k="$key" '
-		$1==k {
-			val=substr($0, index($0, "=")+1)
-			sub(/^[[:space:]]+/, "", val)
-			sub(/[[:space:]]+$/, "", val)
-			print val
-			exit
-		}
-	' "$ENV_FILE"
+	e2e_env_get "$1"
 }
 
 marketId_default=$(env_get "MARKET_ID")
@@ -153,13 +144,6 @@ if [[ -n "$basic_auth_user" || -n "$basic_auth_pass" ]]; then
 	grpc_meta=(-H "authorization: Basic $basic_auth_b64")
 fi
 
-resolve_evm_address() {
-	local account_id="$1"
-	local account_json
-	account_json=$(curl -sfL "$mirror_base/api/v1/accounts/$account_id") || return 1
-	printf '%s\n' "$account_json" | sed -n 's/.*"evm_address"[[:space:]]*:[[:space:]]*"0x\{0,1\}\([0-9a-fA-F]\{40\}\)".*/\1/p' | head -n 1 | tr 'A-F' 'a-f'
-}
-
 fetch_user_portfolio_json() {
 	local evm_address="$1"
 	local payload
@@ -194,7 +178,7 @@ for i in {0..9}; do
 	account_id_var="${i}_ACCOUNT_ID"
 	account_id=$(env_get "$account_id_var")
 	[[ -z "$account_id" ]] && continue
-	evm_address=$(resolve_evm_address "$account_id" 2>/dev/null || true)
+	evm_address=$(e2e_resolve_evm_address "$account_id" 2>/dev/null || true)
 	[[ -z "$evm_address" ]] && continue
 	portfolio_json=$(fetch_user_portfolio_json "$evm_address")
 	[[ -z "$portfolio_json" ]] && continue

@@ -105,6 +105,18 @@ e2e_bearer_header() {
 	printf 'Bearer %s' "$token"
 }
 
+e2e_resolve_evm_address() {
+	local account_id="$1"
+	local mirror_base="${2:-https://${network}.mirrornode.hedera.com}"
+	local account_json
+
+	account_json=$(curl -sfL "$mirror_base/api/v1/accounts/$account_id") || return 1
+	printf '%s\n' "$account_json" |
+		sed -n 's/.*"evm_address"[[:space:]]*:[[:space:]]*"0x\{0,1\}\([0-9a-fA-F]\{40\}\)".*/\1/p' |
+		head -n 1 |
+		tr 'A-F' 'a-f'
+}
+
 # Emits "<hasMore>\t<nextOffset>" for a paged response. Falls back to row counting when the
 # server predates the pagination block, so loops work against both API versions.
 e2e_page_state() {

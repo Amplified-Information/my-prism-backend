@@ -149,13 +149,6 @@ echo "Preloading market metadata cache from GetMarkets..."
 
 mirror_base="https://${network}.mirrornode.hedera.com"
 
-resolve_evm_address() {
-  local account_id="$1"
-  local account_json
-  account_json=$(curl -sfL "$mirror_base/api/v1/accounts/$account_id") || return 1
-  printf '%s\n' "$account_json" | sed -n 's/.*"evm_address"[[:space:]]*:[[:space:]]*"0x\{0,1\}\([0-9a-fA-F]\{40\}\)".*/\1/p' | head -n 1 | tr 'A-F' 'a-f'
-}
-
 declare -A market_statement_cache
 declare -A market_contract_cache
 declare -A market_state_cache
@@ -319,7 +312,7 @@ declare -a summary_active_no
 
 for i in "${!account_ids[@]}"; do
   account_id="${account_ids[$i]}"
-  evm_address=$(resolve_evm_address "$account_id")
+  evm_address=$(e2e_resolve_evm_address "$account_id")
   if [[ -z "$evm_address" ]]; then
     echo "Error: failed to resolve evmAddress for account $account_id."
     continue

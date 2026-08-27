@@ -34,16 +34,7 @@ if [[ ! -d "$PROTO_DIR" ]]; then
 fi
 
 env_get() {
-  local key="$1"
-  awk -F '=' -v k="$key" '
-    $1==k {
-      val=substr($0, index($0, "=")+1)
-      sub(/^[[:space:]]+/, "", val)
-      sub(/[[:space:]]+$/, "", val)
-      print val
-      exit
-    }
-  ' "$ENV_FILE"
+  e2e_env_get "$1"
 }
 
 market_id_default=$(env_get "MARKET_ID")

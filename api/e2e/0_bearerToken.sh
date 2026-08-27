@@ -31,14 +31,10 @@ require_commands() {
   fi
 }
 
-env_value() {
-  sed -n "s/^$1=//p" "$ENV_FILE" | head -n1
-}
-
 run_easyrpc() {
   local rc
 
-  "$EASYRPC_BIN" c -w \
+  "$EASYRPC_BIN" c "${grpc_flags[@]}" \
     -a "$grpc_addr" \
     -i "$PROTO_DIR" \
     -p api.proto \
@@ -97,7 +93,7 @@ if [[ ! -d "$E2E_NODE_MODULES_DIR" ]]; then
   exit 1
 fi
 
-base_url_default="${BASE_URL:-$(env_value BASE_URL | tr -d '[:space:]')}"
+base_url_default="${BASE_URL:-$(e2e_env_get BASE_URL | tr -d '[:space:]')}"
 if [[ -z "$base_url_default" ]]; then
   base_url_default="https://testnet.dev.prism.market"
 fi
@@ -121,8 +117,10 @@ esac
 
 grpc_addr="${baseUrl#*://}"
 grpc_addr="${grpc_addr%%/}"
+grpc_flags=(-w)
 
 if [[ "$baseUrl" == https://* ]]; then
+  grpc_flags=(-w --tls)
   [[ "$grpc_addr" == *:* ]] || grpc_addr="${grpc_addr}:443"
 fi
 
@@ -156,9 +154,9 @@ if ! xxd -p "$grpc_health_tmp" | tr -d '\n' | grep -q '677270632d7374617475733a3
 fi
 rm -f "$grpc_health_tmp"
 
-admin_account_id="$(env_value 0_ACCOUNT_ID)"
-admin_private_key="$(env_value 0_PRIVATE_KEY)"
-admin_key_type_raw="$(env_value 0_KEY_TYPE)"
+admin_account_id="$(e2e_env_get 0_ACCOUNT_ID)"
+admin_private_key="$(e2e_env_get 0_PRIVATE_KEY)"
+admin_key_type_raw="$(e2e_env_get 0_KEY_TYPE)"
 
 if [[ -z "$admin_account_id" || -z "$admin_private_key" || -z "$admin_key_type_raw" ]]; then
   echo "Error: expected 0_ACCOUNT_ID, 0_PRIVATE_KEY, 0_KEY_TYPE in $ENV_FILE"

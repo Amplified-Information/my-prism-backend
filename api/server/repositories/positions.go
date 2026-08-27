@@ -130,25 +130,64 @@ func (positionsRepository *PositionsRepository) CountAllPositions(ctx context.Co
 	return total, nil
 }
 
-func (positionsRepository *PositionsRepository) GetPositionsByMarketIdNoPointsAwardedMarketNotResolved(marketId string) (error, []sqlc.Position) {
+func (positionsRepository *PositionsRepository) GetPositionsByMarketId(marketId string) ([]sqlc.Position, error) {
 	if positionsRepository.db == nil {
-		return lib.ErrorLog("database not initialized"), nil
+		return nil, lib.ErrorLog("database not initialized")
 	}
 
 	q := sqlc.New(positionsRepository.db)
 
 	marketIdUUID, err := uuid.Parse(marketId)
 	if err != nil {
-		return lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId), nil
+		return nil, lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
 	}
 
-	result, err := q.GetPositionsByMarketIdNoPointsAwardedMarketNotResolved(context.Background(), marketIdUUID)
+	result, err := q.GetPositionsByMarketId(context.Background(), marketIdUUID)
 	if err != nil {
-		return lib.ErrorLog("GetPositionsByMarketIdNoPointsAwardedMarketNotResolved failed", "error", err, "marketId", marketId), nil
+		return nil, lib.ErrorLog("GetPositionsByMarketId failed", "error", err, "marketId", marketId)
 	}
 
-	return nil, result
+	return result, nil
 }
+
+func (positionsRepository *PositionsRepository) GetPositionsByMarketIdNotResolved(marketId string) ([]sqlc.Position, error) {
+	if positionsRepository.db == nil {
+		return nil, lib.ErrorLog("database not initialized")
+	}
+
+	q := sqlc.New(positionsRepository.db)
+
+	marketIdUUID, err := uuid.Parse(marketId)
+	if err != nil {
+		return nil, lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
+	}
+
+	result, err := q.GetPositionsByMarketIdNotResolved(context.Background(), marketIdUUID)
+	if err != nil {
+		return nil, lib.ErrorLog("GetPositionsByMarketIdNotResolved failed", "error", err, "marketId", marketId)
+	}
+
+	return result, nil
+}
+
+// func (positionsRepository *PositionsRepository) GetPositionsByMarketIdResolved(marketId string) ([]sqlc.Position, error) {
+// 	if positionsRepository.db == nil {
+// 		return nil, lib.ErrorLog("database not initialized")
+// 	}
+
+// 	q := sqlc.New(positionsRepository.db)
+// 	marketIdUUID, err := uuid.Parse(marketId)
+// 	if err != nil {
+// 		return nil, lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
+// 	}
+
+// 	result, err := q.GetPositionsByMarketIdResolved(context.Background(), marketIdUUID)
+// 	if err != nil {
+// 		return nil, lib.ErrorLog("GetPositionsByMarketIdResolved failed", "error", err, "marketId", marketId)
+// 	}
+
+// 	return result, nil
+// }
 
 func (positionsRepository *PositionsRepository) GetCostBasisForUser(marketId uuid.UUID, evmAddress string) (float64, float64, error) {
 	if positionsRepository.db == nil {

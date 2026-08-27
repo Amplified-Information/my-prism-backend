@@ -155,12 +155,16 @@ func (hs *HederaService) BuyOrSellPositionTokens(sideYes *pb_clob.CreateOrderReq
 	}
 
 	// Match quantities are the actual executed amount from this match event.
-	// qty_rem is the remaining open quantity after this match; qty_orig is the signed original order quantity used for verification.
+	// In a match notification, qty_rem carries the executed fill quantity. qty_orig
+	// remains the signed original order quantity used for verification.
 	matchedQtyYes := math.Abs(sideYes.QtyRem)
 	matchedQtyNo := math.Abs(sideNo.QtyRem)
 	matchedQty := matchedQtyYes
 	if matchedQtyNo < matchedQty {
 		matchedQty = matchedQtyNo
+	}
+	if matchedQty <= 0 {
+		return false, lib.LogAndError(lib.LOG_ERROR, "matched quantity must be positive")
 	}
 
 	// For signature verification, we need separate reconstruction of the payloads for YES and NO positions, including collateralUsd.
@@ -175,18 +179,12 @@ func (hs *HederaService) BuyOrSellPositionTokens(sideYes *pb_clob.CreateOrderReq
 		return false, lib.LogAndError(lib.LOG_ERROR, "failed to scale collateralUsdAbsNo: %v", err)
 	}
 
-	// The Solidity contract requires both settlement slots to carry the same executed amount.
-	// When the two matched orders were authored at different prices, price*matchedQty produces
-	// different values on each side, which triggers the "Oversize settlement tuple" guard.
-	// Use the common executed notional bounded by both signed authorizations instead.
-	// qty_orig remains the signed authorization amount; qty_rem is the residual open amount after this match.
-	settlementUsdAbsScaledYes := new(big.Int).Set(collateralUsdAbsScaledYes)
-	settlementUsdAbsScaledNo := new(big.Int).Set(collateralUsdAbsScaledNo)
-	if settlementUsdAbsScaledNo.Cmp(settlementUsdAbsScaledYes) < 0 {
-		settlementUsdAbsScaledYes = new(big.Int).Set(settlementUsdAbsScaledNo)
-	}
-	if settlementUsdAbsScaledYes.Cmp(settlementUsdAbsScaledNo) < 0 {
-		settlementUsdAbsScaledNo = new(big.Int).Set(settlementUsdAbsScaledYes)
+	// The Solidity contract requires both settlement slots to carry the same amount.
+	// Use the actual matched quantity, not qty_orig, and bound the common notional by
+	// both prices so a residual fill cannot settle the full original order again.
+	settlementUsdAbsScaledYes, settlementUsdAbsScaledNo, err := matchedSettlementAmounts(sideYes, sideNo, matchedQty, int(usdcDecimals))
+	if err != nil {
+		return false, lib.LogAndError(lib.LOG_ERROR, "failed to calculate matched settlement amount: %v", err)
 	}
 
 	qtyScaledYesBig := new(big.Int).Set(settlementUsdAbsScaledYes)
@@ -449,6 +447,26 @@ func (hs *HederaService) BuyOrSellPositionTokens(sideYes *pb_clob.CreateOrderReq
 
 	// if we get here, return true
 	return true, nil
+}
+
+func matchedSettlementAmounts(sideYes *pb_clob.CreateOrderRequestClob, sideNo *pb_clob.CreateOrderRequestClob, matchedQty float64, decimals int) (*big.Int, *big.Int, error) {
+	matchedCollateralYes, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideYes.PriceUsd*matchedQty), decimals)
+	if err != nil {
+		return nil, nil, err
+	}
+	matchedCollateralNo, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideNo.PriceUsd*matchedQty), decimals)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	settlementYes := new(big.Int).Set(matchedCollateralYes)
+	settlementNo := new(big.Int).Set(matchedCollateralNo)
+	if settlementNo.Cmp(settlementYes) < 0 {
+		settlementYes.Set(settlementNo)
+	} else {
+		settlementNo.Set(settlementYes)
+	}
+	return settlementYes, settlementNo, nil
 }
 
 func (hs *HederaService) CreateNewMarket(marketId string, statement string, net string) (uint64, error) {

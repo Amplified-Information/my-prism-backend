@@ -35,4 +35,3 @@ var OFFSET int32 = 0
 var LaunchDate = time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC)
 
 const TotalNprismTokens = 100_000_000
-

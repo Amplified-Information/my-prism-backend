@@ -51,23 +51,7 @@ if [[ ! -x "$ts_node_bin" ]]; then
 fi
 
 env_get() {
-	local key="$1"
-	awk -F '=' -v k="$key" '
-		$1==k {
-			val=substr($0, index($0, "=")+1)
-			sub(/^[[:space:]]+/, "", val)
-			sub(/[[:space:]]+$/, "", val)
-			print val
-			exit
-		}
-	' "$ENV_FILE"
-}
-
-resolve_evm_address() {
-	local account_id="$1"
-	local account_json
-	account_json=$(curl -sfL "$mirror_base/api/v1/accounts/$account_id") || return 1
-	printf '%s\n' "$account_json" | sed -n 's/.*"evm_address"[[:space:]]*:[[:space:]]*"0x\{0,1\}\([0-9a-fA-F]\{40\}\)".*/\1/p' | head -n 1 | tr 'A-F' 'a-f'
+	e2e_env_get "$1"
 }
 
 fetch_user_portfolio_json() {
@@ -281,7 +265,7 @@ for i in "${!account_ids[@]}"; do
 	account_id="${account_ids[$i]}"
 	account_progress=$((account_progress + 1))
 	echo "[submit $account_progress/$accounts_total] Account $account_id: resolving EVM address..."
-	evm_address=$(resolve_evm_address "$account_id" || true)
+	evm_address=$(e2e_resolve_evm_address "$account_id" || true)
 	if [[ -z "$evm_address" ]]; then
 		echo "Warning: failed to resolve evmAddress for account $account_id; skipping."
 		continue

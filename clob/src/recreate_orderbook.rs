@@ -31,5 +31,5 @@ pub async fn recreate_orderbook(api_host: &str, api_port: &str) -> Result<bool, 
         }
     }
     drop(client); // close the api gRPC connection
-    return Ok(true);
+    Ok(true)
 }

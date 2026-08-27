@@ -693,7 +693,6 @@ CREATE TABLE public.positions (
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP CONSTRAINT positions_created_at_not_null1 NOT NULL,
     cost_basis_price_yes_usd double precision DEFAULT 0.0 NOT NULL,
     cost_basis_price_no_usd double precision DEFAULT 0.0 NOT NULL,
-    points_awarded_at timestamp with time zone,
     cost_accum_yes_usd double precision DEFAULT 0.0 NOT NULL,
     cost_accum_no_usd double precision DEFAULT 0.0 NOT NULL,
     realized_pnl_usd double precision DEFAULT 0.0 NOT NULL,

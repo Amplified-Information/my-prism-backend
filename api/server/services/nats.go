@@ -171,9 +171,9 @@ func (ns *NatsService) HandleOrderMatches() error {
 		}
 
 		/////
-		// Determine which order(s) are fully consumed.
-		// clob.matches.full => both fully matched.
-		// clob.matches.partial => smaller qty order is fully matched.
+		// Determine which order(s) are fully consumed. Match tuple QtyRem values
+		// are executed quantities; a zero value identifies a consumed side only
+		// when the CLOB has explicitly emitted a zero residual for that side.
 		/////
 		isPartial := msg.Subject == lib.NATS_CLOB_MATCHES_PARTIAL
 		markAsMatched := fullyMatchedOrderIndexFromTuple(orderRequestClobTuple, isPartial)
@@ -299,9 +299,10 @@ func fullyMatchedOrderIndexFromTuple(tuple [2]*pb_clob.CreateOrderRequestClob, i
 		return markAsMatched
 	}
 
-	// For a partial match, the side whose remaining quantity is zero after this trade is fully consumed.
-	// We must use post-match residual qty, not original order size, otherwise a partial fill gets
-	// incorrectly marked as fully matched when it still has open quantity remaining.
+	// For a partial match, the CLOB emits the executed quantity in QtyRem. The
+	// order-book residual is tracked separately by the CLOB/database state, so
+	// this zero-value check is only valid if the producer explicitly emits a
+	// zero marker for a consumed side.
 	qtyRem0Abs := math.Abs(tuple[0].QtyRem)
 	qtyRem1Abs := math.Abs(tuple[1].QtyRem)
 	markAsMatched[0] = qtyRem0Abs <= 1e-9
