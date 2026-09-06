@@ -4,6 +4,7 @@ set -e
 
 if [ "$#" -ne 1 ]; then
   echo "Usage: $0 <ContractName>"
+  echo "where <ContractName> is the name of the contract to compile. e.g. Prism, Proxy, etc."
   exit 1
 fi
 
@@ -32,4 +33,5 @@ cat ${CONTRACT_NAME}.abi
 echo ""
 echo ""
 
+echo "Compiled files location: $(pwd)"
 echo "Compilation of $CONTRACT_NAME.sol completed."

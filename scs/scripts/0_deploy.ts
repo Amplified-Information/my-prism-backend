@@ -9,6 +9,8 @@ source ../loadEnv.sh local
 # Deploy with:
 cd scripts
 ts-node 0_deploy.ts Prism
+ts-node 0_deploy.ts Proxy
+etc.
 */
 import { Client, ContractCreateFlow, ContractId, Hbar } from '@hashgraph/sdk'
 import { ethers } from 'ethers'
@@ -22,10 +24,16 @@ const DEPLOY_MAX_TX_FEE_HBAR = 50
 
 
 
-const [contractName] = process.argv.slice(2)
+const [contractName, implementationContractId] = process.argv.slice(2)
 if (!contractName) {
   console.error('Usage: ts-node deploy.ts <contractName>')
+  console.error('Example: ts-node 0_deploy.ts Proxy')
   console.error('Example: ts-node deploy.ts Prism')
+  process.exit(1)
+}
+if (contractName === 'Proxy' && !implementationContractId) {
+  console.error('Usage: ts-node 0_deploy.ts Proxy <implementationContractId>')
+  console.error('Example: ts-node 0_deploy.ts Proxy 0.0.9891475')
   process.exit(1)
 }
 
@@ -45,6 +53,14 @@ const getConstructorParams = () => {
   // const resolutionTime = 0
 
   const abiCoder = new ethers.AbiCoder()
+  if (contractName === 'Proxy') {
+    const implementationAddress = ContractId.fromString(implementationContractId!).toEvmAddress()
+    return abiCoder.encode(
+      ['address', 'bytes'],
+      [implementationAddress, '0x']
+    )
+  }
+
   return abiCoder.encode(
       ['address'/*, 'string'*/],
       [collateralToken/*, statement*/]
