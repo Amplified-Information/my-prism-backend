@@ -546,6 +546,7 @@ func (hs *HederaService) ResolveMarketOnChain(net string, marketId string, contr
 	}
 
 	lib.Log(lib.LOG_INFO, "ResolveMarket - tx successful. Hedera txId = %s", result.TransactionID.String())
+	// record this in the database
 	lib.Log(lib.LOG_INFO, "Market resolved as %s", map[int32]string{0: "NO", 1: "YES"}[outcome])
 	return true, nil
 }

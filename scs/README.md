@@ -55,6 +55,19 @@ Follow the output instructions...
 export SMART_CONTRACT_ID=...
 ```
 
+**Proxy contract**
+
+The Prism smart contract lives behind a proxy smart contract (Proxy.sol)
+
+There are a set of scripts in scripts/ folder
+
+Upgradeable by running:
+
+`npx tsx 8_proxyChangeImplContract.ts <proxyId> <newImplementationId> [migrationDataHex]`
+
+
+
+
 **Interact with smart contact:**
 
 ```bash
