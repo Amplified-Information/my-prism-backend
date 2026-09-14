@@ -4,6 +4,8 @@ import (
 	pb_api "api/gen"
 	"api/server/lib"
 	repositories "api/server/repositories"
+
+	hiero "github.com/hiero-ledger/hiero-sdk-go/v2/sdk"
 )
 
 type PrismLOMservice struct {
@@ -20,7 +22,7 @@ func (pls *PrismLOMservice) Init(prismLOMrepository *repositories.PrismLomReposi
 	return nil
 }
 
-func (pls *PrismLOMservice) GetLOMrewardsByMarketId(marketId string) (*pb_api.LOMrewardsResponse, error) {
+func (pls *PrismLOMservice) GetLOMrewardsByMarketId(marketId string) ([]*pb_api.LOMreward, error) {
 	if pls.prismRewardsRepository == nil {
 		return nil, lib.LogAndError(lib.LOG_ERROR, "prismRewardsRepository is not initialized")
 	}
@@ -31,9 +33,9 @@ func (pls *PrismLOMservice) GetLOMrewardsByMarketId(marketId string) (*pb_api.LO
 	}
 
 	// map the result to the protobuf response:
-	response := &pb_api.LOMrewardsResponse{}
+	response := []*pb_api.LOMreward{}
 	for _, lom := range result {
-		response.LomRewards = append(response.LomRewards, &pb_api.LOMreward{
+		response = append(response, &pb_api.LOMreward{
 			MarketId:  lom.MarketID.String(),
 			AccountId: lom.AccountID,
 			Distance:  float32(lom.Distance),
@@ -47,7 +49,7 @@ func (pls *PrismLOMservice) GetLOMrewardsByMarketId(marketId string) (*pb_api.LO
 	return response, nil
 }
 
-func (pls *PrismLOMservice) GetLOMrewardsByAccountId(accountId string) (*pb_api.LOMrewardsResponse, error) {
+func (pls *PrismLOMservice) GetLOMrewardsByAccountId(accountId *hiero.AccountID) ([]*pb_api.LOMreward, error) {
 	if pls.prismRewardsRepository == nil {
 		return nil, lib.LogAndError(lib.LOG_ERROR, "prismRewardsRepository is not initialized")
 	}
@@ -58,9 +60,9 @@ func (pls *PrismLOMservice) GetLOMrewardsByAccountId(accountId string) (*pb_api.
 	}
 
 	// map the result to the protobuf response:
-	response := &pb_api.LOMrewardsResponse{}
+	response := []*pb_api.LOMreward{}
 	for _, lom := range result {
-		response.LomRewards = append(response.LomRewards, &pb_api.LOMreward{
+		response = append(response, &pb_api.LOMreward{
 			MarketId:  lom.MarketID.String(),
 			AccountId: lom.AccountID,
 			Distance:  float32(lom.Distance),

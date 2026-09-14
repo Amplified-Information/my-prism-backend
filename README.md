@@ -344,8 +344,8 @@ There is an **intentional separation** between **configuration** (`.config.ENV`)
 - ~~pull any changes in the sub-modules (e.g. `cd web.lp` `git pull`)~~
 - observe a green build for the service you're interested in releasing: https://github.com/prismmarketlabs/prism/actions
 - after a green build, an (untagged) image should now be available in https://github.com/orgs/PrismMarketLabs/packages
-- run `./tag.sh` for each of the (untagged, `latest`) services you wish to tag
-- follow the interactive prompts. *note: tag.sh automatically increments the patch version for you. You can (optionally) update the major and minor versions, as appropriate*
+- run `./registry_tag.sh` for each of the (untagged, `latest`) services you wish to tag
+- follow the interactive prompts. *note: registry_tag.sh automatically increments the patch version for you. You can (optionally) update the major and minor versions, as appropriate*
 - wait for the deployment to `dev` (it takes about 30 seconds to 60 seconds for the AWS EC2 instance to pick up the change)
 - monitor logs for an appropriate burn-in period
 
@@ -411,7 +411,7 @@ And update the docker-compose-SERVICE.ENV.yml with the new version.
 
 ```bash
 ## **Please note**: there is now a script to peform this more quickly:
-# ./tag.sh
+# ./registry_tag.sh
 # follow the prompts
 
 # first set these three env vars:
@@ -488,14 +488,14 @@ Retrieve a secret:
 
 ```bash
 export ENV=local
-aws ssm get-parameter --name "/$ENV/DB_PWORD" --with-decryption
+aws ssm get-parameter --name "/$ENV/DB_PWORD" --with-decryption --profile prism --region us-east-1
 ```
 
 Delete a secret:
 
 ```bash
 export ENV=local
-aws ssm delete-parameter --name "/$ENV/DB_PWORD"
+aws ssm delete-parameter --name "/$ENV/DB_PWORD" --profile prism --region us-east-1
 ```
 
 ### local
@@ -628,10 +628,21 @@ See: `AssemblePayloadHexForSigning(...)` in ./api/server/lib/sign.go
 
 See: `assemblePayload(...)` in ./scs/contracts/Prism.sol
 
+**Comments signature scheme**
+
 ```go
 // signature format for comments:
 commentPayload := fmt.Sprintf("%s:%s:%s", req.MarketId, req.AccountId, req.Content)
+
+// TODO
+
 ```
+
+
+**Order cancel signature scheme**
+
+// TODO
+
 
 ## Add a submodule to your monorepo (web)
 

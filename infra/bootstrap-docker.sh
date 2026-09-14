@@ -98,7 +98,7 @@ cat <<SCRIPT > /home/admin/0_pull_latest.sh
 # Variables
 ENVIRONMENT="${ENV}"
 AWS_REGION="${AWS_REGION}"
-SECRET_NAME="${GHRC_SECRET_NAME}"
+SECRET_NAME="/${GHRC_SECRET_NAME#/}"
 MACHINE=$(hostname) # should be 'proxy', 'monolith', or 'data'
 S3_BUCKET="${S3_BUCKET_DEPLOYMENT}"
 
@@ -219,14 +219,14 @@ pull_latest_docker_images_if_changed() {
     [ -n "\$service" ] || continue
 
     local image
-    image=\$(yq -r --arg svc "\$service" '.services[$svc].image // empty' "\$compose_env" 2>/dev/null)
+    image=\$(yq -r --arg svc "\$service" '.services[\$svc].image // empty' "\$compose_env" 2>/dev/null)
     if [ -z "\$image" ]; then
-      image=\$(yq -r --arg svc "\$service" '.services[$svc].image // empty' "\$compose_base" 2>/dev/null)
+      image=\$(yq -r --arg svc "\$service" '.services[\$svc].image // empty' "\$compose_base" 2>/dev/null)
     fi
     [ -n "\$image" ] || continue
 
     local remote_digest
-    remote_digest=\$(docker buildx imagetools inspect "\$image" --format '{{.Manifest.Digest}}' 2>/dev/null || true)
+    remote_digest=\$(timeout 15 docker buildx imagetools inspect "\$image" --format '{{.Manifest.Digest}}' 2>/dev/null || true)
     if [ -z "\$remote_digest" ]; then
       echo "INFO: no digest available for \$service (\$image); skipping."
       continue
@@ -251,8 +251,8 @@ pull_latest_docker_images_if_changed() {
 
     while IFS= read -r service; do
       [ -n "\$service" ] || continue
-      image=\$(yq -r --arg svc "\$service" '.services[$svc].image // empty' "\$compose_env" 2>/dev/null)
-      [ -n "\$image" ] || image=\$(yq -r --arg svc "\$service" '.services[$svc].image // empty' "\$compose_base" 2>/dev/null)
+      image=\$(yq -r --arg svc "\$service" '.services[\$svc].image // empty' "\$compose_env" 2>/dev/null)
+      [ -n "\$image" ] || image=\$(yq -r --arg svc "\$service" '.services[\$svc].image // empty' "\$compose_base" 2>/dev/null)
       [ -n "\$image" ] || continue
       remote_digest=\$(docker buildx imagetools inspect "\$image" --format '{{.Manifest.Digest}}' 2>/dev/null || true)
       [ -n "\$remote_digest" ] && printf '%s\n' "\$remote_digest" > "\$state_dir/\$service.digest"

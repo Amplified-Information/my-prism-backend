@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"time"
+
+	hiero "github.com/hiero-ledger/hiero-sdk-go/v2/sdk"
 )
 
 type PrismRewardsRepository struct {
@@ -175,4 +177,23 @@ func (prismRewardsRepository *PrismRewardsRepository) GetTotalRedeemedPrismRewar
 		return 0, err
 	}
 	return uint64(result), nil
+}
+
+func (prismRewardsRepository *PrismRewardsRepository) MarkAllPrismClaimed(net string, accountId *hiero.AccountID, redeemedBy hiero.AccountID, txHash string) error {
+	if prismRewardsRepository.db == nil {
+		return lib.ErrorLog("database not initialized")
+	}
+
+	if !lib.IsValidNetwork(net) {
+		return lib.LogAndError(lib.LOG_ERROR, "invalid network: %s", net)
+	}
+
+	q := sqlc.New(prismRewardsRepository.db)
+	err := q.MarkAllPrismClaimed(context.Background(), sqlc.MarkAllPrismClaimedParams{
+		Net:           net,
+		DestAccountID: accountId.String(),
+		RedeemedBy:    sql.NullString{String: redeemedBy.String(), Valid: true},
+		HederaTxHash:  sql.NullString{String: txHash, Valid: true},
+	})
+	return err
 }

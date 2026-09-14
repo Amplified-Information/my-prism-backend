@@ -483,31 +483,32 @@ func (s *server) ClaimPrism(ctx context.Context, req *pb_api.ClaimPrismRequest) 
 	return result, err
 }
 
-func (s *server) GetLOMrewardsByMarketId(ctx context.Context, req *pb_api.MarketIdRequest) (*pb_api.LOMrewardsResponse, error) {
+func (s *server) GetRewardsByMarketId(ctx context.Context, req *pb_api.MarketIdRequest) (*pb_api.RewardsResponse, error) {
 	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
 		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
 	}
 
-	result, err := s.prismLomService.GetLOMrewardsByMarketId(req.MarketId)
+	result, err := s.prismRewardsService.GetRewardsByMarketId(req.MarketId)
 	return result, err
 }
 
-func (s *server) GetLOMrewardsByAccountId(ctx context.Context, req *pb_api.AccountIdRequest) (*pb_api.LOMrewardsResponse, error) {
+func (s *server) GetRewardsByAccountId(ctx context.Context, req *pb_api.AccountIdRequest) (*pb_api.RewardsResponse, error) {
 	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
 		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
 	}
 
-	result, err := s.prismLomService.GetLOMrewardsByAccountId(req.AccountId)
-	return result, err
+	rewards, err := s.prismRewardsService.GetRewardsByAccountId(req.AccountId)
+	return rewards, err
 }
-func (s *server) SendEntitledPrism(ctx context.Context, req *pb_api.AccountIdRequest) (*pb_api.StdResponse, error) {
-	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
-		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
-	}
 
-	result, err := s.prismRewardsService.SendEntitledPrism(req)
-	return result, err
-}
+// func (s *server) SendEntitledPrism(ctx context.Context, req *pb_api.AccountIdRequest) (*pb_api.StdResponse, error) {
+// 	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
+// 		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
+// 	}
+
+// 	result, err := s.prismRewardsService.SendEntitledPrism(req)
+// 	return result, err
+// }
 
 func main() {
 	lib.InitZapLogger(lib.LOG_INFO)
@@ -563,6 +564,9 @@ func main() {
 		"PREVIEWNET_TOKEN",
 		"TESTNET_TOKEN",
 		"MAINNET_TOKEN",
+		"PREVIEWNET_PRISM_TOKEN_HOT_PAYER",
+		"TESTNET_PRISM_TOKEN_HOT_PAYER",
+		"MAINNET_PRISM_TOKEN_HOT_PAYER",
 		"MIN_ORDER_SIZE_USD",
 		"CRON_STR_KICK_UNFUNDED",
 		"CRON_STR_LOM",
@@ -578,6 +582,9 @@ func main() {
 		"SMTP_PWORD",
 		"JWT_SECRET",
 		"OPENAI_API_KEY",
+		"PREVIEWNET_PRISM_TOKEN_HOT_PAYER_KEY",
+		"TESTNET_PRISM_TOKEN_HOT_PAYER_KEY",
+		"MAINNET_PRISM_TOKEN_HOT_PAYER_KEY",
 	}
 	vals := make(map[string]string)
 
@@ -745,13 +752,6 @@ func main() {
 		fatal("Failed to initialize Positions service: %v", err)
 	}
 
-	// initialize PrismPoints service
-	prismRewardsService := services.PrismRewardsService{}
-	err = prismRewardsService.Init(&marketsRepository, &positionsRepository, &prismRewardsRepository)
-	if err != nil {
-		fatal("Failed to initialize PrismRewards service: %v", err)
-	}
-
 	// initialize Markets service
 	marketsService := services.MarketsService{}
 	err = marketsService.Init(&marketsRepository, &hederaService, &priceService, &categoriesRepository)
@@ -798,6 +798,13 @@ func main() {
 	err = prismLomService.Init(&prismLomRepository, &prismRewardsRepository)
 	if err != nil {
 		fatal("Failed to initialize PrismLOM service: %v", err)
+	}
+
+	// initialize PrismPoints service
+	prismRewardsService := services.PrismRewardsService{}
+	err = prismRewardsService.Init(&marketsRepository, &positionsRepository, &prismRewardsRepository, &prismLomService)
+	if err != nil {
+		fatal("Failed to initialize PrismRewards service: %v", err)
 	}
 
 	cronRewardsCampaignService := services.CronRewardsCampaignService{}

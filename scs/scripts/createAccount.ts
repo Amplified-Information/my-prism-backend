@@ -1,24 +1,39 @@
-// export HEDERA_OPERATOR_KEY=.... # no 0x prefix...
-// ts-node createAccount_ecdsa.ts
+// source ../loadEnv.sh local
+// npx tsx createAccount.ts
 import { Client, PrivateKey, AccountCreateTransaction, Hbar } from '@hashgraph/sdk'
 type Net = 'previewnet' | 'testnet' | 'mainnet'
 
+const selectedNetwork = process.env.HEDERA_NETWORK_SELECTED
+if (selectedNetwork !== 'previewnet' && selectedNetwork !== 'testnet' && selectedNetwork !== 'mainnet') {
+  throw new Error(`Unsupported HEDERA_NETWORK_SELECTED: ${selectedNetwork ?? '(not set)'}`)
+}
+console.log('HEDERA_NETWORK_SELECTED:', selectedNetwork)
 
-const net: Net = 'previewnet'
-const HEDERA_OPERATOR_ID='0.0.8062' // portal.hedera.com operator ID
+const net: Net = selectedNetwork
+const networkPrefix = net.toUpperCase()
+const operatorId = process.env[`${networkPrefix}_HEDERA_OPERATOR_ID`]
+const operatorKeyType = process.env[`${networkPrefix}_HEDERA_OPERATOR_KEY_TYPE`]
+const operatorKeyValue = process.env[`${networkPrefix}_HEDERA_OPERATOR_KEY`]
 
-
-
+if (!operatorId) {
+  throw new Error(`${networkPrefix}_HEDERA_OPERATOR_ID not set in environment variables`)
+}
+if (!operatorKeyType || !operatorKeyValue) {
+  throw new Error(`${networkPrefix}_HEDERA_OPERATOR_KEY_TYPE and ${networkPrefix}_HEDERA_OPERATOR_KEY must be set in environment variables`)
+}
+const validatedOperatorId: string = operatorId
+const validatedOperatorKeyValue: string = operatorKeyValue
 
 const pubKeyPrefixECDSA = '302d300706052b8104000a0322000'
 const privKeyPrefixECDSA = '3030020100300706052b8104000a04220420'
 
 async function main() {
   // Load operator credentials
-  const operatorId = HEDERA_OPERATOR_ID
-  const operatorKey = PrivateKey.fromStringECDSA(
-    process.env.HEDERA_OPERATOR_KEY!
-  )
+  const operatorKey = operatorKeyType === 'ecdsa'
+    ? PrivateKey.fromStringECDSA(validatedOperatorKeyValue)
+    : operatorKeyType === 'ed25519'
+      ? PrivateKey.fromStringED25519(validatedOperatorKeyValue)
+      : (() => { throw new Error(`Unknown ${networkPrefix}_HEDERA_OPERATOR_KEY_TYPE: ${operatorKeyType}`) })()
 
   // Create the client
   let client: Client
@@ -31,7 +46,7 @@ async function main() {
   } else {
       throw new Error(`Unsupported net: ${net}`)
   }
-  client.setOperator(operatorId, operatorKey)
+  client.setOperator(validatedOperatorId, operatorKey)
   
   // Generate keypair for the new account
   const newAccountKey = PrivateKey.generateECDSA()

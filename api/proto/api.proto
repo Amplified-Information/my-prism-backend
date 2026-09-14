@@ -43,9 +43,9 @@ service ApiServicePublic {
   rpc CreateCategory(CategoryRequest) returns (CategoryResponse);
   rpc UpdateCategory(CategoryRequest) returns (CategoryResponse);
   rpc DeleteCategory(CategoryIdRequest) returns (StdResponse);
-  rpc GetLOMrewardsByMarketId(MarketIdRequest) returns (LOMrewardsResponse);
-  rpc GetLOMrewardsByAccountId(AccountIdRequest) returns (LOMrewardsResponse);
-  rpc SendEntitledPrism(AccountIdRequest) returns (StdResponse);
+  rpc GetRewardsByMarketId(MarketIdRequest) returns (RewardsResponse);
+  rpc GetRewardsByAccountId(AccountIdRequest) returns (RewardsResponse);
+  // rpc SendEntitledPrism(AccountIdRequest) returns (StdResponse);
 }
 
 service ApiServiceInternal {
@@ -356,8 +356,16 @@ message LOMreward {
   string created_at = 7    [json_name = "createdAt"];
 }
 
-message LOMrewardsResponse {
+message Pointsreward {
+  string market_id = 1     [json_name = "marketId"];
+  string account_id = 2    [json_name = "accountId"];
+  float points = 3         [json_name = "points"];
+  string created_at = 4    [json_name = "createdAt"];
+}
+
+message RewardsResponse {
   repeated LOMreward lom_rewards = 1 [json_name = "lomRewards"];
+  repeated Pointsreward points_rewards = 2 [json_name = "pointsRewards"];
 }
 
 

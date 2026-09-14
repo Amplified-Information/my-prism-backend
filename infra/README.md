@@ -447,11 +447,21 @@ Create a new PAT: https://github.com/settings/apps
 
 On your laptop, save this PAT in the aws secrets manager:
 
-`aws ssm put-parameter --name "read_ghcr" --value "XXXXXXXX" --type "SecureString" --region "us-east-1"`
+`aws ssm put-parameter --name "/shared/READ_GHCR" --value "XXXXXXXX" --type "SecureString" --region "us-east-1"`
 
 Now, on the EC2 instance, can do (Terraform has already set the permsissions for you)
 
-`aws ssm get-parameter --name "read_ghcr" --with-decryption --region "us-east-1"`
+`aws ssm get-parameter --name "/shared/READ_GHCR" --with-decryption --region "us-east-1"`
+
+
+N.B. An EC2 box in dev cannot read a secret in /prod/* Similarly, an EC2 box in prod cannot read a secret in /dev/* See: "aws_iam_policy" in `shared/main.tf` for more info.
+
+Test with:
+- login to EC2 box in dev
+- attempt to access a prod secret (should fail): `aws ssm get-parameter --name /prod/JWT_SECRET --with-decryption --region us-east-1`
+
+
+
 
 ## AWS SES service
 

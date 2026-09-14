@@ -53,7 +53,15 @@ WHERE net = $1 AND dest_account_id = $2
   AND redeemed_at IS NOT NULL;
 
 -- UPDATE
-
+-- name: MarkAllPrismClaimed :exec
+UPDATE prism_rewards
+SET redeemed_at = NOW(),
+    redeemed_by = $3,
+    is_redeemable = FALSE,
+    hedera_tx_hash = $4
+WHERE net = $1
+  AND dest_account_id = $2
+  AND redeemed_at IS NULL;
 
 
 

@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/google/uuid"
+	hiero "github.com/hiero-ledger/hiero-sdk-go/v2/sdk"
 )
 
 type PrismLomRepository struct {
@@ -81,12 +82,12 @@ func (prismLomRepository *PrismLomRepository) GetLOMrewardsByMarketId(market_id 
 	return result, err
 }
 
-func (prismLomRepository *PrismLomRepository) GetLOMrewardsByAccountId(account_id string) ([]sqlc.PrismLom, error) {
+func (prismLomRepository *PrismLomRepository) GetLOMrewardsByAccountId(account_id *hiero.AccountID) ([]sqlc.PrismLom, error) {
 	if prismLomRepository.db == nil {
 		return nil, lib.ErrorLog("database not initialized")
 	}
 
 	q := sqlc.New(prismLomRepository.db)
-	result, err := q.GetLOMrewardsByAccountId(context.Background(), account_id)
+	result, err := q.GetLOMrewardsByAccountId(context.Background(), account_id.String())
 	return result, err
 }

@@ -1,3 +1,5 @@
+data "aws_caller_identity" "current" {}
+
 #####
 # variable definitions
 #####
@@ -687,7 +689,7 @@ resource "aws_security_group" "allow_hedera_rpc_egress" {
 #####
 # IAM roles
 # - view files with `aws s3 ls s3://prismlabs-deployment --region us-east-1`
-# - access `aws ssm get-parameter ...` - so can acccess the "read_ghcr" secret
+# - access `aws ssm get-parameter ...` - so can acccess the "/shared/READ_GHCR" secret
 #####
 
 resource "aws_iam_role" "combined_role" {
@@ -713,15 +715,34 @@ resource "aws_iam_policy" "combined_policy" {
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
-      // EC2 box has ssm read access
+      // First apply deny to ssm:GetParameter
+      // AmazonSSMManagedInstanceCore grants SSM parameter reads on all resources.
+      // Explicitly deny other environment paths so those broad permissions cannot
+      // expose another environment's secrets.
+      {
+        Effect = "Deny",
+        Action = [
+          "ssm:GetParameter",
+          "ssm:GetParameters",
+          "ssm:GetParametersByPath"
+        ],
+        NotResource = [
+          "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/shared",
+          "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/shared/*",
+          "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${var.env}",
+          "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${var.env}/*"
+        ]
+      },
+      // Now apply read access for the EC2 box
+      // N.B. the EC2 box only has access to /shared/* and /${var.env}/*
       {
         Effect = "Allow",
         Action = [
           "ssm:GetParameter"
         ],
         Resource = [
-          "arn:aws:ssm:us-east-1:063088900305:parameter/read_ghcr",
-          "arn:aws:ssm:us-east-1:063088900305:parameter/*"
+          "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/shared/*",       # all envs can access /shared/*
+          "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${var.env}/*"    # only the dev box can access secrets in /dev/*
         ]
       },
       {

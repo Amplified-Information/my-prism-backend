@@ -15,7 +15,7 @@ module "shared" {
   ec2_type_data = "$EC2_TYPE_DATA"
 
   s3_bucket_deployment = "prismlabs-deployment"
-  ghrc_secret_name = "read_ghcr"
+  ghrc_secret_name = "/shared/READ_GHCR"
 }
 
 // so it is always called using the "prism" AWS profile
