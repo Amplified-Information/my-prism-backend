@@ -543,9 +543,17 @@ func (ms *MarketsService) PatchMarket(req *pb_api.PatchMarketRequest) (*pb_api.M
 }
 
 func (ms *MarketsService) SoftDeleteMarket(marketId string) error {
+	// 1. delete the market by marking it as soft deleted in the repository:
 	if _, err := ms.marketsRepository.SoftDeleteMarket(marketId); err != nil {
 		return lib.LogAndError(lib.LOG_ERROR, "failed to soft delete market %s: %v", marketId, err)
 	}
+
+	// 2. delete the market on the CLOB:
+	err := lib.CloseMarketOnClob(marketId)
+	if err != nil {
+		return lib.LogAndError(lib.LOG_ERROR, "failed to delete market on CLOB: %v", err)
+	}
+
 	lib.Info("Market soft deleted successfully", "marketId", marketId)
 	return nil
 }

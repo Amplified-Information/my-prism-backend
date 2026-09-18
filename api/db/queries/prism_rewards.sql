@@ -52,6 +52,14 @@ FROM prism_rewards
 WHERE net = $1 AND dest_account_id = $2
   AND redeemed_at IS NOT NULL;
 
+
+
+
+
+
+
+
+
 -- UPDATE
 -- name: MarkAllPrismClaimed :exec
 UPDATE prism_rewards
@@ -62,6 +70,18 @@ SET redeemed_at = NOW(),
 WHERE net = $1
   AND dest_account_id = $2
   AND redeemed_at IS NULL;
+
+-- name: MarkPrismAsClaimableByAccountId :exec
+UPDATE prism_rewards
+SET is_redeemable = TRUE
+WHERE net = $1
+  AND dest_account_id = $2
+  AND redeemed_at IS NULL;
+
+
+
+
+
 
 
 

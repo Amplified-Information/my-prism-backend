@@ -235,3 +235,46 @@ func GetUsdcBalanceUsd(networkSelected hiero.LedgerID, accountId hiero.AccountID
 	}
 	return balance, nil
 }
+
+func IsPRISMassociated(net string, accountIdStr string) bool {
+	prismTokenIdStr := os.Getenv(fmt.Sprintf("%s_TOKEN", strings.ToUpper(net)))
+	if prismTokenIdStr == "" {
+		return false
+	}
+	prismTokenId, err := hiero.TokenIDFromString(prismTokenIdStr)
+	if err != nil {
+		return false
+	}
+
+	accountId, err := hiero.AccountIDFromString(accountIdStr)
+	if err != nil {
+		return false
+	}
+
+	mirrorNodeURL := fmt.Sprintf(
+		"https://%s.mirrornode.hedera.com/api/v1/accounts/%s/tokens?token.id=%s",
+		strings.ToLower(net),
+		accountId.String(),
+		prismTokenId.String(),
+	)
+	resp, err := Fetch(GET, mirrorNodeURL, nil)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return false
+	}
+
+	var result struct {
+		Tokens []struct {
+			TokenID string `json:"token_id"`
+		} `json:"tokens"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return false
+	}
+
+	return len(result.Tokens) > 0
+}

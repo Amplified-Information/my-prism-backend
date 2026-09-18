@@ -25,6 +25,8 @@ service ApiServicePublic {
   rpc GetPredictionIntentMatches(GetMatchesRequest) returns (MatchesResponse);
   rpc GetPrism(AccountIdRequest) returns (PrismResponse);
   rpc ClaimPrism(ClaimPrismRequest) returns (StdResponse);
+  rpc GetRewardsByMarketId(MarketIdRequest) returns (RewardsResponse);
+  rpc GetRewardsByAccountId(AccountIdRequest) returns (RewardsResponse);
   
   // authenticated endpoints
   // @Deprecated:
@@ -43,9 +45,8 @@ service ApiServicePublic {
   rpc CreateCategory(CategoryRequest) returns (CategoryResponse);
   rpc UpdateCategory(CategoryRequest) returns (CategoryResponse);
   rpc DeleteCategory(CategoryIdRequest) returns (StdResponse);
-  rpc GetRewardsByMarketId(MarketIdRequest) returns (RewardsResponse);
-  rpc GetRewardsByAccountId(AccountIdRequest) returns (RewardsResponse);
   // rpc SendEntitledPrism(AccountIdRequest) returns (StdResponse);
+  rpc MarkPrismAsClaimableByAccountId(AccountIdRequest) returns (StdResponse);
 }
 
 service ApiServiceInternal {

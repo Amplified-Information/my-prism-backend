@@ -107,7 +107,12 @@ func (prs *PrismRewardsService) ClaimPrism(destAccountIdStr string, net string, 
 		return nil, lib.LogAndError(lib.LOG_ERROR, "prismRewardsRepository is not initialized")
 	}
 
-	// TODO: implement auth and signature verification
+	// TODO: implement auth and signature verification?
+
+	// 0. does destAccountIdStr have the PRISM token associated?
+	if !lib.IsPRISMassociated(net, destAccountIdStr) {
+		return nil, lib.LogAndError(lib.LOG_ERROR, "destination account %s does not have the PRISM token associated on network %s", destAccountIdStr, net)
+	}
 
 	// 1. get the destAccountIdStr's pending PRISM
 	totalUnredeemedPrismScaled, err := prs.prismRewardsRepository.GetTotalUnredeemedPrismRewardsByUser(net, destAccountIdStr)
@@ -263,4 +268,22 @@ func (prs *PrismRewardsService) GetRewardsByMarketId(marketIdStr string) (*pb_ap
 		LomRewards:    lomRewards,
 		PointsRewards: pointsRewards,
 	}, nil
+}
+
+func (prs *PrismRewardsService) MarkPrismAsClaimableByAccountId(accountIdStr string, net string) (bool, error) {
+	if prs.prismRewardsRepository == nil {
+		return false, lib.LogAndError(lib.LOG_ERROR, "prismRewardsRepository is not initialized")
+	}
+
+	accountId, err := hiero.AccountIDFromString(accountIdStr)
+	if err != nil {
+		return false, lib.LogAndError(lib.LOG_ERROR, "invalid account ID %s: %v", accountIdStr, err)
+	}
+
+	err = prs.prismRewardsRepository.MarkPrismAsClaimableByAccountId(net, &accountId)
+	if err != nil {
+		return false, lib.LogAndError(lib.LOG_ERROR, "failed to mark PRISM as claimable for account ID %s on network %s: %v", accountId, net, err)
+	}
+
+	return true, nil
 }

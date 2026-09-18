@@ -484,19 +484,11 @@ func (s *server) ClaimPrism(ctx context.Context, req *pb_api.ClaimPrismRequest) 
 }
 
 func (s *server) GetRewardsByMarketId(ctx context.Context, req *pb_api.MarketIdRequest) (*pb_api.RewardsResponse, error) {
-	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
-		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
-	}
-
 	result, err := s.prismRewardsService.GetRewardsByMarketId(req.MarketId)
 	return result, err
 }
 
 func (s *server) GetRewardsByAccountId(ctx context.Context, req *pb_api.AccountIdRequest) (*pb_api.RewardsResponse, error) {
-	if !s.authService.HasRole(ctx, lib.ADMIN) { // MUST be ADMIN user
-		return nil, lib.LogAndError(lib.LOG_ERROR, "unauthorized: ADMIN role required")
-	}
-
 	rewards, err := s.prismRewardsService.GetRewardsByAccountId(req.AccountId)
 	return rewards, err
 }
@@ -509,6 +501,24 @@ func (s *server) GetRewardsByAccountId(ctx context.Context, req *pb_api.AccountI
 // 	result, err := s.prismRewardsService.SendEntitledPrism(req)
 // 	return result, err
 // }
+
+func (s *server) MarkPrismAsClaimableByAccountId(ctx context.Context, req *pb_api.AccountIdRequest) (*pb_api.StdResponse, error) {
+	isOK, err := s.prismRewardsService.MarkPrismAsClaimableByAccountId(req.AccountId, req.Net)
+
+	if !isOK || err != nil {
+		return &pb_api.StdResponse{
+			ErrorCode: 1,
+			Message:   "Failed to mark PRISM as claimable",
+		}, err
+	}
+
+	result := &pb_api.StdResponse{
+		ErrorCode: 0,
+		Message:   "PRISM marked as claimable successfully.",
+	}
+
+	return result, nil
+}
 
 func main() {
 	lib.InitZapLogger(lib.LOG_INFO)

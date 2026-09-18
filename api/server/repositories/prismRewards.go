@@ -197,3 +197,20 @@ func (prismRewardsRepository *PrismRewardsRepository) MarkAllPrismClaimed(net st
 	})
 	return err
 }
+
+func (prismRewardsRepository *PrismRewardsRepository) MarkPrismAsClaimableByAccountId(net string, accountId *hiero.AccountID) error {
+	if prismRewardsRepository.db == nil {
+		return lib.ErrorLog("database not initialized")
+	}
+
+	if !lib.IsValidNetwork(net) {
+		return lib.LogAndError(lib.LOG_ERROR, "invalid network: %s", net)
+	}
+
+	q := sqlc.New(prismRewardsRepository.db)
+	err := q.MarkPrismAsClaimableByAccountId(context.Background(), sqlc.MarkPrismAsClaimableByAccountIdParams{
+		Net:           net,
+		DestAccountID: accountId.String(),
+	})
+	return err
+}

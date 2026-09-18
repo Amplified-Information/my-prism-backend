@@ -23,6 +23,42 @@ modular components:
 - `resources`: a version-controlled area to store artifacts, design files, images, etc.
 - `scripts`: some general usage scripts
 
+## Prism accountIds on Hedera
+
+Foreach network {previewnet, testnet, mainnet}:
+
+**Accounts:**
+- API operator account (NOT multi-sig)
+- treasury account (**multi-sig**)
+- hot payer account (NOT multi-sig)
+
+// m of n for multi-sig:
+- accountId1
+- ...
+- accountIdN
+
+**Tokens:**
+- PRISM token
+
+**Smart contracts:**
+- PRISM smart contract (**multi-sig**)
+- Vesting contract?
+- Payment splitter?
+- ???
+
+**HCS topics**
+- PRISM hcs
+
+
+**WIP:**
+
+| network    | operatorAccountId |
+| -----------|-------------------|
+| testnet    | 0.0.
+| mainnet    |
+
+
+
 ## real-time application observability
 
 https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#logsV2:log-groups

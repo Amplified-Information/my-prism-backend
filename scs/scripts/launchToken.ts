@@ -4,7 +4,7 @@ import { initHederaClient } from './lib/hedera.ts'
 const TOKEN_NAME = 'Prism'
 const TOKEN_SYMBOL = 'PRSM'
 const DECIMALS = 6
-const SUPPLY = 21_000_000
+const SUPPLY = 100_000_000
 
 const [ client, networkSelected, operatorKey ] = initHederaClient()
 
@@ -25,7 +25,7 @@ const launchTokens = async () => {
     .setMetadata(Buffer.from(JSON.stringify({ image: 'https://testnet.prism.market/prsm.png' })))
     // .setCustomFees()
     .freezeWith(client)
-    .sign(operatorKey)
+    .sign(operatorKey) // TODO - handle multi-sig here
 
     const txResponse = await transaction.execute(client)
     const receipt = await txResponse.getReceipt(client)
