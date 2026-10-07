@@ -1,9 +1,18 @@
 -- CREATE
 
 
--- name: CreateMatch :one
-INSERT INTO matches (market_id, tx_id1, tx_id2, qty1, qty2, tx_hash)
-VALUES ($1, $2, $3, $4, $5, $6)
+-- name: CreateMatchV2 :one
+-- tx_id1 is the bid and tx_id2 the ask. Redelivery returns the existing row unchanged.
+INSERT INTO matches (
+    market_id, tx_id1, tx_id2, qty1, qty2, tx_hash,
+    match_id, status, protocol_version, fill_shares, execution_yes_price, yes_collateral, no_collateral
+)
+VALUES (
+    $1, $2, $3, $4, $5, 'notYetAvailable',
+    sqlc.arg(match_id), 'pending', 2, sqlc.arg(fill_shares)::numeric, sqlc.arg(execution_yes_price),
+    sqlc.arg(yes_collateral)::numeric, sqlc.arg(no_collateral)::numeric
+)
+ON CONFLICT (match_id) DO UPDATE SET match_id = EXCLUDED.match_id
 RETURNING *;
 
 
@@ -73,7 +82,29 @@ WHERE tx_id1 = $1 OR tx_id2 = $1;
 
 -- UPDATE
 
--- name: UpdateMatch :exec
+-- name: MarkMatchSubmitted :exec
+-- tx_hash holds the Hedera transaction ID of the latest submission.
 UPDATE matches
-SET tx_hash = $4, hcs_tx_id = $5
-WHERE (market_id = $1 AND tx_id1 = $2 AND tx_id2 = $3) OR (market_id = $1 AND tx_id1 = $3 AND tx_id2 = $2);
+SET status = 'submitted', attempts = attempts + 1, submitted_at = NOW(), last_error = NULL, tx_hash = $2
+WHERE match_id = $1 AND status <> 'finalized';
+
+-- name: MarkMatchFailed :exec
+UPDATE matches
+SET status = 'failed', last_error = $2
+WHERE match_id = $1 AND status <> 'finalized';
+
+-- name: FinalizeMatch :execrows
+-- Returns 0 rows when the match was already finalized, so fill bookkeeping runs exactly once.
+UPDATE matches
+SET status = 'finalized', tx_hash = $2, finalized_at = NOW(), last_error = NULL
+WHERE match_id = $1 AND status <> 'finalized';
+
+-- name: SetMatchHcsTxId :exec
+UPDATE matches
+SET hcs_tx_id = $2
+WHERE match_id = $1;
+
+-- name: GetMatchByMatchId :one
+SELECT *
+FROM matches
+WHERE match_id = $1;

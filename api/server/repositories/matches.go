@@ -7,8 +7,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
-
-	pb_clob "api/gen/clob"
+	"strconv"
 
 	"github.com/google/uuid"
 )
@@ -16,6 +15,7 @@ import (
 type MatchesRepository struct {
 	db *sql.DB
 }
+
 
 func (matchesRepository *MatchesRepository) CloseDb() error {
 	var err = matchesRepository.db.Close()
@@ -43,109 +43,122 @@ func (matchesRepository *MatchesRepository) InitDb() error {
 	return nil
 }
 
-// Record the match in the database for auditing
-func (matchesRepository *MatchesRepository) CreateMatch(orderRequestClobTuple [2]*pb_clob.CreateOrderRequestClob, txHash string) (*sqlc.Match, error) {
-	// guards
+// MatchV2 is one PrismV2 fill. Bid is the YES-price buyer, Ask the YES-price seller.
+type MatchV2 struct {
+	MarketID          uuid.UUID
+	BidTxID           uuid.UUID
+	AskTxID           uuid.UUID
+	MatchID           string // 0x-prefixed bytes32 hex
+	FillShares        uint64
+	ExecutionYesPrice uint64
+	YesCollateral     uint64
+	NoCollateral      uint64
+	BidCollateral     uint64 // collateral attributed to the bid authorization (contract _consume)
+	AskCollateral     uint64
+	UnitScale         float64 // 10^collateral decimals, for the derived qty columns
+}
+
+// CreateMatchV2 records a fill before submission. Redelivery returns the existing row.
+func (matchesRepository *MatchesRepository) CreateMatchV2(m MatchV2) (*sqlc.Match, error) {
 	if matchesRepository.db == nil {
 		return nil, lib.ErrorLog("database not initialized")
 	}
-
-	// // Normalize tuple order by sign so txId1/qty1 is always YES-side (positive)
-	// // and txId2/qty2 is always NO-side (negative), independent of publish order.
-	// if orderRequestClobTuple[0].PriceUsd < 0 && orderRequestClobTuple[1].PriceUsd > 0 {
-	// 	orderRequestClobTuple[0], orderRequestClobTuple[1] = orderRequestClobTuple[1], orderRequestClobTuple[0]
-	// } else if !(orderRequestClobTuple[0].PriceUsd > 0 && orderRequestClobTuple[1].PriceUsd < 0) {
-	// 	return nil, lib.ErrorLog("invalid priceUsd signs for match tuple", "txId1", orderRequestClobTuple[0].TxId, "priceUsd1", orderRequestClobTuple[0].PriceUsd, "txId2", orderRequestClobTuple[1].TxId, "priceUsd2", orderRequestClobTuple[1].PriceUsd)
-	// }
-
-	// Normalize tuple to sign ordering for downstream code paths.
-	// CLOB no longer does this normalization at publish time.
-	if err := lib.NormalizeMatchTupleByPriceSign(&orderRequestClobTuple); err != nil {
-		return nil, lib.ErrorLog("failed to normalize match tuple by price sign", "error", err)
-	}
-
-	// marketIds should match
-	if orderRequestClobTuple[0].MarketId != orderRequestClobTuple[1].MarketId {
-		return nil, lib.ErrorLog("marketIds do not match", "marketId1", orderRequestClobTuple[0].MarketId, "marketId2", orderRequestClobTuple[1].MarketId)
-	}
-
-	marketId, err := uuid.Parse(orderRequestClobTuple[0].MarketId)
-	if err != nil {
-		return nil, lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", orderRequestClobTuple[0].MarketId)
-	}
-
-	txId1, err := uuid.Parse(orderRequestClobTuple[0].TxId)
-	if err != nil {
-		return nil, lib.ErrorLog("invalid txId1 uuid", "error", err, "txId1", orderRequestClobTuple[0].TxId)
-	}
-
-	txId2, err := uuid.Parse(orderRequestClobTuple[1].TxId)
-	if err != nil {
-		return nil, lib.ErrorLog("invalid txId2 uuid", "error", err, "txId2", orderRequestClobTuple[1].TxId)
-	}
-
-	// OK
-
-	params := sqlc.CreateMatchParams{
-		MarketID: marketId,
-		TxId1:    txId1,
-		TxId2:    txId2,
-		Qty1:     orderRequestClobTuple[0].QtyRem,
-		Qty2:     orderRequestClobTuple[1].QtyRem,
-		TxHash:   txHash,
-	}
-
+	qty := float64(m.FillShares) / m.UnitScale
 	q := sqlc.New(matchesRepository.db)
-	match, err := q.CreateMatch(context.Background(), params)
+	match, err := q.CreateMatchV2(context.Background(), sqlc.CreateMatchV2Params{
+		MarketID:          m.MarketID,
+		TxId1:             m.BidTxID,
+		TxId2:             m.AskTxID,
+		Qty1:              qty,
+		Qty2:              qty,
+		MatchID:           sql.NullString{String: m.MatchID, Valid: true},
+		FillShares:        strconv.FormatUint(m.FillShares, 10),
+		ExecutionYesPrice: sql.NullInt64{Int64: int64(m.ExecutionYesPrice), Valid: true},
+		YesCollateral:     strconv.FormatUint(m.YesCollateral, 10),
+		NoCollateral:      strconv.FormatUint(m.NoCollateral, 10),
+	})
 	if err != nil {
-		return nil, lib.ErrorLog("failed to record match", "error", err, "txId1", orderRequestClobTuple[0].TxId, "txId2", orderRequestClobTuple[1].TxId)
+		return nil, lib.ErrorLog("failed to record match", "error", err, "matchId", m.MatchID)
 	}
-
-	lib.Info("match recorded", "txId1", orderRequestClobTuple[0].TxId, "txId2", orderRequestClobTuple[1].TxId)
-
 	return &match, nil
 }
 
-func (matchesRepository *MatchesRepository) UpdateMatch(marketId string, tx1 string, tx2 string, txHash string, hcsTxId *string /* optional */) error {
-	if matchesRepository.db == nil {
-		return lib.ErrorLog("database not initialized")
-	}
-
-	marketUUID, err := uuid.Parse(marketId)
-	if err != nil {
-		return lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
-	}
-
-	txId1, err := uuid.Parse(tx1)
-	if err != nil {
-		return lib.ErrorLog("invalid txId1 uuid", "error", err, "txId1", tx1)
-	}
-
-	txId2, err := uuid.Parse(tx2)
-	if err != nil {
-		return lib.ErrorLog("invalid txId2 uuid", "error", err, "txId2", tx2)
-	}
-
-	var hcsTxIDStr string
-	if hcsTxId != nil {
-		hcsTxIDStr = *hcsTxId
-	}
-
+func (matchesRepository *MatchesRepository) MarkMatchSubmitted(matchID string, hederaTxID string) error {
 	q := sqlc.New(matchesRepository.db)
-	err = q.UpdateMatch(context.Background(), sqlc.UpdateMatchParams{
-		MarketID: marketUUID,
-		TxId1:    txId1,
-		TxId2:    txId2,
-		TxHash:   txHash,
-		HcsTxID:  sql.NullString{String: hcsTxIDStr, Valid: hcsTxId != nil},
+	return q.MarkMatchSubmitted(context.Background(), sqlc.MarkMatchSubmittedParams{
+		MatchID: sql.NullString{String: matchID, Valid: true},
+		TxHash:  hederaTxID,
+	})
+}
+
+func (matchesRepository *MatchesRepository) MarkMatchFailed(matchID string, cause error) error {
+	q := sqlc.New(matchesRepository.db)
+	return q.MarkMatchFailed(context.Background(), sqlc.MarkMatchFailedParams{
+		MatchID:   sql.NullString{String: matchID, Valid: true},
+		LastError: sql.NullString{String: cause.Error(), Valid: true},
+	})
+}
+
+// FinalizeMatchV2 marks a match finalized and applies both fills in one transaction.
+// It returns false (and changes nothing) if the match was already finalized, so a
+// redelivered settlement can never double-count a fill.
+func (matchesRepository *MatchesRepository) FinalizeMatchV2(m MatchV2, txHash string) (bool, error) {
+	if matchesRepository.db == nil {
+		return false, lib.ErrorLog("database not initialized")
+	}
+	tx, err := matchesRepository.db.BeginTx(context.Background(), nil)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+
+	q := sqlc.New(tx)
+	n, err := q.FinalizeMatch(context.Background(), sqlc.FinalizeMatchParams{
+		MatchID: sql.NullString{String: m.MatchID, Valid: true},
+		TxHash:  txHash,
 	})
 	if err != nil {
-		return lib.ErrorLog("UpdateMatch failed", "error", err, "marketId", marketId, "txId1", tx1, "txId2", tx2)
+		return false, err
 	}
+	if n == 0 {
+		return false, nil
+	}
+	fills := []struct {
+		txID       uuid.UUID
+		collateral uint64
+	}{{m.BidTxID, m.BidCollateral}, {m.AskTxID, m.AskCollateral}}
+	for _, fill := range fills {
+		if _, err := q.AddPredictionIntentFill(context.Background(), sqlc.AddPredictionIntentFillParams{
+			FillShares:     strconv.FormatUint(m.FillShares, 10),
+			FillCollateral: strconv.FormatUint(fill.collateral, 10),
+			UnitScale:      m.UnitScale,
+			TxID:           fill.txID,
+		}); err != nil {
+			return false, fmt.Errorf("apply fill to %s: %w", fill.txID, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	lib.Info("match finalized", "matchId", m.MatchID, "bid", m.BidTxID.String(), "ask", m.AskTxID.String())
+	return true, nil
+}
 
-	lib.Info("match row updated", "txId1", tx1, "txId2", tx2)
+func (matchesRepository *MatchesRepository) SetMatchHcsTxId(matchID string, hcsTxID string) error {
+	q := sqlc.New(matchesRepository.db)
+	return q.SetMatchHcsTxId(context.Background(), sqlc.SetMatchHcsTxIdParams{
+		MatchID: sql.NullString{String: matchID, Valid: true},
+		HcsTxID: sql.NullString{String: hcsTxID, Valid: true},
+	})
+}
 
-	return nil
+func (matchesRepository *MatchesRepository) GetMatchByMatchId(matchID string) (*sqlc.Match, error) {
+	q := sqlc.New(matchesRepository.db)
+	match, err := q.GetMatchByMatchId(context.Background(), sql.NullString{String: matchID, Valid: true})
+	if err != nil {
+		return nil, err
+	}
+	return &match, nil
 }
 
 func (matchesRepository *MatchesRepository) GetAllMatchesForMarketIdTxId(marketID uuid.UUID, txId uuid.UUID) ([]sqlc.Match, error) {

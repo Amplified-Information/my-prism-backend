@@ -1,0 +1,17 @@
+[profile.default]
+src = "foundry/src"
+test = "foundry/test"
+script = "foundry/script"
+out = "foundry/out"
+libs = ["foundry/lib"]
+
+optimizer = true
+optimizer_runs = 200
+via_ir = true
+
+remappings = [
+  '@openzeppelin/=foundry/lib/openzeppelin-contracts/',
+  '@openzeppelin/contracts/=foundry/lib/openzeppelin-contracts/contracts/',
+  'ds-test/=foundry/lib/ds-test/src/',
+  'forge-std/=foundry/lib/forge-std/src/'
+]

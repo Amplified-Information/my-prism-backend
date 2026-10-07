@@ -2,6 +2,7 @@ package services
 
 import (
 	pb_api "api/gen"
+	"api/gen/sqlc"
 	"api/server/lib"
 	repositories "api/server/repositories"
 	"context"
@@ -55,6 +56,7 @@ func (ms *MatchesService) GetAllMatches(limit int32, offset int32) (*pb_api.Matc
 			PriceUsd1: intent1.PriceUsd,
 			PriceUsd2: intent2.PriceUsd,
 		}
+		applyMatchV2Fields(apiMatch, &m)
 		apiMatches = append(apiMatches, apiMatch)
 	}
 
@@ -108,6 +110,7 @@ func (ms *MatchesService) GetPredictionIntentMatches(marketId string, limit *int
 			PriceUsd1: intent1.PriceUsd,
 			PriceUsd2: intent2.PriceUsd,
 		}
+		applyMatchV2Fields(apiMatch, &m)
 		apiMatches = append(apiMatches, apiMatch)
 	}
 
@@ -115,4 +118,21 @@ func (ms *MatchesService) GetPredictionIntentMatches(marketId string, limit *int
 		Matches:    apiMatches,
 		Pagination: lib.NewPagination(_limit, _offset, total, len(apiMatches)),
 	}, nil
+}
+
+// applyMatchV2Fields adds the PrismV2 settlement detail to a match row. For V2 rows
+// tx_id1 is the bid and tx_id2 the ask, and price_usd is the execution YES price.
+func applyMatchV2Fields(apiMatch *pb_api.Match, m *sqlc.Match) {
+	if m.ProtocolVersion != 2 {
+		return
+	}
+	apiMatch.MatchId = m.MatchID.String
+	apiMatch.Status = m.Status
+	if fill, err := parseNumeric(m.FillShares); err == nil {
+		apiMatch.FillShares = fill
+	}
+	if m.ExecutionYesPrice.Valid {
+		apiMatch.ExecutionYesPrice = uint64(m.ExecutionYesPrice.Int64)
+		apiMatch.PriceUsd = float64(m.ExecutionYesPrice.Int64) / float64(lib.PriceScale)
+	}
 }

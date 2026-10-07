@@ -2,8 +2,8 @@ package services
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
-	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -19,12 +19,12 @@ import (
 
 type NatsService struct {
 	nats                         *nats.Conn
+	js                           nats.JetStreamContext
 	hederaService                *HederaService
 	dbRepository                 *repositories.DbRepository
 	matchesRepository            *repositories.MatchesRepository
 	predictionIntentsRepository  *repositories.PredictionIntentsRepository
 	smartContractEventRepository *repositories.SmartContractEventRepository
-	matchDedup                   map[string]bool
 }
 
 func (ns *NatsService) InitNATS(h *HederaService, d *repositories.DbRepository, m *repositories.MatchesRepository, p *repositories.PredictionIntentsRepository, scer *repositories.SmartContractEventRepository) error {
@@ -34,11 +34,31 @@ func (ns *NatsService) InitNATS(h *HederaService, d *repositories.DbRepository, 
 	if natsURL == "" {
 		natsURL = nats.DefaultURL
 	}
-	natsConn, err := nats.Connect(natsURL)
+	natsUser, natsPassword := os.Getenv("NATS_USER"), os.Getenv("NATS_PASSWORD")
+	if natsUser == "" || natsPassword == "" {
+		return lib.LogAndError(lib.LOG_ERROR, "NATS_USER and NATS_PASSWORD are required")
+	}
+	natsConn, err := nats.Connect(natsURL,
+		nats.UserInfo(natsUser, natsPassword),
+		nats.Name("prism-api"),
+		nats.MaxReconnects(-1),
+		nats.ReconnectWait(2*time.Second),
+	)
 	if err != nil {
 		return lib.LogAndError(lib.LOG_ERROR, "failed to connect to NATS: %v", err)
 	}
 	ns.nats = natsConn
+	js, err := natsConn.JetStream(nats.PublishAsyncMaxPending(256))
+	if err != nil { return lib.LogAndError(lib.LOG_ERROR, "JetStream is required: %v", err) }
+	ns.js = js
+	for _, cfg := range []*nats.StreamConfig{
+		{Name: "CLOB_ORDERS", Subjects: []string{"clob.orders", "clob.orders.cancel"}, Storage: nats.FileStorage, Retention: nats.WorkQueuePolicy, MaxAge: 7 * 24 * time.Hour, Duplicates: 24 * time.Hour},
+		{Name: "CLOB_MATCHES", Subjects: []string{"clob.matches.*"}, Storage: nats.FileStorage, Retention: nats.WorkQueuePolicy, MaxAge: 30 * 24 * time.Hour, Duplicates: 24 * time.Hour},
+	} {
+		if _, err := js.StreamInfo(cfg.Name); err != nil {
+			if _, err = js.AddStream(cfg); err != nil { return lib.LogAndError(lib.LOG_ERROR, "create JetStream stream %s: %v", cfg.Name, err) }
+		}
+	}
 
 	// and inject the HederaService:
 	ns.hederaService = h
@@ -50,10 +70,6 @@ func (ns *NatsService) InitNATS(h *HederaService, d *repositories.DbRepository, 
 	ns.predictionIntentsRepository = p
 	// and inject the SmartContractEventRepository:
 	ns.smartContractEventRepository = scer
-	if ns.matchDedup == nil {
-		ns.matchDedup = make(map[string]bool)
-	}
-
 	lib.Log(lib.LOG_INFO, "Service: NATS service initialized successfully")
 	return nil
 }
@@ -66,13 +82,19 @@ func (ns *NatsService) CloseNATS() error {
 }
 
 func (ns *NatsService) Publish(subject string, data []byte) error {
+	return ns.PublishWithID(subject, data, "")
+}
+
+func (ns *NatsService) PublishWithID(subject string, data []byte, messageID string) error {
 	if ns.nats == nil {
 		return lib.LogAndError(lib.LOG_ERROR, "NATS connection not initialized")
 	}
-	if err := ns.nats.Publish(subject, data); err != nil {
-		return err
-	}
-	return nil
+	if ns.js == nil { return lib.LogAndError(lib.LOG_ERROR, "JetStream not initialized") }
+	msg := nats.NewMsg(subject)
+	msg.Data = data
+	if messageID != "" { msg.Header.Set(nats.MsgIdHdr, messageID) }
+	_, err := ns.js.PublishMsg(msg)
+	return err
 }
 
 func (ns *NatsService) subscribe(subject string, handler nats.MsgHandler) (*nats.Subscription, error) {
@@ -90,224 +112,50 @@ func (ns *NatsService) subscribe(subject string, handler nats.MsgHandler) (*nats
 
 func (ns *NatsService) HandleOrderMatches() error {
 	lib.Log(lib.LOG_INFO, "HandleOrderMatches subscription starting...")
-	_, err := ns.subscribe(lib.NATS_CLOB_MATCHES_WILDCARD, func(msg *nats.Msg) {
-
-		lib.Log(lib.LOG_INFO, "NATS %s: %s\n", msg.Subject, string(msg.Data))
-
-		// Guards
-		var orderRequestClobTuple [2]*pb_clob.CreateOrderRequestClob
-		if err := json.Unmarshal(msg.Data, &orderRequestClobTuple); err != nil {
-			lib.Log(lib.LOG_ERROR, "Error parsing order data: %v", err)
-			return
-		}
-
-		// assert that [0].marketId and [1].marketId are the same
-		if orderRequestClobTuple[0].MarketId != orderRequestClobTuple[1].MarketId {
-			lib.Log(lib.LOG_ERROR, "PROBLEM: the marketIds (%s, %s) don't match! (txid=%s).", orderRequestClobTuple[0].MarketId, orderRequestClobTuple[1].MarketId, orderRequestClobTuple[0].TxId)
-			return
-		}
-
-		/////
-		// N.B. ///// this is an invalid assertion because a high bid can be higher than the lowest ask and vice-versa
-		/////
-		// assert that the two priceUsd's cancel each other out
-		// priceDiff := orderRequestClobTuple[0].PriceUsd + orderRequestClobTuple[1].PriceUsd
-		// if priceDiff != 0.0 {
-		// 	debug: orderRequestClobTuple[0] + orderRequestClobTuple[1] is non-zero
-		// 	return
-		// }
-
-		// assert that priceUsd is not 0.0
-		if orderRequestClobTuple[0].PriceUsd == 0.0 {
-			lib.Log(lib.LOG_ERROR, "PROBLEM: orderRequestClobTuple[0].PriceUsd  is 0.0 - this is not allowed (txid=%s).", orderRequestClobTuple[0].TxId)
-			return
-		}
-		if orderRequestClobTuple[1].PriceUsd == 0.0 {
-			lib.Log(lib.LOG_ERROR, "PROBLEM: orderRequestClobTuple[1].PriceUsd  is 0.0 - this is not allowed (txid=%s).", orderRequestClobTuple[1].TxId)
-			return
-		}
-
-		// assert that the keyType is not 0
-		if orderRequestClobTuple[0].KeyType == 0 || orderRequestClobTuple[1].KeyType == 0 {
-			lib.Log(lib.LOG_ERROR, "PROBLEM: keyType is 0 - this is not allowed (txid0=%s, txid1=%s).", orderRequestClobTuple[0].TxId, orderRequestClobTuple[1].TxId)
-			return
-		}
-
-		// Normalize tuple order for downstream code paths.
-		// CLOB no longer normalizes publish order; ensure tuple[0] is positive and tuple[1] is negative.
-		if err := lib.NormalizeMatchTupleByPriceSign(&orderRequestClobTuple); err != nil {
-			lib.Log(lib.LOG_ERROR, "PROBLEM: failed to normalize match tuple by price sign (txid0=%s, txid1=%s).", orderRequestClobTuple[0].TxId, orderRequestClobTuple[1].TxId)
-			return
-		}
-
-		if err := validateMatchTupleInvariant(orderRequestClobTuple); err != nil {
-			lib.Log(lib.LOG_CRITICAL, "CRITICAL PROTOCOL ERROR: invalid match tuple invariant: %v", err)
-			return
-		}
-
-		matchKey := matchTupleKey(orderRequestClobTuple)
-		if matchKey != "" {
-			if seen, ok := ns.matchDedup[matchKey]; ok && seen {
-				lib.Log(lib.LOG_WARN, "Skipping duplicate match tuple: %s", matchKey)
-				return
-			}
-			ns.matchDedup[matchKey] = true
-		}
-
-		// OK
-
-		/////
-		// db
-		// Record the match on a database (auditing)
-		/////
-
-		_, err := ns.matchesRepository.CreateMatch(
-			// note: orderRequestClobTuple[0] is positive-price leg and [1] is negative-price leg
-			[2]*pb_clob.CreateOrderRequestClob{orderRequestClobTuple[0], orderRequestClobTuple[1]},
-			"notYetAvailable",
-		)
-		if err != nil {
-			lib.Log(lib.LOG_ERROR, "Error recording match in database: %v", err)
-		}
-
-		/////
-		// Determine which order(s) are fully consumed. Match tuple QtyRem values
-		// are executed quantities; a zero value identifies a consumed side only
-		// when the CLOB has explicitly emitted a zero residual for that side.
-		/////
-		isPartial := msg.Subject == lib.NATS_CLOB_MATCHES_PARTIAL
-		markAsMatched := fullyMatchedOrderIndexFromTuple(orderRequestClobTuple, isPartial)
-
-		marketId := orderRequestClobTuple[0].MarketId
-		if orderRequestClobTuple[0] != nil {
-			err = ns.predictionIntentsRepository.UpdatePredictionIntentQtyRem(marketId, orderRequestClobTuple[0].TxId, orderRequestClobTuple[0].QtyRem)
-			if err != nil {
-				lib.Log(lib.LOG_ERROR, "Error decrementing qty_rem for tx0 (%s): %v", orderRequestClobTuple[0].TxId, err)
-			}
-		}
-		if orderRequestClobTuple[1] != nil {
-			err = ns.predictionIntentsRepository.UpdatePredictionIntentQtyRem(marketId, orderRequestClobTuple[1].TxId, orderRequestClobTuple[1].QtyRem)
-			if err != nil {
-				lib.Log(lib.LOG_ERROR, "Error decrementing qty_rem for tx1 (%s): %v", orderRequestClobTuple[1].TxId, err)
-			}
-		}
-		if markAsMatched[0] == true { // mark tx0 for deletion
-			lib.Log(lib.LOG_INFO, "marking tx0 (%s) as fully matched with tx1 (%s)", orderRequestClobTuple[0].TxId, orderRequestClobTuple[1].TxId)
-			err = ns.predictionIntentsRepository.MarkPredictionIntentAsFullyMatched(marketId, orderRequestClobTuple[0].TxId)
-			if err != nil {
-				lib.Log(lib.LOG_ERROR, "Error marking prediction intent as fully matched in database: %v", err)
-			}
-		}
-		if markAsMatched[1] == true { // mark tx1 for deletion
-			lib.Log(lib.LOG_INFO, "marking tx1 (%s) as fully matched with tx0 (%s)", orderRequestClobTuple[1].TxId, orderRequestClobTuple[0].TxId)
-			err = ns.predictionIntentsRepository.MarkPredictionIntentAsFullyMatched(marketId, orderRequestClobTuple[1].TxId)
-			if err != nil {
-				lib.Log(lib.LOG_ERROR, "Error marking prediction intent as fully matched in database: %v", err)
-			}
-		}
-
-		/////
-		// smart contract
-		// Now submit BOTH matches to the smart contract
-		// BuyPositionTokens determines which account recieves the YES and which account receives the NO (price_usd < 0 => NO)
-		/////
-
-		isOK, err := ns.hederaService.BuyOrSellPositionTokens(orderRequestClobTuple[0], orderRequestClobTuple[1])
-		if err != nil {
-			lib.Log(lib.LOG_ERROR, "Error submitting match to smart contract: %v ", err)
-		}
-		if !isOK {
-			lib.Log(lib.LOG_ERROR, "BuyOrSellPositionTokens returned !isOK for txId=%s, txId=%s", orderRequestClobTuple[0].TxId, orderRequestClobTuple[1].TxId)
-		}
-
-		// TODO - handle situation when smart contract fails
-	})
-	if err != nil {
-		return err
+	// CLOB_MATCHES is a work-queue stream, which refuses consumers with overlapping
+	// subjects. Remove the V1 consumer (clob.matches.*) so the V2 one can be created.
+	if err := ns.js.DeleteConsumer("CLOB_MATCHES", "api-settlement-v1"); err != nil && !errors.Is(err, nats.ErrConsumerNotFound) {
+		lib.Log(lib.LOG_WARN, "could not remove the legacy V1 settlement consumer: %v", err)
 	}
-	return nil
+	_, err := ns.js.QueueSubscribe(lib.NATS_CLOB_MATCHES_SETTLE, "api-settlement", func(msg *nats.Msg) {
+		// Valid matches stay unacknowledged until PrismV2 settlement is final, so
+		// JetStream redelivers them after a failure. Invalid matches are terminated.
+		var match pb_clob.ClobMatch
+		outcome := settlementRejected
+		var err error
+		if err = json.Unmarshal(msg.Data, &match); err != nil {
+			err = fmt.Errorf("invalid match payload: %w", err)
+		} else {
+			outcome, err = ns.settleMatchV2(&match)
+		}
+
+		switch outcome {
+		case settlementDone:
+			if ackErr := msg.Ack(); ackErr != nil {
+				lib.Log(lib.LOG_ERROR, "failed to ACK settled match: %v", ackErr)
+			}
+		case settlementRetry:
+			lib.Log(lib.LOG_ERROR, "match settlement will be retried (bid=%s ask=%s): %v", orderTxID(match.Bid), orderTxID(match.Ask), err)
+			if nakErr := msg.NakWithDelay(5 * time.Second); nakErr != nil {
+				lib.Log(lib.LOG_ERROR, "failed to NAK match message: %v", nakErr)
+			}
+		default:
+			lib.Log(lib.LOG_CRITICAL, "match rejected and will not be settled (bid=%s ask=%s): %v", orderTxID(match.Bid), orderTxID(match.Ask), err)
+			if termErr := msg.Term(); termErr != nil {
+				lib.Log(lib.LOG_ERROR, "failed to terminate match message: %v", termErr)
+			}
+		}
+	}, nats.Durable("api-settlement-v2"), nats.ManualAck(), nats.AckExplicit(),
+		nats.AckWait(5*time.Minute), nats.MaxDeliver(20), nats.MaxAckPending(1),
+		nats.DeliverAll(), nats.BindStream("CLOB_MATCHES"))
+	return err
 }
 
-func matchTupleKey(tuple [2]*pb_clob.CreateOrderRequestClob) string {
-	if tuple[0] == nil || tuple[1] == nil {
+func orderTxID(order *pb_clob.CreateOrderRequestClob) string {
+	if order == nil {
 		return ""
 	}
-
-	leftTx, rightTx := tuple[0].TxId, tuple[1].TxId
-	leftQty, rightQty := tuple[0].QtyRem, tuple[1].QtyRem
-	if leftTx > rightTx {
-		leftTx, rightTx = rightTx, leftTx
-		leftQty, rightQty = rightQty, leftQty
-	}
-
-	return tuple[0].MarketId + "|" + leftTx + "|" + rightTx + "|" + fmt.Sprintf("%.12f", leftQty) + "|" + fmt.Sprintf("%.12f", rightQty)
-}
-
-func validateMatchTupleInvariant(tuple [2]*pb_clob.CreateOrderRequestClob) error {
-	if tuple[0] == nil || tuple[1] == nil {
-		return lib.ErrorLog("match tuple contains nil order")
-	}
-
-	if tuple[0].MarketId != tuple[1].MarketId {
-		return lib.ErrorLog("match tuple invariant failed",
-			"marketId0", tuple[0].MarketId,
-			"marketId1", tuple[1].MarketId,
-			"txId0", tuple[0].TxId,
-			"txId1", tuple[1].TxId,
-		)
-	}
-
-	if tuple[0].PriceUsd == 0.0 || tuple[1].PriceUsd == 0.0 {
-		return lib.ErrorLog("match tuple invariant failed",
-			"txId0", tuple[0].TxId,
-			"price0", tuple[0].PriceUsd,
-			"txId1", tuple[1].TxId,
-			"price1", tuple[1].PriceUsd,
-		)
-	}
-
-	if (tuple[0].PriceUsd > 0.0 && tuple[1].PriceUsd > 0.0) || (tuple[0].PriceUsd < 0.0 && tuple[1].PriceUsd < 0.0) {
-		return lib.ErrorLog("match tuple invariant failed",
-			"txId0", tuple[0].TxId,
-			"price0", tuple[0].PriceUsd,
-			"txId1", tuple[1].TxId,
-			"price1", tuple[1].PriceUsd,
-		)
-	}
-
-	if math.Abs(tuple[0].QtyRem-tuple[1].QtyRem) > 1e-9 {
-		return lib.ErrorLog("match tuple invariant failed",
-			"txId0", tuple[0].TxId,
-			"qty0", tuple[0].QtyRem,
-			"txId1", tuple[1].TxId,
-			"qty1", tuple[1].QtyRem,
-		)
-	}
-
-	return nil
-}
-
-func fullyMatchedOrderIndexFromTuple(tuple [2]*pb_clob.CreateOrderRequestClob, isPartial bool) [2]bool {
-	markAsMatched := [2]bool{false, false}
-	if !isPartial {
-		markAsMatched[0] = true
-		markAsMatched[1] = true
-		return markAsMatched
-	}
-
-	if tuple[0] == nil || tuple[1] == nil {
-		return markAsMatched
-	}
-
-	// For a partial match, the CLOB emits the executed quantity in QtyRem. The
-	// order-book residual is tracked separately by the CLOB/database state, so
-	// this zero-value check is only valid if the producer explicitly emits a
-	// zero marker for a consumed side.
-	qtyRem0Abs := math.Abs(tuple[0].QtyRem)
-	qtyRem1Abs := math.Abs(tuple[1].QtyRem)
-	markAsMatched[0] = qtyRem0Abs <= 1e-9
-	markAsMatched[1] = qtyRem1Abs <= 1e-9
-	return markAsMatched
+	return order.TxId
 }
 
 func (ns *NatsService) HandleSmartContractEvents() error {
@@ -394,6 +242,13 @@ func (ns *NatsService) HandleSmartContractEvents() error {
 			return
 		}
 
+		// PrismV2 events are routed separately: several share a name with a V1 event but not its arguments.
+		if cfg, cfgErr := lib.GetPrismV2Network(network); cfgErr == nil && cfg.ContractID.String() == contractId {
+			ns.handlePrismV2Event(network, contractId, eventType, eventArgs, timestampNano, txHash, hostname, md5uniq)
+			return
+		}
+
+		// Legacy V1 contract events (old markets can still be redeemed on the V1 contract).
 		// specific fields will be parsed in the relevant case statements below
 
 		// event DaoUpdated(address newDao);
@@ -466,4 +321,43 @@ func (ns *NatsService) HandleSmartContractEvents() error {
 		return lib.LogAndError(lib.LOG_ERROR, "failed to handle smart contract events: %v", err)
 	}
 	return nil
+}
+
+// handlePrismV2Event stores every PrismV2 event verbatim and mirrors resolutions and
+// redemptions into the tables the portfolio already reads.
+func (ns *NatsService) handlePrismV2Event(network string, contractId string, eventType string, args map[string]interface{}, timestamp time.Time, txHash string, hostname string, md5uniq string) {
+	inserted, err := ns.smartContractEventRepository.CreateEventV2(network, contractId, eventType, args, txHash, timestamp, hostname, md5uniq)
+	if err != nil {
+		lib.Log(lib.LOG_ERROR, "failed to store PrismV2 %s event (%s): %v", eventType, txHash, err)
+		return
+	}
+	if !inserted {
+		return // redelivery
+	}
+
+	switch eventType {
+	case "MarketStateChanged":
+		// MarketState: 4 = RESOLVED_YES, 5 = RESOLVED_NO, 6 = VOID -> legacy outcome 1 / 0 / 2
+		outcomes := map[string]string{"4": "1", "5": "0", "6": "2"}
+		outcome, isResolution := outcomes[fmt.Sprintf("%v", args["state"])]
+		if !isResolution {
+			return
+		}
+		legacy := map[string]interface{}{"marketId": args["marketId"], "outcome": outcome}
+		if err := ns.smartContractEventRepository.CreateMarketResolvedEvent(network, contractId, timestamp, txHash, hostname, md5uniq, legacy); err != nil {
+			lib.Log(lib.LOG_ERROR, "failed to record PrismV2 resolution (%s): %v", txHash, err)
+		}
+	case "Redeemed":
+		legacy := map[string]interface{}{"marketId": args["marketId"], "winner": args["account"], "amount": fmt.Sprintf("%v", args["net"])}
+		marketId, account, err := ns.smartContractEventRepository.CreateWinningsRedeemedEvent(network, contractId, timestamp, txHash, hostname, md5uniq, legacy)
+		if err != nil || marketId == nil || account == nil {
+			lib.Log(lib.LOG_ERROR, "failed to record PrismV2 redemption (%s): %v", txHash, err)
+			return
+		}
+		if err := ns.predictionIntentsRepository.MarkPredictionIntentAsRedeemedForAccount(*marketId, *account); err != nil {
+			lib.Log(lib.LOG_ERROR, "failed to mark orders redeemed for %s on %s: %v", *account, *marketId, err)
+		}
+	default:
+		lib.Log(lib.LOG_INFO, "PrismV2 %s event stored (%s)", eventType, txHash)
+	}
 }

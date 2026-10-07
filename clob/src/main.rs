@@ -1,6 +1,7 @@
 mod grpc_service;
 mod nats;
 mod orderbook;
+mod matching;
 mod constants;
 pub mod utils;
 pub mod recreate_orderbook;
@@ -48,7 +49,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // NATS: listen for new orders to add to orderbook
     let order_book_service_for_nats = order_book_service.clone();
     let nats_task = tokio::spawn(async move {
-        let result = nats::NatsService::subscribe_and_place_orders(&nats_service.nats_client, order_book_service_for_nats).await;
+        let result = nats::NatsService::subscribe_and_place_orders(&nats_service, order_book_service_for_nats).await;
         if let Err(e) = result {
             log::error!("NATS subscription failed: {}", e);
         }

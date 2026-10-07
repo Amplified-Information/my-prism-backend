@@ -93,6 +93,7 @@ sudo systemctl restart docker
 #####
 cat <<SCRIPT > /home/admin/0_pull_latest.sh
 #!/bin/bash
+set -euo pipefail
 
 
 # Variables
@@ -173,7 +174,14 @@ pull_config_secrets_files() {
     echo "Pulling .config*, .secrets and loadEnv.sh for \$SERVICE..."
     mkdir -p "./\$SERVICE" # Ensure the local folder exists
 
-    aws s3 cp "s3://\$S3_BUCKET/\$SERVICE" "./\$SERVICE/" --recursive --region "\$AWS_REGION"
+    local before_hash after_hash
+    before_hash=\$(find "./\$SERVICE" -type f ! -name '.secrets.cache' -print0 2>/dev/null | sort -z | xargs -0r sha256sum | sha256sum | awk '{print \$1}')
+    aws s3 sync "s3://\$S3_BUCKET/\$SERVICE" "./\$SERVICE/" --delete --exclude '.secrets.cache' --region "\$AWS_REGION"
+    after_hash=\$(find "./\$SERVICE" -type f ! -name '.secrets.cache' -print0 | sort -z | xargs -0r sha256sum | sha256sum | awk '{print \$1}')
+
+    if [ "\$before_hash" != "\$after_hash" ]; then
+      echo "DIFF detected in docker-compose-\$MACHINE.yml (\$SERVICE configuration changed)"
+    fi
 
     chmod +x "./\$SERVICE/loadEnv.sh" # make loadEnv.sh executable
   done
@@ -228,8 +236,8 @@ pull_latest_docker_images_if_changed() {
     local remote_digest
     remote_digest=\$(timeout 15 docker buildx imagetools inspect "\$image" --format '{{.Manifest.Digest}}' 2>/dev/null || true)
     if [ -z "\$remote_digest" ]; then
-      echo "INFO: no digest available for \$service (\$image); skipping."
-      continue
+      echo "ERROR: no remote digest available for \$service (\$image); refusing to deploy an unverified image." >&2
+      return 1
     fi
 
     local state_file="\$state_dir/\$service.digest"
@@ -244,7 +252,7 @@ pull_latest_docker_images_if_changed() {
 
   if [ "\$changed" -eq 1 ]; then
     echo "DIFF detected in docker-compose-\$machine.yml"
-    if ! docker compose -f "\$compose_base" -f "\$compose_env" pull --policy missing; then
+    if ! docker compose -f "\$compose_base" -f "\$compose_env" pull --policy always; then
       echo "ERROR: image pull failed; digest state was not updated." >&2
       return 1
     fi
@@ -255,7 +263,11 @@ pull_latest_docker_images_if_changed() {
       [ -n "\$image" ] || image=\$(yq -r --arg svc "\$service" '.services[\$svc].image // empty' "\$compose_base" 2>/dev/null)
       [ -n "\$image" ] || continue
       remote_digest=\$(docker buildx imagetools inspect "\$image" --format '{{.Manifest.Digest}}' 2>/dev/null || true)
-      [ -n "\$remote_digest" ] && printf '%s\n' "\$remote_digest" > "\$state_dir/\$service.digest"
+      if [ -z "\$remote_digest" ] || ! docker image inspect "\$image" --format '{{range .RepoDigests}}{{println .}}{{end}}' | grep -Fq "@\$remote_digest"; then
+        echo "ERROR: local image for \$service does not match remote digest \$remote_digest; digest state was not updated." >&2
+        return 1
+      fi
+      printf '%s\n' "\$remote_digest" > "\$state_dir/\$service.digest"
     done <<< "\$services"
   fi
 
@@ -286,6 +298,12 @@ cat <<SCRIPT > /home/admin/1_loadEnvVars.sh
 # Variables
 ENVIRONMENT="${ENV}"
 MACHINE=$(hostname) # should be 'proxy', 'monolith', or 'data'
+FORCE_FLAG="\${1:-}"
+
+if [ -n "\$FORCE_FLAG" ] && [ "\$FORCE_FLAG" != "--forceSecretsReload" ]; then
+  echo "ERROR: unsupported option: \$FORCE_FLAG"
+  return 1
+fi
 
 # Detect if the script is being sourced
 # If \$BASH_SOURCE[0] == \$0, the script is executed, not sourced
@@ -300,7 +318,7 @@ echo "Loading config and secrets..."
 # set -a causes all variables set/sourced to be automatically exported to child processes
 set -a
 for SERVICE in \$(yq '.services | keys | join(" ")' ./docker-compose-\$MACHINE.yml | tr -d '"'); do
-  source ./\$SERVICE/loadEnv.sh \$ENVIRONMENT
+  source ./\$SERVICE/loadEnv.sh \$ENVIRONMENT \$FORCE_FLAG
 done
 set +a
 
@@ -419,7 +437,7 @@ WorkingDirectory=/home/admin
 # every 30 seconds:
 # always pull images and deploy only iff there's a diff in any the docker-compose-* files
 # docker compose will intelligently deploy - so if a service has the same version, it won't get re-deployed
-ExecStart=/bin/bash -c "while true; do sleep 30; OUT=\$(/home/admin/0_pull_latest.sh 2>&1); echo \"\$OUT\"; echo \"\$OUT\" | grep -q 'DIFF detected in docker-compose-' && source /home/admin/1_loadEnvVars.sh && /home/admin/2_dockerComposeUp.sh; done"
+ExecStart=/bin/bash -c "while true; do sleep 30; OUT=\$(/home/admin/0_pull_latest.sh 2>&1); STATUS=\$?; echo \"\$OUT\"; if [ \$STATUS -ne 0 ]; then continue; fi; echo \"\$OUT\" | grep -q 'DIFF detected in docker-compose-' && source /home/admin/1_loadEnvVars.sh --forceSecretsReload && /home/admin/2_dockerComposeUp.sh; done"
 Restart=always
 RestartSec=10
 

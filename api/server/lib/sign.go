@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"math"
 	"math/big"
 	"os"
 	"strconv"
@@ -18,112 +17,8 @@ import (
 
 	protobuf "google.golang.org/protobuf/proto"
 
-	pb_api "api/gen"
 )
 
-/**
-* Assembles a payload hex string for signing from the PredictionIntentRequest object
-* See: prism/README.md for format definition details
-* Also see: ./web.eng/lib/utils.ts (assemblePayloadHexForSigning)
-* Also see: ./scs/contracts/Prism.sol (assemblePayload)
-* @param predictionIntentRequest PredictionIntentRequest object from front-end
-* @param usdcDecimals number of decimals for USDC
-* @returns a long string conforming to the format
- */
-func AssemblePayloadHexForSigning(req *pb_api.PrismPredictionIntentRequest, usdcDecimals uint64) (string, error) {
-	Info("prediction intent request", "request", req)
-
-	collateralUsdAbs := math.Abs(req.PriceUsd * req.Qty)
-	collateralUsdAbsScaled, err := FloatToBigIntScaledDecimals(collateralUsdAbs, int(usdcDecimals))
-	if err != nil {
-		return "", ErrorLog("failed to scale collateralUsdAbs", "error", err, "priceUsd", req.PriceUsd, "qty", req.Qty)
-	}
-	Debug("collateralUsdAbsScaled", "value", collateralUsdAbsScaled.String())
-
-	marketIdBigInt, err := Uuid7_to_bigint(req.MarketId)
-	if err != nil {
-		return "", ErrorLog("failed to convert MarketId", "error", err, "marketId", req.MarketId)
-	}
-
-	txIdBigInt, err := Uuid7_to_bigint(req.TxId)
-	if err != nil {
-		return "", ErrorLog("failed to convert TxId", "error", err, "txId", req.TxId)
-	}
-
-	evmAddressBigInt := new(big.Int)
-	evmAddressBigInt.SetString(strings.TrimPrefix(req.EvmAddress, "0x"), 16)
-
-	buySell := 0xf0 // buy
-	if req.PriceUsd < 0 {
-		buySell = 0xf1 // sell
-	}
-
-	primarySecondary := 0xf0 // primary
-	if req.PrimarySecondary == "s" {
-		primarySecondary = 0xf1 // secondary
-	}
-
-	// The format specifier "%002x" is used to ensure that the value of `buySell`
-	// is formatted as a two-character hexadecimal string, padded with leading zeros
-	// if necessary. Here's the breakdown:
-	// - `%`: Indicates the start of a format verb.
-	// - `0`: Specifies that the padding character is '0'.
-	// - `2`: Specifies the minimum width of the output (2 characters).
-	// - `x`: Specifies that the value should be formatted as a hexadecimal number.
-	//
-	// The double zeros (`%002x`) ensure that the output is always 2 characters long,
-	// even if the value of `buySell` is less than 16 (0x10 in hexadecimal). This
-	// avoids odd-length hex strings, which could cause issues in contexts where
-	// fixed-length formatting is required.
-
-	// default payload assembly scheme:
-	payloadHex := fmt.Sprintf( // beautiful :)   example: 0100000000000000000000000000004e20000000000000000000000000440a1d7af93b92920bce50b4c0d2a8e6dcfebfd60189c0a87e807e808000000000000003019b45b837017342a16c7fb8a8023f17
-		"%02x%064x%040x%032x%032x%02x",
-
-		buySell,                // note: 8 bits. The hex len is 2 chars (padded left with '0') to avoid odd length hex strings. 0xf0 = buy, 0xf1 = sell
-		collateralUsdAbsScaled, // yes, uint256
-		evmAddressBigInt,       // note: an evm address is exactly 20 bytes = 40 hex chars
-		marketIdBigInt,         // uint128
-		txIdBigInt,             // uint128
-		primarySecondary,       // note: 8 bits. The hex len is 2 chars (padded left with '0') to avoid odd length hex strings. 0xf0 = primary, 0xf1 = secondary
-	)
-
-	/////
-	// Versioning - handle variations in the payload schema
-	/////
-	// Note: see lib/constants.go/ - SigSchemeDateRanges
-	// if the current timestamp falls within one of the ranges, apply the versioned payload assembly scheme
-	// - retrieve the index of the date range that the current timestamp falls into
-	// - this index is the version
-	currentTimestamp := time.Now().Unix()
-	version := 0
-	for i, dateRange := range SigSchemeDateRanges {
-		if currentTimestamp >= dateRange[0] && currentTimestamp < dateRange[1] {
-			version = i
-			break
-		}
-	}
-
-	switch version {
-	case 0:
-		payloadHex = fmt.Sprintf(
-			"%02x%064x%040x%032x%032x",
-
-			buySell,
-			collateralUsdAbsScaled,
-			evmAddressBigInt,
-			marketIdBigInt,
-			txIdBigInt,
-			// note: no primarySecondary field in version 0, as the concept didn't then.
-		)
-	case 1:
-		// default payload assembly scheme (as above)
-	default:
-		return "", ErrorLog("unsupported signature scheme version", "version", version)
-	}
-
-	return payloadHex, nil
-}
 
 // func Uuid7_to_bytes(uuid7 string) ([]byte, error) {
 // 	// Remove all hyphens from the UUID7 string

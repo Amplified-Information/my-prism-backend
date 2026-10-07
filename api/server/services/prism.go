@@ -147,6 +147,15 @@ func (p *Prism) MacroMetadata() (*pb_api.MacroMetadataResponse, error) {
 		}
 	}
 
+	proxyAddresses := make(map[string]string)
+	chainIds := make(map[string]uint64)
+	for _, net := range networks {
+		if cfg, err := lib.GetPrismV2Network(strings.TrimSpace(net)); err == nil {
+			proxyAddresses[cfg.Net] = cfg.ProxyAddress
+			chainIds[cfg.Net] = cfg.ChainID
+		}
+	}
+
 	sigSchemeDateRanges := make([]*pb_api.UnixDateRange, len(lib.SigSchemeDateRanges))
 	for i, dateRange := range lib.SigSchemeDateRanges {
 		sigSchemeDateRanges[i] = &pb_api.UnixDateRange{
@@ -172,6 +181,8 @@ func (p *Prism) MacroMetadata() (*pb_api.MacroMetadataResponse, error) {
 		ActiveTraders:               nActiveTraders,
 		Categories:                  categoriesMapped,
 		SigSchemeDateRanges:         sigSchemeDateRanges,
+		PrismV2ProxyAddresses:       proxyAddresses,
+		ChainIds:                    chainIds,
 	}
 
 	return response, nil
@@ -219,63 +230,44 @@ func (p *Prism) TriggerRecreateClob() (bool, error) {
 		for _, pi := range *allPredictionIntents {
 			lib.Log(lib.LOG_INFO, "\t - txId: %s", pi.TxID.String())
 
-			// calculate "qtyRemaining" to be placed on CLOB (may not exist)
-			var qtyRemaining float64 = pi.QtyRem // set to the remaining quantity by default [previously was Qty causing a bug!]
-
-			allMatches, err := p.matchesRepository.GetAllMatchesForMarketIdTxId(pi.MarketID, pi.TxID)
-			lib.Log(lib.LOG_INFO, "\t - allMatches for txId %s on marketId %s: %v", pi.TxID.String(), pi.MarketID.String(), allMatches)
-			if err != nil || len(allMatches) == 0 {
-				// no matches for this predictionIntent qty found: qtyRemaining = req.Qty (default)
-				// qtyRemaining is predictionIntent.Qty - OK
-			} else {
-				// we must find the latest qtyRemaining for this txId
-
-				// loop through allMatches
-				// calculate the Qty for predictionIntent.TxID
-				// subtract this Qty from qtyRemaining
-				// at the end of the loop, if qtyRemaining is > 0, continue to add the order to the CLOB
-				// otherwise, don't add anything to the clob
-				for _, match := range allMatches {
-					lib.Log(lib.LOG_INFO, "\t row on 'match': %v", match)
-					// Each match has a Qty field that represents the amount matched for this TxID
-					if match.TxId1 == pi.TxID {
-						// log.Print("%s", match.Qty1)
-						qtyRemaining -= match.Qty2
-					} else if match.TxId2 == pi.TxID {
-						qtyRemaining -= match.Qty1
-					}
-				}
-			}
-
-			if qtyRemaining <= 0 {
-				// All qty has been matched, nothing to restore to CLOB for this predictionIntent
+			// The persisted fill state counts finalized fills. Fills still being settled
+			// (pending, submitted, or failed but retrying) are also counted, so the
+			// rebuilt book never offers shares that may already be committed.
+			clobRequestObj, err := clobOrderFromIntent(&pi)
+			if err != nil {
+				lib.Log(lib.LOG_ERROR, "\tskipping txId %s: %v", pi.TxID.String(), err)
 				continue
 			}
-
-			/////
-			// Next, recreate the CLOB order request object
-			/////
-
-			clobRequestObj := &pb_clob.CreateOrderRequestClob{
-				TxId:             pi.TxID.String(),
-				Net:              pi.Net,
-				MarketId:         pi.MarketID.String(),
-				AccountId:        pi.AccountID,
-				PriceUsd:         pi.PriceUsd,
-				QtyRem:           qtyRemaining,
-				QtyOrig:          pi.QtyOrig, // keep the original order size for signature validation and consistent match semantics
-				Sig:              pi.Sig,
-				PublicKey:        pi.PublicKeyHex, // passing extra key info - i) avoid lookups ii) handle situation where user has changed their key
-				EvmAddress:       pi.Evmaddress,
-				KeyType:          int32(pi.Keytype),
-				PrimarySecondary: pi.PrimarySecondary,
+			allMatches, err := p.matchesRepository.GetAllMatchesForMarketIdTxId(pi.MarketID, pi.TxID)
+			if err != nil {
+				return false, lib.LogAndError(lib.LOG_ERROR, "failed to load matches for txId %s: %v", pi.TxID.String(), err)
 			}
+			for _, match := range allMatches {
+				if match.ProtocolVersion != 2 || match.Status == "finalized" {
+					continue
+				}
+				fill, err := parseNumeric(match.FillShares)
+				if err != nil {
+					continue
+				}
+				legCollateral := match.YesCollateral
+				if lib.Side(clobRequestObj.Side) == lib.SideNO {
+					legCollateral = match.NoCollateral
+				}
+				collateral, _ := parseNumeric(legCollateral)
+				clobRequestObj.SharesFilled += fill
+				clobRequestObj.CollateralFilled += collateral
+			}
+			if clobRequestObj.SharesFilled >= clobRequestObj.QtyShares {
+				continue // nothing left to restore
+			}
+
 			clobRequestJSON, err := json.Marshal(clobRequestObj)
 			if err != nil {
 				return false, lib.LogAndError(lib.LOG_ERROR, "failed to marshal CLOB request: %v", err)
 			}
 
-			lib.Log(lib.LOG_INFO, "\tre-creating tx (qtyRem=%f, qtyOrig=%f): %v", clobRequestObj.QtyRem, clobRequestObj.QtyOrig, clobRequestObj)
+			lib.Log(lib.LOG_INFO, "\tre-creating txId %s (sharesFilled=%d of %d)", clobRequestObj.TxId, clobRequestObj.SharesFilled, clobRequestObj.QtyShares)
 
 			/////
 			// And push to CLOB via NATS
@@ -326,9 +318,14 @@ func (p *Prism) clob_getTotalValuePendingUsd() (float64, error) {
 	if tvPending.ErrorCode != 0 {
 		return 0, lib.LogAndError(lib.LOG_ERROR, "failed to get total value pending USD from CLOB (%s): %v", clobAddr, tvPending.ErrorCode)
 	}
-	tvPendingValue, err := strconv.ParseFloat(tvPending.Message, 64)
+	// The CLOB reports collateral in the token's smallest unit.
+	tvPendingUnits, err := strconv.ParseFloat(tvPending.Message, 64)
 	if err != nil {
-		return 0, lib.LogAndError(lib.LOG_ERROR, "failed to parse total value pending USD from CLOB: %v", err)
+		return 0, lib.LogAndError(lib.LOG_ERROR, "failed to parse total value pending from CLOB: %v", err)
 	}
-	return tvPendingValue, nil
+	unitScale, err := lib.CollateralUnitScale()
+	if err != nil {
+		return 0, lib.LogAndError(lib.LOG_ERROR, "%v", err)
+	}
+	return tvPendingUnits / float64(unitScale), nil
 }

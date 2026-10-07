@@ -158,15 +158,10 @@ func (ps *PositionsService) GetUserPortfolio(req *pb_api.UserPortfolioRequest) (
 		if hasMarketFilter && pi.MarketID.String() != requestedMarketID {
 			continue
 		}
-		orderbookPosition := &pb_api.PredictionIntentResponse{
-			TxId:             pi.TxID.String(),
-			Net:              pi.Net,
-			MarketId:         pi.MarketID.String(),
-			GeneratedAt:      pi.GeneratedAt.String(),
-			AccountId:        pi.AccountID,
-			PriceUsd:         pi.PriceUsd,
-			Qty:              pi.QtyRem,
-			PrimarySecondary: pi.PrimarySecondary,
+		orderbookPosition, err := predictionIntentResponseFromRow(&pi)
+		if err != nil {
+			lib.Log(lib.LOG_WARN, "skipping open order %s: %v", pi.TxID, err)
+			continue
 		}
 		if _, ok := response.OpenPredictionIntents[pi.MarketID.String()]; !ok {
 			response.OpenPredictionIntents[pi.MarketID.String()] = &pb_api.PredictionIntents{}

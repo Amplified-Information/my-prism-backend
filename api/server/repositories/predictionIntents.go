@@ -6,7 +6,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,6 +20,13 @@ import (
 
 type PredictionIntentsRepository struct {
 	db *sql.DB
+}
+
+type OrderOutboxRecord struct {
+	ID      int64
+	TxID    uuid.UUID
+	Subject string
+	Payload []byte
 }
 
 func (pir *PredictionIntentsRepository) CloseDb() error {
@@ -45,52 +55,89 @@ func (pir *PredictionIntentsRepository) InitDb() error {
 	return nil
 }
 
-// SaveOrderRequest saves an order request to the database
-func (pir *PredictionIntentsRepository) CreateOrderIntentRequest(req *pb_api.PrismPredictionIntentRequest) (*sqlc.PredictionIntent, error) {
-	if pir.db == nil {
-		return nil, lib.ErrorLog("could not connect to database")
+
+// CreateOrderIntentRequestWithOutbox commits the authoritative order and its
+// publication request in one database transaction. A NATS outage can delay an
+// order, but can no longer create an order that exists only in the CLOB.
+// unitScale is 10^collateral decimals; it only derives the legacy display columns.
+func (pir *PredictionIntentsRepository) CreateOrderIntentRequestWithOutbox(req *pb_api.PrismPredictionIntentRequest, unitScale float64, subject string, payload []byte) (*sqlc.PredictionIntent, error) {
+	if pir.db == nil { return nil, lib.ErrorLog("database not initialized") }
+	if req.LimitYesPrice > lib.PriceScale || req.QtyShares > math.MaxInt64 || req.CollateralCap > math.MaxInt64 || req.ChainId > math.MaxInt64 || req.Deadline > math.MaxInt64 {
+		return nil, lib.ErrorLog("authorization field out of range", "txId", req.TxId)
 	}
+	tx, err := pir.db.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil { return nil, lib.ErrorLog("begin order transaction", "error", err) }
+	defer tx.Rollback()
 
 	txUUID, err := uuid.Parse(req.TxId)
-	if err != nil {
-		return nil, lib.ErrorLog("invalid txId uuid", "error", err, "txId", req.TxId)
-	}
-
+	if err != nil { return nil, lib.ErrorLog("invalid txId uuid", "error", err) }
 	marketUUID, err := uuid.Parse(req.MarketId)
-	if err != nil {
-		return nil, lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", req.MarketId)
-	}
+	if err != nil { return nil, lib.ErrorLog("invalid marketId uuid", "error", err) }
 
-	generatedAt, err := time.Parse(time.RFC3339, req.GeneratedAt) // Zulu time (RFC3339)
-	if err != nil {
-		return nil, lib.ErrorLog("invalid GeneratedAt timestamp", "error", err, "generatedAt", req.GeneratedAt)
-	}
-	generatedAt = generatedAt.UTC()
+	// Legacy columns, kept for portfolio/analytics code: bids carry a positive YES
+	// price, asks a negative one; BUY maps to primary ("p") and SELL to secondary ("s").
+	priceUsd := float64(req.LimitYesPrice) / float64(lib.PriceScale)
+	if !lib.IsBid(lib.Side(req.Side), lib.Action(req.Action)) { priceUsd = -priceUsd }
+	primarySecondary := "p"
+	if lib.Action(req.Action) == lib.ActionSELL { primarySecondary = "s" }
+	qty := float64(req.QtyShares) / unitScale
 
-	params := sqlc.CreatePredictionIntentParams{
-		TxID:             txUUID,
-		Net:              req.Net,
-		MarketID:         marketUUID,
-		AccountID:        req.AccountId,
-		PriceUsd:         req.PriceUsd,
-		QtyOrig:          req.Qty,
-		QtyRem:           req.Qty,
-		Sig:              req.Sig,
-		GeneratedAt:      generatedAt,
-		PublicKeyHex:     req.PublicKey,
-		Evmaddress:       req.EvmAddress,
-		Keytype:          int32(req.KeyType),
-		PrimarySecondary: req.PrimarySecondary,
+	q := sqlc.New(tx)
+	row, err := q.CreatePredictionIntent(context.Background(), sqlc.CreatePredictionIntentParams{
+		TxID: txUUID, Net: req.Net, MarketID: marketUUID, AccountID: req.AccountId,
+		PriceUsd: priceUsd, QtyOrig: qty, QtyRem: qty, Sig: req.Sig,
+		GeneratedAt: time.Now().UTC(), PublicKeyHex: req.PublicKey, Evmaddress: req.EvmAddress,
+		Keytype: int32(req.KeyType), PrimarySecondary: primarySecondary,
+		ChainID:           sql.NullInt64{Int64: int64(req.ChainId), Valid: true},
+		VerifyingContract: sql.NullString{String: strings.ToLower(req.VerifyingContract), Valid: true},
+		Side:              sql.NullInt16{Int16: int16(req.Side), Valid: true},
+		Action:            sql.NullInt16{Int16: int16(req.Action), Valid: true},
+		LimitYesPrice:     sql.NullInt64{Int64: int64(req.LimitYesPrice), Valid: true},
+		QtyShares:         strconv.FormatUint(req.QtyShares, 10),
+		CollateralCap:     strconv.FormatUint(req.CollateralCap, 10),
+		Deadline:          sql.NullInt64{Int64: int64(req.Deadline), Valid: true},
+	})
+	if err != nil { return nil, lib.ErrorLog("CreatePredictionIntent failed", "error", err, "txId", req.TxId) }
+	if _, err = tx.ExecContext(context.Background(), `
+		INSERT INTO order_outbox (tx_id, subject, payload)
+		VALUES ($1, $2, $3::jsonb)
+		ON CONFLICT (tx_id, subject) DO NOTHING`, txUUID, subject, payload); err != nil {
+		return nil, lib.ErrorLog("create order outbox entry", "error", err, "txId", req.TxId)
 	}
+	if err = tx.Commit(); err != nil { return nil, lib.ErrorLog("commit order transaction", "error", err) }
+	lib.Info("prediction intent and outbox committed", "txId", req.TxId)
+	return &row, nil
+}
 
-	q := sqlc.New(pir.db)
-	newPredictionIntent, err := q.CreatePredictionIntent(context.Background(), params)
-	if err != nil {
-		return nil, lib.ErrorLog("CreatePredictionIntent failed", "error", err, "accountId", req.AccountId, "txId", req.TxId)
+func (pir *PredictionIntentsRepository) PendingOrderOutbox(limit int) ([]OrderOutboxRecord, error) {
+	if pir.db == nil { return nil, lib.ErrorLog("database not initialized") }
+	rows, err := pir.db.QueryContext(context.Background(), `
+		SELECT id, tx_id, subject, payload::text::bytea
+		FROM order_outbox
+		WHERE delivered_at IS NULL AND next_attempt_at <= NOW()
+		ORDER BY id LIMIT $1`, limit)
+	if err != nil { return nil, err }
+	defer rows.Close()
+	var result []OrderOutboxRecord
+	for rows.Next() {
+		var r OrderOutboxRecord
+		if err := rows.Scan(&r.ID, &r.TxID, &r.Subject, &r.Payload); err != nil { return nil, err }
+		result = append(result, r)
 	}
+	return result, rows.Err()
+}
 
-	lib.Info("prediction intent saved", "accountId", req.AccountId, "txId", req.TxId)
-	return &newPredictionIntent, nil
+func (pir *PredictionIntentsRepository) MarkOrderOutboxDelivered(id int64) error {
+	_, err := pir.db.ExecContext(context.Background(), `UPDATE order_outbox SET delivered_at=NOW(), last_error=NULL WHERE id=$1 AND delivered_at IS NULL`, id)
+	return err
+}
+
+func (pir *PredictionIntentsRepository) RecordOrderOutboxFailure(id int64, cause error) error {
+	_, err := pir.db.ExecContext(context.Background(), `
+		UPDATE order_outbox SET attempts=attempts+1, last_error=$2,
+		next_attempt_at=NOW() + LEAST(INTERVAL '5 minutes', INTERVAL '1 second' * power(2, LEAST(attempts, 8)))
+		WHERE id=$1 AND delivered_at IS NULL`, id, cause.Error())
+	return err
 }
 
 func (pir *PredictionIntentsRepository) CancelPredictionIntent(txId string) error {
@@ -154,34 +201,6 @@ func (dbRepository *DbRepository) MarkPredictionIntentAsRegenerated(txId string)
 	return nil
 }
 
-func (pir *PredictionIntentsRepository) UpdatePredictionIntentQtyRem(marketId string, txId string, qtyToSubtract float64) error {
-	if pir.db == nil {
-		return lib.ErrorLog("database not initialized")
-	}
-
-	marketUUID, err := uuid.Parse(marketId)
-	if err != nil {
-		return lib.ErrorLog("invalid marketId uuid", "error", err, "marketId", marketId)
-	}
-
-	txUUID, err := uuid.Parse(txId)
-	if err != nil {
-		return lib.ErrorLog("invalid txId uuid", "error", err, "txId", txId)
-	}
-
-	q := sqlc.New(pir.db)
-	_, err = q.DecrementPredictionIntentQtyRem(context.Background(), sqlc.DecrementPredictionIntentQtyRemParams{
-		MarketID: marketUUID,
-		TxID:     txUUID,
-		QtyRem:   qtyToSubtract,
-	})
-	if err != nil {
-		return lib.ErrorLog("DecrementPredictionIntentQtyRem failed", "error", err, "marketId", marketId, "txId", txId, "qtyToSubtract", qtyToSubtract)
-	}
-
-	lib.Info("updated prediction intent remaining qty", "marketId", marketId, "txId", txId, "qtyToSubtract", qtyToSubtract)
-	return nil
-}
 
 func (pir *PredictionIntentsRepository) MarkPredictionIntentAsFullyMatched(marketId string, txId string) error {
 	if pir.db == nil {

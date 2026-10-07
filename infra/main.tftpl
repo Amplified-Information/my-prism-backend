@@ -67,15 +67,14 @@ resource "aws_instance" "proxy_$ENV" {
   instance_type = module.shared.ec2_type_proxy
   key_name      = module.shared.aws_key_internal
   availability_zone = module.shared.aws_az
+  disable_api_termination = module.shared.env == "prod"
 
   subnet_id              = module.shared.aws_subnet_private_id # aws_subnet_public_id # PUBLIC subnet
   private_ip             = module.shared.fixed_ip_proxy
 
   vpc_security_group_ids = [
     module.shared.allow_web_egress_id,
-    module.shared.allow_web_ingress_id,
-    # module.shared.allow_internal_vpc_id,
-    module.shared.allow_internal_private_subnet_id,
+    module.shared.proxy_service_security_group_id,
     # module.shared.allow_ssh_ingress_id
     module.shared.allow_ssh_from_public_subnet_id,
     # module.shared.allow_8090_from_internet_id,
@@ -84,7 +83,7 @@ resource "aws_instance" "proxy_$ENV" {
     module.shared.allow_alb_ingress_id
   ]
 
-  iam_instance_profile = module.shared.combined_iam_policy_name # combined IAM
+  iam_instance_profile = module.shared.proxy_iam_instance_profile_name
 
   user_data = <<-EOF
     #!/bin/bash
@@ -111,6 +110,7 @@ resource "aws_instance" "monolith_$ENV" {
   instance_type = module.shared.ec2_type_monolith
   key_name      = module.shared.aws_key_internal
   availability_zone = module.shared.aws_az
+  disable_api_termination = module.shared.env == "prod"
 
   subnet_id              = module.shared.aws_subnet_private_id
   private_ip             = module.shared.fixed_ip_monolith
@@ -118,18 +118,15 @@ resource "aws_instance" "monolith_$ENV" {
   vpc_security_group_ids = [
     module.shared.allow_web_egress_id,
     module.shared.allow_email_egress_id,
-    module.shared.allow_web_ingress_id,
-    # module.shared.allow_internal_vpc_id,
-    module.shared.allow_internal_private_subnet_id,
+    module.shared.monolith_service_security_group_id,
     # module.shared.allow_ssh_ingress_id,
     module.shared.allow_ssh_from_public_subnet_id,
     # module.shared.allow_8090_from_internet_id, 
-    module.shared.allow_proxy_ingress_id,
     # module.shared.allow_monolith_egress_id,
     module.shared.allow_hedera_rpc_egress_id,
   ]
 
-  iam_instance_profile = module.shared.combined_iam_policy_name # combined IAM
+  iam_instance_profile = module.shared.monolith_iam_instance_profile_name
 
   user_data = <<-EOF
     #!/bin/bash
@@ -154,15 +151,14 @@ resource "aws_instance" "data_$ENV" {
   instance_type = module.shared.ec2_type_data
   key_name      = module.shared.aws_key_internal
   availability_zone = module.shared.aws_az                      # must be the same as the EBS volume
+  disable_api_termination = module.shared.env == "prod"
 
   subnet_id              = module.shared.aws_subnet_private_id
   private_ip             = module.shared.fixed_ip_data
 
    vpc_security_group_ids = [
     module.shared.allow_web_egress_id,
-    module.shared.allow_web_ingress_id,
-    # module.shared.allow_internal_vpc_id,
-    module.shared.allow_internal_private_subnet_id,
+    module.shared.data_service_security_group_id,
     # module.shared.allow_ssh_ingress_id,
     module.shared.allow_ssh_from_public_subnet_id,
     # module.shared.allow_8090_from_internet_id,
@@ -171,7 +167,7 @@ resource "aws_instance" "data_$ENV" {
     # module.shared.allow_bastion_db_id # Warning: allow 5432 from bastion
   ]
 
-  iam_instance_profile = module.shared.combined_iam_policy_name # combined IAM
+  iam_instance_profile = module.shared.data_iam_instance_profile_name
 
   user_data = <<-EOF
     #!/bin/bash
@@ -278,7 +274,7 @@ resource "aws_lb" "alb_$ENV" {
     module.shared.aws_subnet_public_id_2
   ]
 
-  enable_deletion_protection = false
+  enable_deletion_protection = module.shared.env == "prod"
 
   tags = {
     Name = "${module.shared.env}-alb"

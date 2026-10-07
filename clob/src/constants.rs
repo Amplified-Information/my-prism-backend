@@ -1,3 +1,3 @@
 pub const CLOB_ORDERS: &str = "clob.orders";
-pub const CLOB_MATCHES_FULL: &str = "clob.matches.full";
-pub const CLOB_MATCHES_PARTIAL: &str = "clob.matches.partial";
+// One ClobMatch per PrismV2 fill; consumed by the API settlement worker.
+pub const CLOB_MATCHES_SETTLE: &str = "clob.matches.settle";

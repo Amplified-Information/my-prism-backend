@@ -4,7 +4,7 @@ import { log } from './logger'
 let natsSingleton: NatsConnection | null = null
 const sc = StringCodec()
 
-const getNatsConnection = async (host: string, port: number): Promise<NatsConnection | null> => {
+const getNatsConnection = async (host: string, port: number, user: string, pass: string): Promise<NatsConnection | null> => {
   if (natsSingleton && !natsSingleton.isClosed()) {
     log.info('Reusing existing NATS connection', { host, port })
     return natsSingleton
@@ -19,7 +19,7 @@ const getNatsConnection = async (host: string, port: number): Promise<NatsConnec
   }
 
   try {
-    natsSingleton = await connect({ servers: `${host}:${port}` })
+    natsSingleton = await connect({ servers: `${host}:${port}`, user, pass, name: 'prism-blocknode' })
     log.info('Connected to NATS', { host, port })
     return natsSingleton
   } catch (error) {
@@ -31,6 +31,7 @@ const getNatsConnection = async (host: string, port: number): Promise<NatsConnec
 const pub = async (nats: NatsConnection, subject: string, message: string) => {
   try{
     nats.publish(subject, sc.encode(message))
+    await nats.flush()
     log.info('Published to NATS', { subject, message })
   } catch (error) {
     log.error('Failed to publish to NATS', { subject, message, error })

@@ -104,20 +104,29 @@ message AccountIdRequest {
 // ApiServicePublic
 ////
 
+// A signed PrismV2 Authorization. See docs/PRISM_V2_ORDER_PROTOCOL.md for the exact
+// signing procedure. All price, quantity and collateral fields are integers:
+// limit_yes_price is a YES probability on a 1_000_000 scale; qty_shares and
+// collateral_cap use the collateral token's smallest unit (USDC: 1_000_000 = 1 share = $1).
 message PrismPredictionIntentRequest {
-  string tx_id = 1              [json_name = "txId",        (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
-  string net = 2                [json_name = "net",         (validate.rules).string = {in: ["mainnet", "testnet", "previewnet"]} /* Hedera network */];
-  string market_id = 3          [json_name = "marketId",    (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
-  string generated_at = 4       [json_name = "generatedAt", (validate.rules).string = {pattern: "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d\\.\\d{3}Z$"} /* UTC ISO 8601 (Zulu time only) */];
-  string account_id = 5         [json_name = "accountId",   (validate.rules).string = {pattern: "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$"} /* Hedera account ID (no leading zeros) */];
-  double price_usd = 6          [json_name = "priceUsd",    (validate.rules).double = {gt: -1.0, lt: 1.0} /* price_usd <0 => sell, price_usd >=0 => buy */];
-  double qty = 7                [json_name = "qty",         (validate.rules).double = {gt: 0.0}];
-  string sig = 8                [json_name = "sig",         (validate.rules).string = {pattern: "^[A-Za-z0-9+/]{20,100}={0,2}$"} /* base64-encoded signature (URL-safe base64 without padding, min 20 chars, max 100 chars) */];
+  reserved 4, 6, 7, 12; // V1 generated_at, price_usd, qty and primary_secondary
+  string tx_id = 1                [json_name = "txId",        (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
+  string net = 2                  [json_name = "net",         (validate.rules).string = {in: ["mainnet", "testnet", "previewnet"]} /* Hedera network */];
+  string market_id = 3            [json_name = "marketId",    (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
+  string account_id = 5           [json_name = "accountId",   (validate.rules).string = {pattern: "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$"} /* Hedera account ID (no leading zeros) */];
+  string sig = 8                  [json_name = "sig",         (validate.rules).string = {pattern: "^[A-Za-z0-9+/]{20,100}={0,2}$"} /* base64-encoded signature over the Hedera-framed authorization hash */];
   // pass extra key info - i) avoid lookups ii) handle situation where user has changed their key
-  string public_key = 9         [json_name = "publicKey",   (validate.rules).string = {pattern: "^(04[0-9a-fA-F]{128}|0[23][0-9a-fA-F]{64}|[0-9a-fA-F]{64})$"} /* ECDSA (compressed/uncompressed) or Ed25519 public key in hex format, no 0x prefix */];
-  string evm_address = 10       [json_name = "evmAddress",  (validate.rules).string = {pattern: "^[0-9a-fA-F]{40}$"} /* 20-byte (40 hex chars) EVM address (no 0x prefix) */];
-  uint32 key_type = 11          [json_name = "keyType",     (validate.rules).uint32 = {in: [1, 2]} /* 1 = ed25519, 2 = ecdsa_secp256k1 */];
-  string primary_secondary = 12 [json_name = "primarySecondary", (validate.rules).string = {in: ["p", "s"]}];
+  string public_key = 9           [json_name = "publicKey",   (validate.rules).string = {pattern: "^(04[0-9a-fA-F]{128}|0[23][0-9a-fA-F]{64}|[0-9a-fA-F]{64})$"} /* ECDSA (compressed/uncompressed) or Ed25519 public key in hex format, no 0x prefix */];
+  string evm_address = 10         [json_name = "evmAddress",  (validate.rules).string = {pattern: "^[0-9a-fA-F]{40}$"} /* the Authorization signer: 20-byte (40 hex chars) EVM address (no 0x prefix) */];
+  uint32 key_type = 11            [json_name = "keyType",     (validate.rules).uint32 = {in: [1, 2]} /* 1 = ed25519, 2 = ecdsa_secp256k1 */];
+  uint64 chain_id = 13            [json_name = "chainId",     (validate.rules).uint64 = {gt: 0} /* Hedera EVM chain ID: mainnet 295, testnet 296, previewnet 297 */];
+  string verifying_contract = 14  [json_name = "verifyingContract", (validate.rules).string = {pattern: "^[0-9a-fA-F]{40}$"} /* PrismV2 proxy EVM address (no 0x prefix) */];
+  uint32 side = 15                [json_name = "side",        (validate.rules).uint32 = {in: [0, 1]} /* 0 = YES, 1 = NO */];
+  uint32 action = 16              [json_name = "action",      (validate.rules).uint32 = {in: [0, 1]} /* 0 = BUY, 1 = SELL */];
+  uint64 limit_yes_price = 17     [json_name = "limitYesPrice", (validate.rules).uint64 = {lte: 1000000}];
+  uint64 qty_shares = 18          [json_name = "qtyShares",   (validate.rules).uint64 = {gt: 0}];
+  uint64 collateral_cap = 19      [json_name = "collateralCap"] /* maximum collateral a BUY may spend; ignored on chain for SELL */;
+  uint64 deadline = 20            [json_name = "deadline",    (validate.rules).uint64 = {gt: 0} /* unix seconds */];
 }
 
 message Category {
@@ -148,6 +157,9 @@ message MacroMetadataResponse {
   repeated Category categories = 15                   [json_name = "categories"];
   // constants.go/SigSchemeDateRanges
   repeated UnixDateRange sig_scheme_date_ranges = 16  [json_name = "sigSchemeDateRanges"];
+  // PrismV2 signing domain per network: sign with these as chainId and verifyingContract
+  map<string, string> prism_v2_proxy_addresses = 17   [json_name = "prismV2ProxyAddresses"]; // 40 hex chars, no 0x
+  map<string, uint64> chain_ids = 18                  [json_name = "chainIds"];
 }
 
 message NewsLetterRequest {
@@ -161,14 +173,20 @@ message UserPortfolioRequest {
 }
 
 message PredictionIntentResponse {
-  string tx_id = 1              [json_name = "txId",        (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
-  string net = 2                [json_name = "net",         (validate.rules).string = {in: ["mainnet", "testnet", "previewnet"]} /* Hedera network */];
-  string market_id = 3          [json_name = "marketId",    (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
-  string generated_at = 4       [json_name = "generatedAt", (validate.rules).string = {pattern: "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d\\.\\d{3}Z$"} /* UTC ISO 8601 (Zulu time only) */];
-  string account_id = 5         [json_name = "accountId",   (validate.rules).string = {pattern: "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$"} /* Hedera account ID (no leading zeros) */];
-  double price_usd = 6          [json_name = "priceUsd",    (validate.rules).double = {gt: -1.0, lt: 1.0} /* price_usd <0 => sell, price_usd >=0 => buy */];
-  double qty = 7                [json_name = "qty",         (validate.rules).double = {gt: 0.0}];
-  string primary_secondary = 8  [json_name = "primarySecondary", (validate.rules).string = {in: ["p", "s"]}];
+  reserved 6, 7, 8; // V1 price_usd, qty and primary_secondary
+  string tx_id = 1               [json_name = "txId"];
+  string net = 2                 [json_name = "net"];
+  string market_id = 3           [json_name = "marketId"];
+  string generated_at = 4        [json_name = "generatedAt"]; // when the API accepted the order
+  string account_id = 5          [json_name = "accountId"];
+  uint32 side = 9                [json_name = "side"];
+  uint32 action = 10             [json_name = "action"];
+  uint64 limit_yes_price = 11    [json_name = "limitYesPrice"];
+  uint64 qty_shares = 12         [json_name = "qtyShares"];
+  uint64 collateral_cap = 13     [json_name = "collateralCap"];
+  uint64 deadline = 14           [json_name = "deadline"];
+  uint64 shares_filled = 15      [json_name = "sharesFilled"];
+  uint64 collateral_filled = 16  [json_name = "collateralFilled"];
 }
 
 message PredictionIntents {
@@ -186,6 +204,11 @@ message Match {
   string tx_hash = 9         [json_name = "txHash"];
   double price_usd1 = 10     [json_name = "priceUsd1"];
   double price_usd2 = 11     [json_name = "priceUsd2"];
+  // PrismV2 settlement detail. tx_id1 is the bid (BUY YES / SELL NO), tx_id2 the ask (SELL YES / BUY NO).
+  string match_id = 12              [json_name = "matchId"];
+  uint64 fill_shares = 13           [json_name = "fillShares"];
+  uint64 execution_yes_price = 14   [json_name = "executionYesPrice"];
+  string status = 15                [json_name = "status"]; // pending | submitted | finalized | failed
 }
 
 message GetMatchesRequest {

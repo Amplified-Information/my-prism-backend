@@ -16,11 +16,24 @@ services:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_PASSWORD: ${DB_PWORD}
   eventbus:
-    image: ghcr.io/prismmarketlabs/eventbus:0.1.5
+    # The eventbus workflow publishes every eventbus change to this tag. The
+    # deployment poller resolves and verifies its immutable registry digest.
+    image: ghcr.io/prismmarketlabs/eventbus:latest
     restart: always
     ports:
       - "4222:4222"
-      - "6222:6222"
+    expose:
+      - "8222"
+    volumes:
+      - /mnt/external/natsdata:/data/jetstream
+    environment:
+      NATS_USER: ${NATS_USER}
+      NATS_PASSWORD: ${NATS_PASSWORD}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8222/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
     logging:
       driver: "fluentd"
       options:
@@ -34,6 +47,9 @@ services:
   blocknode:
     image: ghcr.io/prismmarketlabs/blocknode:0.1.19
     restart: always
+    depends_on:
+      eventbus:
+        condition: service_healthy
     ports:
       - "7777:7777"
     environment:
@@ -42,6 +58,8 @@ services:
       BN_SUPPORTED_NETWORKS: "${BN_SUPPORTED_NETWORKS}"
       BN_NATS_HOST: ${BN_NATS_HOST}
       BN_NATS_PORT: ${BN_NATS_PORT}
+      BN_NATS_USER: ${NATS_USER}
+      BN_NATS_PASSWORD: ${NATS_PASSWORD}
       BN_SMART_CONTRACT_IDS_PREVIEWNET: "${BN_SMART_CONTRACT_IDS_PREVIEWNET}"
       BN_SMART_CONTRACT_IDS_TESTNET: "${BN_SMART_CONTRACT_IDS_TESTNET}"
       BN_SMART_CONTRACT_IDS_MAINNET: "${BN_SMART_CONTRACT_IDS_MAINNET}"

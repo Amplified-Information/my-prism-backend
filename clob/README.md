@@ -4,38 +4,37 @@ A Rust-based CLOB
 
 ## Example book
 
-```text
-BIDS (Buy Orders - Highest Price First):
-Price: 0.52 → Queue: [Order1, Order2, Order3]  ← Best Bid
-Price: 0.51 → Queue: [Order4]
-Price: 0.50 → Queue: [Order5, Order6]
+One book per market, quoted as an integer YES price (`1_000_000` = 1.0). Shares are in
+the collateral token's smallest unit (`1_000_000` = 1 share for USDC).
 
-ASKS (Sell Orders - Lowest Price First):  
-Price: -0.48 → Queue: [Order7, Order8]      ← Best Ask (closest to 0)
-Price: -0.49 → Queue: [Order9]
-Price: -0.50 → Queue: [Order10, Order11]
+```text
+BIDS (buy YES exposure: BUY YES or SELL NO) - highest YES price first
+520000 → [Order1, Order2, Order3]  ← best bid
+510000 → [Order4]
+
+ASKS (sell YES exposure: SELL YES or BUY NO) - lowest YES price first
+480000 → [Order7, Order8]          ← best ask
+490000 → [Order9]
 ```
 
-## State Representation
+A bid and an ask trade when the bid's limit is at or above the ask's, at the resting
+order's limit. Every bid/ask pair is one of PrismV2's settlement pairings.
 
-The OrderBook state looks like this:
+## State and matching
 
-**Key Properties**
-
-- Price-Time Priority: Orders at the same price level are served FIFO via VecDeque
-- Efficient Lookup: BTreeMap provides O(log n) price level access
-- Automatic Sorting: Best bid/ask prices are efficiently accessible
-- Signed Price System: Positive = buy, negative = sell (unique approach)
-- Memory Efficient: Empty price levels are cleaned up via cleanup_empty_levels()
-
-**State Access Methods**
-
-- best_bid_mut(): Gets highest positive price (best buy order)
-- best_ask_mut(): Gets highest negative price (best sell order, closest to 0)
-- snapshot_top(depth): Returns top N price levels for each side
-- Orders within each price level maintain strict time priority (FIFO)
-
-This format enables efficient matching, maintains market integrity with price-time priority, and provides fast access to the best available prices on both sides of the book.
+- Each market's book holds bid and ask vectors of signed V2 orders with their cumulative
+  fill state (`shares_filled`, `collateral_filled`). The matcher is in `src/matching.rs`
+  and is unit tested (`cargo test`).
+- Price-time priority: best price first; a stable sort keeps arrival order within a price.
+- Each fill is sized so that both legs pay a positive amount under the contract's rounding
+  (`floor(shares × price / 1e6)` for YES, the rest for NO), and each BUY stays within its
+  signed collateral cap.
+- Self-trades (same EVM address or account) are skipped. Orders within 30 s of their
+  deadline are dropped.
+- Every fill is published, in order, as one `ClobMatch` on `clob.matches.settle` with a
+  per-fill message ID. The API settles it with `PrismV2.settle`.
+- On restart the API rebuilds the book from the database (`TriggerRecreateClob`),
+  counting fills that are still being settled.
 
 ### Quickstart
 
@@ -91,8 +90,6 @@ There is a [yaak](https://yaak.app/) collection avaiable - see `yaak.json`
 ```bash
 export ACCOUNTID="0.0.12345"
 export NET="testnet"
-export PRICE_USD=0.5000005
-export QTY=1.5
 UUID7=$(printf '%08x-%04x-7%03x-%x%03x-%012x\n' \
   $(( $(date +%s%3N) >> 16 )) \
   $(( $(date +%s%3N) & 0xFFFF )) \
@@ -100,8 +97,12 @@ UUID7=$(printf '%08x-%04x-7%03x-%x%03x-%012x\n' \
   $(( 8 + RANDOM % 4 )) \
   $(( RANDOM & 0x0FFF )) \
   $(( RANDOM<<24 | RANDOM<<12 | RANDOM )) )
+export MARKET_ID=...   # an existing market on the CLOB
+export DEADLINE=$(( $(date +%s) + 3600 ))
 
-grpcurl -plaintext -import-path ./proto -proto ./proto/clob.proto -d '{"txId":"'$UUID7'","net":"'$NET'","marketId":"'$UUID7'","accountId":"'$ACCOUNTID'","priceUsd":'$PRICE_USD',"qty":'$QTY'}' localhost:50051 clob.Clob/PlaceOrder
+# BUY YES 1.5 shares at YES 0.50, spending at most 0.75 USDC. Orders placed directly
+# on the CLOB skip the API's checks and will not settle; use this only for local testing.
+grpcurl -plaintext -import-path ./proto -proto ./proto/clob.proto -d '{"txId":"'$UUID7'","net":"'$NET'","marketId":"'$MARKET_ID'","accountId":"'$ACCOUNTID'","evmAddress":"0000000000000000000000000000000000003039","side":0,"action":0,"limitYesPrice":"500000","qtyShares":"1500000","collateralCap":"750000","deadline":"'$DEADLINE'"}' localhost:50051 clob.ClobInternal/CreateOrder
 ```
 
 **View full orderbook (non-streaming):**

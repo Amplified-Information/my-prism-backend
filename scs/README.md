@@ -65,6 +65,15 @@ Upgradeable by running:
 
 `npx tsx 8_proxyChangeImplContract.ts <proxyId> <newImplementationId> [migrationDataHex]`
 
+See [UPGRADING.md](UPGRADING.md) for how upgrades work and what to watch out for.
+
+**PrismV2**
+
+Deploy with `npx tsx 0_deploy_v2.ts` (see [UPGRADING.md](UPGRADING.md)). Markets are
+created and resolved from the admin app; the API signs those calls.
+The order format clients sign is in
+[docs/PRISM_V2_ORDER_PROTOCOL.md](../docs/PRISM_V2_ORDER_PROTOCOL.md).
+
 
 
 

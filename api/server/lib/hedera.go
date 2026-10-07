@@ -118,6 +118,15 @@ func EvmAddressToHederaAccountId(networkSelected hiero.LedgerID, evmAddressWith0
 }
 
 func GetSpenderAllowanceUsd(networkSelected hiero.LedgerID, accountId hiero.AccountID, smartContractId hiero.ContractID, usdcAddress hiero.ContractID, usdcDecimals uint64) (float64, error) {
+	amount, err := GetSpenderAllowance(networkSelected, accountId, smartContractId, usdcAddress)
+	if err != nil {
+		return 0, err
+	}
+	return float64(amount) / math.Pow(10, float64(usdcDecimals)), nil
+}
+
+// GetSpenderAllowance returns the token allowance granted to smartContractId, in the token's smallest unit.
+func GetSpenderAllowance(networkSelected hiero.LedgerID, accountId hiero.AccountID, smartContractId hiero.ContractID, usdcAddress hiero.ContractID) (uint64, error) {
 	mirrorNodeURL := fmt.Sprintf("https://%s.mirrornode.hedera.com/api/v1/accounts/%s/allowances/tokens?spender.id=eq:%s&token.id=eq:%s", networkSelected.String(), accountId.String(), smartContractId.String(), usdcAddress.String())
 	Log(LOG_INFO, mirrorNodeURL)
 	// debug URL template retained for reference
@@ -134,7 +143,7 @@ func GetSpenderAllowanceUsd(networkSelected hiero.LedgerID, accountId hiero.Acco
 
 	var result struct {
 		Allowances []struct {
-			Amount int64 `json:"amount"`
+			Amount uint64 `json:"amount"`
 		} `json:"allowances"`
 	}
 
@@ -146,16 +155,14 @@ func GetSpenderAllowanceUsd(networkSelected hiero.LedgerID, accountId hiero.Acco
 		return 0, nil
 	}
 
-	// Convert to float64 and apply decimals
 	Log(LOG_INFO, "Allowance amount: %d", result.Allowances[0].Amount)
-	amount := float64(result.Allowances[0].Amount) / math.Pow(10, float64(usdcDecimals))
-	return amount, nil
+	return result.Allowances[0].Amount, nil
 }
 
 func GetTokenBalance(networkSelected hiero.LedgerID, tokenId hiero.TokenID, accountId hiero.AccountID) (uint64, error) {
 	// OK - proceed
 
-	mirrorNodeURL := fmt.Sprintf("https://testnet.mirrornode.hedera.com/api/v1/tokens/%s/balances?account.id=%s", tokenId.String(), accountId.String())
+	mirrorNodeURL := fmt.Sprintf("https://%s.mirrornode.hedera.com/api/v1/tokens/%s/balances?account.id=%s", networkSelected.String(), tokenId.String(), accountId.String())
 	// mirrorNodeURL := fmt.Sprintf("https://%s.mirrornode.hedera.com/api/v1/accounts/%s/balances/tokens/%s", networkSelected.String(), accountId.String(), usdcAddress.String())
 	// debug URL template retained for reference
 

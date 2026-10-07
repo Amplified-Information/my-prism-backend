@@ -14,6 +14,7 @@ EBS_VOLUME_ID="$1"
 NVME_VOLUME_ID="${EBS_VOLUME_ID//-/}"
 DATA_MOUNT="/mnt/external"
 POSTGRES_DATA_DIR="$DATA_MOUNT/postgresdata"
+NATS_DATA_DIR="$DATA_MOUNT/natsdata"
 
 # noninteractive install of all packages (apt-get, apt and dpkg) - to avoid any interactive prompts that would block the deployment:
 export DEBIAN_FRONTEND=noninteractive
@@ -28,7 +29,7 @@ sudo DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-client e2fspro
 
 
 # prepare mount point for postgres data volume
-sudo mkdir -p "$POSTGRES_DATA_DIR"
+sudo mkdir -p "$POSTGRES_DATA_DIR" "$NATS_DATA_DIR"
 
 # The volume attachment is a separate Terraform resource and can complete
 # after cloud-init starts user-data. Never continue against the root disk.
@@ -107,3 +108,6 @@ fi
 
 # N.B. must give permission to the PostgreSQL container user.
 sudo chown -R 999:999 "$POSTGRES_DATA_DIR"
+# The official NATS image runs as uid/gid 1000. Keep JetStream on the same
+# persistent EBS volume as PostgreSQL, with a separate ownership boundary.
+sudo chown -R 1000:1000 "$NATS_DATA_DIR"

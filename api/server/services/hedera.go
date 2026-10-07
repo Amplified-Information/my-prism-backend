@@ -1,21 +1,18 @@
 package services
 
 import (
-	"encoding/base64"
-	"encoding/hex"
 	"fmt"
 	"math"
-	"math/big"
 	"strconv"
 	"strings"
+	"time"
 
 	"os"
 
-	pb_api "api/gen"
-	pb_clob "api/gen/clob"
 	"api/server/lib"
 	repositories "api/server/repositories"
 
+	"github.com/google/uuid"
 	hiero "github.com/hiero-ledger/hiero-sdk-go/v2/sdk"
 )
 
@@ -95,462 +92,6 @@ func (hs *HederaService) initHederaNet(networkSelected string) (*hiero.Client, e
 	return client, nil
 }
 
-/*
-*
-This function takes a number of input parameters from the YES and NO side
-- performs validation
-- determines which side (YES or NO) gets the YES or NO position tokens (the negative USD side gets the NO, the positive side gets the YES)
-- in the event of a partial match, the lower collatoralUsd amount (priceUsd * qty) is used for the collateral
-- constructs sigObjYes/sigObjNo off-chain. sigObjYes and sigObjNo have key type information embedded in them
-- submits to the posColToksOnBehalfAtomic(...) function on the Prism smart contract
-
-* @param marketId - nique market ID for the transaction (UUIDv7 string)
-* @param origQtyYes - quantity of YES position tokens requested by the user when they originally placed the order
-* @param origQtyNo - quantity of NO position tokens requested by the user when they originally placed the order
-* @param origPriceUsdYes - price (USD) of the market when the user originally placed the order (negative number => YES, positive number => NO)
-* @param origPriceUsdNo - price (USD) of the market when the user originally placed the order (negative number => YES, positive number => NO)
-* @param txIdUuidYes -
-* @param txIdUuidNo -
-* @param sigYes64 -
-* @param sigNo64 -
-* @param publicKeyYesHex -
-* @param publicKeyNoHex -
-* @param evmYes -
-* @param evmNo -
-* @param keyTypeYes -
-* @param keyTypeNo -
-
-* @return bool - Returns true if the transaction is successful, otherwise false.
-* @return error - Returns an error if the transaction fails or the receipt cannot be retrieved.
-*/
-func (hs *HederaService) BuyOrSellPositionTokens(sideYes *pb_clob.CreateOrderRequestClob, sideNo *pb_clob.CreateOrderRequestClob) (bool, error) {
-	// validate that sideYes.MarketId == sideNo.MarketId and sideYes.MarketId != ""
-	if sideYes.MarketId != sideNo.MarketId || sideYes.MarketId == "" {
-		return false, lib.LogAndError(lib.LOG_ERROR, "market IDs do not match or invalid: %s vs %s", sideYes.MarketId, sideNo.MarketId)
-	}
-
-	// validate that a price is not zero
-	if sideYes.PriceUsd == 0.0 || sideNo.PriceUsd == 0.0 {
-		return false, lib.LogAndError(lib.LOG_ERROR, "priceUsd cannot be zero: %f vs %f", sideYes.PriceUsd, sideNo.PriceUsd)
-	}
-
-	// validate that one price is negative and one price is positive
-	if (sideYes.PriceUsd > 0 && sideNo.PriceUsd > 0) || (sideYes.PriceUsd < 0 && sideNo.PriceUsd < 0) {
-		return false, lib.LogAndError(lib.LOG_ERROR, "both prices have the same sign: %f vs %f", sideYes.PriceUsd, sideNo.PriceUsd)
-	}
-
-	// validate that both orders are on the same network
-	if (sideYes.Net != sideNo.Net) || (sideYes.Net == "") {
-		return false, lib.LogAndError(lib.LOG_ERROR, "networks do not match or are invalid: %s vs %s", sideYes.Net, sideNo.Net)
-	}
-
-	// OK - proceed
-
-	// Upstream tuple normalization guarantees sign ordering (positive first, negative second).
-
-	usdcDecimalsStr := os.Getenv("USDC_DECIMALS")
-	usdcDecimals, err := strconv.ParseUint(usdcDecimalsStr, 10, 64)
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "invalid USDC_DECIMALS: %v", err)
-	}
-
-	// Match quantities are the actual executed amount from this match event.
-	// In a match notification, qty_rem carries the executed fill quantity. qty_orig
-	// remains the signed original order quantity used for verification.
-	matchedQtyYes := math.Abs(sideYes.QtyRem)
-	matchedQtyNo := math.Abs(sideNo.QtyRem)
-	matchedQty := matchedQtyYes
-	if matchedQtyNo < matchedQty {
-		matchedQty = matchedQtyNo
-	}
-	if matchedQty <= 0 {
-		return false, lib.LogAndError(lib.LOG_ERROR, "matched quantity must be positive")
-	}
-
-	// For signature verification, we need separate reconstruction of the payloads for YES and NO positions, including collateralUsd.
-	// The signed payload uses the originally authorized amount (qty_orig), while settlement uses the actual matched quantity from this event.
-	collateralUsdAbsScaledYes, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideYes.PriceUsd*sideYes.QtyOrig /* signed authorization amount */), int(usdcDecimals))
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "failed to scale collateralUsdAbsYes: %v", err)
-	}
-
-	collateralUsdAbsScaledNo, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideNo.PriceUsd*sideNo.QtyOrig /* signed authorization amount */), int(usdcDecimals))
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "failed to scale collateralUsdAbsNo: %v", err)
-	}
-
-	// The Solidity contract requires both settlement slots to carry the same amount.
-	// Use the actual matched quantity, not qty_orig, and bound the common notional by
-	// both prices so a residual fill cannot settle the full original order again.
-	settlementUsdAbsScaledYes, settlementUsdAbsScaledNo, err := matchedSettlementAmounts(sideYes, sideNo, matchedQty, int(usdcDecimals))
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "failed to calculate matched settlement amount: %v", err)
-	}
-
-	qtyScaledYesBig := new(big.Int).Set(settlementUsdAbsScaledYes)
-	qtyScaledNoBig := new(big.Int).Set(settlementUsdAbsScaledNo)
-
-	// priceUsdAbsScaledYesBig, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideYes.PriceUsd), int(usdcDecimals))
-	// if err != nil {
-	// 	return false, lib.LogAndError(lib.LOG_ERROR, "failed to calculate priceUsdAbsScaledYesBig: %v", err)
-	// }
-
-	// priceUsdAbsScaledNoBig, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideNo.PriceUsd), int(usdcDecimals))
-	// if err != nil {
-	// 	return false, lib.LogAndError(lib.LOG_ERROR, "failed to calculate priceUsdAbsScaledNoBig: %v", err)
-	// }
-
-	sigYes, err := base64.StdEncoding.DecodeString(sideYes.Sig) // Sig is base64-encoded
-	if err != nil {
-		lib.Log(lib.LOG_ERROR, "Error decoding sigYes64 from base64: %v", err)
-		return false, err
-	}
-	sigNo, err := base64.StdEncoding.DecodeString(sideNo.Sig) // Sig is base64-encoded
-	if err != nil {
-		lib.Log(lib.LOG_ERROR, "Error decoding sigNo64 from base64: %v", err)
-		return false, err
-	}
-
-	lib.Log(lib.LOG_INFO, "sigYes (len=%d): %x", len(sigYes), sigYes)
-	lib.Log(lib.LOG_INFO, "sigNo (len=%d): %x", len(sigNo), sigNo)
-
-	serializedPayloadYes, err := lib.AssemblePayloadHexForSigning(&pb_api.PrismPredictionIntentRequest{
-		PriceUsd:   sideYes.PriceUsd,
-		Qty:        sideYes.QtyOrig, // N.B. use QtyOrig and not Qty (remaining amount) - digital sig verifies based on original quantity, not current available Qty
-		MarketId:   sideYes.MarketId,
-		EvmAddress: sideYes.EvmAddress,
-		TxId:       sideYes.TxId,
-	}, usdcDecimals)
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "failed to extract YES payload for signing: %v", err)
-	}
-
-	serializedPayloadNo, err := lib.AssemblePayloadHexForSigning(&pb_api.PrismPredictionIntentRequest{
-		PriceUsd:   sideNo.PriceUsd,
-		Qty:        sideNo.QtyOrig, // N.B. use QtyOrig and not Qty (remaining amount) - digital sig verifies based on original quantity, not current available Qty
-		MarketId:   sideNo.MarketId,
-		EvmAddress: sideNo.EvmAddress,
-		TxId:       sideNo.TxId,
-	}, usdcDecimals)
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "failed to extract NO payload for signing: %v", err)
-	}
-
-	lib.Log(lib.LOG_INFO, "serializedPayloadYes: %s", serializedPayloadYes)
-	lib.Log(lib.LOG_INFO, "serializedPayloadNo: %s", serializedPayloadNo)
-
-	// calculate the keccak256 hash of the serialized payload
-	payloadYes, _ := lib.Hex2utf8(serializedPayloadYes)
-	payloadNo, _ := lib.Hex2utf8(serializedPayloadNo)
-	keccakYes := lib.Keccak256([]byte(payloadYes))
-	keccakNo := lib.Keccak256([]byte(payloadNo))
-	lib.Log(lib.LOG_INFO, "keccakYes calc'd server-side (hex): %x", keccakYes)
-	lib.Log(lib.LOG_INFO, "keccakNo calc'd server-side (hex): %x", keccakNo)
-
-	// create a hiero public key for the hex string and key type (ecdasa/ed25519)
-	publicKeyYes, err := lib.PublicKeyForKeyType(sideYes.PublicKey, lib.HederaKeyType(sideYes.KeyType))
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "failed to get publicKeyYes: %v", err)
-	}
-	publicKeyNo, err := lib.PublicKeyForKeyType(sideNo.PublicKey, lib.HederaKeyType(sideNo.KeyType))
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "failed to get publicKeyNo: %v", err)
-	}
-
-	/////
-	// OK
-	// now call the smart contract...
-	/////
-	marketIdBig, err := lib.Uuid7_to_bigint(sideYes.MarketId) // same for yes and no sides
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "failed to convert marketId to bigint: %v", err)
-	}
-
-	txIdYesBig, err := lib.Uuid7_to_bigint(sideYes.TxId)
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "failed to convert txIdUuidYes to bigint: %v", err)
-	}
-	txIdNoBig, err := lib.Uuid7_to_bigint(sideNo.TxId)
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "failed to convert txIdUuidNo to bigint: %v", err)
-	}
-
-	// sigObjYes and sigObjNo (Hedera format signature objects)
-	sigObjYes, err := lib.BuildSignatureMap(publicKeyYes, sigYes, lib.HederaKeyType(sideYes.KeyType))
-	sigObjNo, err := lib.BuildSignatureMap(publicKeyNo, sigNo, lib.HederaKeyType(sideNo.KeyType))
-	lib.Log(lib.LOG_INFO, "sigYes (keyType=%d) (hex): %x", sideYes.KeyType, sigYes)
-	lib.Log(lib.LOG_INFO, "sigNo (keyType=%d) (hex): %x", sideNo.KeyType, sigNo)
-
-	// Defensive pre-submit check: the live settlement amount must not exceed the signed authorization amount.
-	signedCollateralLower := new(big.Int).Set(collateralUsdAbsScaledYes)
-	if collateralUsdAbsScaledNo.Cmp(signedCollateralLower) < 0 {
-		signedCollateralLower = new(big.Int).Set(collateralUsdAbsScaledNo)
-	}
-	invariantHolds := qtyScaledYesBig.Cmp(signedCollateralLower) <= 0 && qtyScaledNoBig.Cmp(signedCollateralLower) <= 0 && qtyScaledYesBig.Cmp(qtyScaledNoBig) == 0
-	lib.Log(lib.LOG_INFO,
-		"Pre-submit invariant check (marketId=%s): signed_lower=%s settlement=%s signed_slot0=%s signed_slot1=%s settlement_slot0=%s settlement_slot1=%s holds=%t",
-		sideYes.MarketId,
-		signedCollateralLower.String(),
-		qtyScaledYesBig.String(),
-		collateralUsdAbsScaledYes.String(),
-		collateralUsdAbsScaledNo.String(),
-		qtyScaledYesBig.String(),
-		qtyScaledNoBig.String(),
-		invariantHolds,
-	)
-	// End Invariant check
-
-	/////
-	// submit to the smart contract :)
-	/////
-	params := hiero.NewContractFunctionParameters()
-	params.AddUint128BigInt(marketIdBig)               // marketId
-	params.AddAddress(sideYes.EvmAddress)              // signerYes
-	params.AddAddress(sideNo.EvmAddress)               // signerNo
-	params.AddUint256BigInt(collateralUsdAbsScaledYes) // collateralUsdAbsScaledYes (signed authorization amount)
-	params.AddUint256BigInt(collateralUsdAbsScaledNo)  // collateralUsdAbsScaledNo (signed authorization amount)
-	params.AddUint256BigInt(qtyScaledYesBig)           // settlement amount in collateral units
-	params.AddUint256BigInt(qtyScaledNoBig)            // settlement amount in collateral units
-	// params.AddUint256BigInt(priceUsdAbsScaledYesBig)
-	// params.AddUint256BigInt(priceUsdAbsScaledNoBig)
-	params.AddUint128BigInt(txIdYesBig)                              // txIdYes
-	params.AddUint128BigInt(txIdNoBig)                               // txIdNo
-	params.AddBytes(sigObjYes)                                       // sigObjYes
-	params.AddBytes(sigObjNo)                                        // sigObjNo
-	params.AddBool(strings.ToLower(sideYes.PrimarySecondary) == "s") // true => secondary (hedged), false => primary
-	params.AddBool(strings.ToLower(sideNo.PrimarySecondary) == "s")  // true => secondary (hedged), false => primary
-
-	slot0PrimarySecondary := strings.ToLower(sideYes.PrimarySecondary) == "s"
-	slot1PrimarySecondary := strings.ToLower(sideNo.PrimarySecondary) == "s"
-	slot0Action := "BUY YES"
-	if slot0PrimarySecondary {
-		slot0Action = "SELL NO"
-	}
-	slot1Action := "BUY NO"
-	if slot1PrimarySecondary {
-		slot1Action = "SELL YES"
-	}
-
-	lib.Log(lib.LOG_INFO, "Prepared smart contract parameters for BuyPositionTokens")
-	lib.Log(lib.LOG_INFO, "marketIdBytes (hex): %s", hex.EncodeToString(marketIdBig.Bytes()))
-	lib.Log(lib.LOG_INFO, "slot0 (positive-price leg): account=%s action=%s primarySecondary=%t", sideYes.EvmAddress, slot0Action, slot0PrimarySecondary)
-	lib.Log(lib.LOG_INFO, "slot1 (negative-price leg): account=%s action=%s primarySecondary=%t", sideNo.EvmAddress, slot1Action, slot1PrimarySecondary)
-	// lib.Log(lib.LOG_INFO, "collateralUsdAbsScaledYes: %s", collateralUsdAbsScaledYes.String())
-	// lib.Log(lib.LOG_INFO, "collateralUsdAbsScaledNo: %s", collateralUsdAbsScaledNo.String())
-	lib.Log(lib.LOG_INFO, "txIdYesBig (hex): %s", hex.EncodeToString(txIdYesBig.Bytes()))
-	lib.Log(lib.LOG_INFO, "txIdNoBig (hex): %s", hex.EncodeToString(txIdNoBig.Bytes()))
-	lib.Log(lib.LOG_INFO, "sigObjYes (len=%d): %x", len(sigObjYes), sigObjYes)
-	lib.Log(lib.LOG_INFO, "sigObjNo (len=%d): %x", len(sigObjNo), sigObjNo)
-	lib.Log(lib.LOG_INFO, "primarySecondaryYes: %t", sideYes.PrimarySecondary == "s")
-	lib.Log(lib.LOG_INFO, "primarySecondaryNo: %t", sideNo.PrimarySecondary == "s")
-	// NO - do not use the current X_SMART_CONTRACT_ID - use the one that is stored in the markets table
-	// contractID, err := hiero.ContractIDFromString(
-	// 	os.Getenv(fmt.Sprintf("%s_SMART_CONTRACT_ID", strings.ToUpper(sideYes.Net))),
-	// )
-	market, err := hs.marketsRepository.GetMarketById(sideYes.MarketId /* yes or no, doesn't matter*/, false)
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "could not retrieve market: %v. Is the market suspended or paused?", err)
-	}
-	contractId, err := hiero.ContractIDFromString(market.SmartContractID)
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "invalid contract ID in market record: %v", err)
-	}
-
-	tx, err := hiero.NewContractExecuteTransaction().
-		SetContractID(contractId).
-		SetGas(5_000_000). // TODO - can this be lowered? 2M in 4_buy.ts
-		SetFunction("posColToksOnBehalfAtomic", params).
-		Execute(hs.hedera_clients[sideYes.Net]) // both sides are guaranteed to be on the same network
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "failed to execute contract: %v", err)
-	}
-
-	receipt, err := tx.GetReceipt(hs.hedera_clients[sideYes.Net]) // both sides are guaranteed to be on the same network
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "failed to get transaction receipt: %v", err)
-	}
-
-	// the smart contract function returns (nYes, nNo)
-	record, err := tx.GetRecord(hs.hedera_clients[sideYes.Net])
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "failed to get transaction record: %v", err)
-	}
-	nYesTokens := new(big.Int).SetBytes(record.CallResult.GetUint256(0))
-	nNoTokens := new(big.Int).SetBytes(record.CallResult.GetUint256(1))
-	nYesTokens2 := new(big.Int).SetBytes(record.CallResult.GetUint256(2))
-	nNoTokens2 := new(big.Int).SetBytes(record.CallResult.GetUint256(3))
-
-	lib.Log(lib.LOG_INFO, "Token balances (marketId=%s): %s (yes=%s, no=%s) |  %s (yes=%s, no=%s)", sideYes.MarketId /* yes===no*/, sideYes.EvmAddress, nYesTokens.String(), nNoTokens.String(), sideNo.EvmAddress, nYesTokens2.String(), nNoTokens2.String())
-
-	lib.Log(lib.LOG_INFO, "posColToksOnBehalfAtomic(marketId=%s, ...) status: %s", sideYes.MarketId, receipt.Status.String())
-
-	/////
-	// db
-	// - 1. Record the tx on the database (auditing)
-	// - 2. record the price on the price table
-	// - 3. record the YES/NO balances
-	// - 4. record the global tv_matched
-	// - 5. log on Hedera HCS
-	// - 6. update the matches record with the HCS message ID
-	/////
-
-	if hs.dbRepository == nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "dbRepository is not initialized")
-	}
-
-	// 1. record the successful on-chain match
-	txHash := receipt.TransactionID.String()
-	lib.Log(lib.LOG_INFO, "TransactionID (txHash) for successful match: %s", txHash)
-	err = hs.matchesRepository.UpdateMatch(sideYes.MarketId, sideYes.TxId, sideNo.TxId, txHash, nil)
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "Error logging a successful tx to matches table: %v", err)
-	}
-
-	// 2. record the price
-	err = hs.priceRepository.SavePriceHistory(sideYes.MarketId, sideYes.TxId, sideYes.PriceUsd) // TODO - check this
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "Error saving price history for market %s: %v", sideYes.MarketId, err)
-	}
-	// don't need to save the No side
-	// err = h.dbRepository.SavePriceHistory(sideNo.MarketId, sideNo.PriceUsd)
-	// if err != nil {
-	// 	return false, fmt.Errorf("Error saving price history for market %s: %v", sideNo.MarketId, err)
-	// }
-
-	// 3. record the YES/NO balances on database
-	resultYes, err := hs.positionsRepository.UpsertUserPositions(sideYes.EvmAddress, sideYes.MarketId, nYesTokens.Int64(), nNoTokens.Int64(), sideYes.PriceUsd)
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "Error upserting user position tokens for %s on market %s: %v", sideYes.EvmAddress, sideYes.MarketId, err)
-	}
-	lib.Log(lib.LOG_INFO, "In marketId=%s, user with evmAddress=%s, has nYes=%d | nNo=%d", resultYes.MarketID, resultYes.EvmAddress, resultYes.NYes, resultYes.NNo)
-	resultNo, err := hs.positionsRepository.UpsertUserPositions(sideNo.EvmAddress, sideNo.MarketId, nYesTokens2.Int64(), nNoTokens2.Int64(), sideNo.PriceUsd)
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "Error upserting user position tokens for %s on market %s: %v", sideNo.EvmAddress, sideNo.MarketId, err)
-	}
-	lib.Log(lib.LOG_INFO, "In marketId=%s, user with evmAddress=%s, has nYes=%d | nNo=%d", resultNo.MarketID, resultNo.EvmAddress, resultNo.NYes, resultNo.NNo)
-
-	// 4. and update the global tv_matched value
-	hs.dbRepository.UpdateTotalValueMatchedUsd(math.Min(math.Abs(sideYes.PriceUsd*sideYes.QtyRem), math.Abs(sideNo.PriceUsd*sideNo.QtyRem)) * 2) // N.B. multiply by 2 (qtyRemYES === qtyRemNO) because both yes and no sides contribute to the total value matched!
-
-	// 5. log on Hedera HCS
-	hederaHcsTxId, err := hs.PublishHCSmessage(sideYes.Net, fmt.Sprintf("[%s,%s]", sideYes.TxId, sideNo.TxId))
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "Error publishing HCS message for market %s: %v", sideYes.MarketId, err)
-	}
-
-	// 6. update the matches record with the HCS message ID
-	// call UpdateMatchTxHash again - this time include the hederaHcsTxId
-	err = hs.matchesRepository.UpdateMatch(sideYes.MarketId, sideYes.TxId, sideNo.TxId, txHash, &hederaHcsTxId)
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "Error logging a successful hederaHcsTxId to matches table: %v", err)
-	}
-
-	// if we get here, return true
-	return true, nil
-}
-
-func matchedSettlementAmounts(sideYes *pb_clob.CreateOrderRequestClob, sideNo *pb_clob.CreateOrderRequestClob, matchedQty float64, decimals int) (*big.Int, *big.Int, error) {
-	matchedCollateralYes, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideYes.PriceUsd*matchedQty), decimals)
-	if err != nil {
-		return nil, nil, err
-	}
-	matchedCollateralNo, err := lib.FloatToBigIntScaledDecimals(math.Abs(sideNo.PriceUsd*matchedQty), decimals)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	settlementYes := new(big.Int).Set(matchedCollateralYes)
-	settlementNo := new(big.Int).Set(matchedCollateralNo)
-	if settlementNo.Cmp(settlementYes) < 0 {
-		settlementYes.Set(settlementNo)
-	} else {
-		settlementNo.Set(settlementYes)
-	}
-	return settlementYes, settlementNo, nil
-}
-
-func (hs *HederaService) CreateNewMarket(marketId string, statement string, net string) (uint64, error) {
-	// call the smart contract function createNewMarket(uint128 marketId, string memory _statement)
-	marketIdBig, err := lib.Uuid7_to_bigint(marketId)
-	if err != nil {
-		return 0, lib.LogAndError(lib.LOG_ERROR, "failed to convert marketId to bigint: %v", err)
-	}
-	params := hiero.NewContractFunctionParameters()
-	params.AddUint128BigInt(marketIdBig) // marketId
-	params.AddString(statement)          // statement
-
-	// YES, use the X_SMART_CONTRACT_ID that's loaded in the env var (new market creation always uses the current one)
-	contractID, err := hiero.ContractIDFromString(
-		os.Getenv(fmt.Sprintf("%s_SMART_CONTRACT_ID", strings.ToUpper(net))),
-	)
-	if err != nil {
-		return 0, lib.LogAndError(lib.LOG_ERROR, "invalid smart contract ID: %v", err)
-	}
-
-	lib.Log(lib.LOG_INFO, "Creating a new market on Prism smart contract (%s)", contractID)
-	result, err := hiero.NewContractExecuteTransaction().
-		SetContractID(contractID).
-		SetGas(2_000_000). // TODO - can this be lowered?
-		SetFunction("createNewMarket", params).
-		Execute(hs.hedera_clients[net])
-	if err != nil {
-		return 0, lib.LogAndError(lib.LOG_ERROR, "failed to execute contract: %v", err)
-	}
-
-	record, err := result.GetRecord(hs.hedera_clients[net])
-	if err != nil {
-		return 0, lib.LogAndError(lib.LOG_ERROR, "CreateNewMarket - tx failed (could not get transaction record). Hedera txId = %s. %v", result.TransactionID.String(), err)
-	}
-
-	// receipt, err := result.GetReceipt(hs.hedera_clients[net])
-	// if err != nil {
-	// 	return fmt.Errorf("failed to get transaction receipt: %v", err)
-	// }
-
-	remainingAllowance := new(big.Int).SetBytes(record.CallResult.GetUint256(0))
-
-	lib.Log(lib.LOG_INFO, "Remaining allowance: %v", remainingAllowance.Uint64())
-
-	lib.Log(lib.LOG_INFO, "CreateNewMarket - tx successful. Hedera txId = %s", result.TransactionID.String())
-
-	return remainingAllowance.Uint64(), nil
-}
-
-func (hs *HederaService) ResolveMarketOnChain(net string, marketId string, contractIdStr string, outcome int32) (bool, error) {
-	contractId, err := hiero.ContractIDFromString(contractIdStr)
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "failed to parse smart contract ID from market data: %v", err)
-	}
-
-	marketIdBig, err := lib.Uuid7_to_bigint(marketId)
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "failed to convert marketId to bigint: %v", err)
-	}
-
-	params := hiero.NewContractFunctionParameters()
-	params.AddUint128BigInt(marketIdBig) // marketId
-	params.AddBool(outcome == 1)         // no = false, yes = true
-
-	result, err := hiero.NewContractExecuteTransaction().
-		SetContractID(contractId).
-		SetGas(1_000_000). // TODO - can this be lowered? 2M in 4_buy.ts
-		SetFunction("resolveMarket", params).
-		Execute(hs.hedera_clients[net]) // both sides are guaranteed to be on the same network
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "failed to execute contract: %v", err)
-	}
-
-	_, err = result.GetRecord(hs.hedera_clients[net])
-	if err != nil {
-		return false, lib.LogAndError(lib.LOG_ERROR, "ResolveMarket - tx failed (could not get transaction record). Hedera txId = %s. %v", result.TransactionID.String(), err)
-	}
-
-	lib.Log(lib.LOG_INFO, "ResolveMarket - tx successful. Hedera txId = %s", result.TransactionID.String())
-	// record this in the database
-	lib.Log(lib.LOG_INFO, "Market resolved as %s", map[int32]string{0: "NO", 1: "YES"}[outcome])
-	return true, nil
-}
-
 func (hs *HederaService) PublishHCSmessage(net string, message string) (string, error) {
 	topicIdStr := os.Getenv(fmt.Sprintf("%s_HCS_TOPIC_ID", strings.ToUpper(net)))
 	if topicIdStr == "" {
@@ -615,94 +156,127 @@ func (hs *HederaService) SendHTStokens(networkSelected hiero.LedgerID, tokenId h
 	return txHash, nil
 }
 
-/*
-on-chain : retrieve a user's number of position tokens
-*/
-func (hs *HederaService) GetUserPositionTokenBalanceOnChain(networkSelected hiero.LedgerID, marketId string, userEvmAddress string) (float64, float64, error) {
-	// Solidity:
-	// getUserTokens(uint128 marketId, address user) returns (uint256)
-
-	params := hiero.NewContractFunctionParameters()
-	marketIdBig, err := lib.Uuid7_to_bigint(marketId)
-	if err != nil {
-		return 0, 0, lib.LogAndError(lib.LOG_ERROR, "invalid market ID: %v", err)
-	}
-
-	params.AddUint128BigInt(marketIdBig)
-	params.AddAddress(userEvmAddress)
-
-	market, err := hs.marketsRepository.GetMarketById(marketId, false)
-	if err != nil {
-		return 0, 0, lib.LogAndError(lib.LOG_ERROR, "could not retrieve market: %v. Is the market suspended or paused?", err)
-	}
-	contractId, err := hiero.ContractIDFromString(market.SmartContractID)
-	if err != nil {
-		return 0, 0, lib.LogAndError(lib.LOG_ERROR, "invalid contract ID in market record (GetPositionTokenBalance): %v", err)
-	}
-
-	query := hiero.NewContractCallQuery().
-		SetContractID(contractId).
-		SetGas(1_000_000).
-		SetFunction("getUserTokens", params)
-
-	// first get the cost of the query:
-	queryCost, err := query.GetCost(hs.hedera_clients[networkSelected.String()])
-	if err != nil {
-		return 0, 0, lib.LogAndError(lib.LOG_ERROR, "failed to estimate contract call cost (GetPositionTokenBalance): %v", err)
-	}
-
-	result, err := query.
-		SetQueryPayment(hiero.HbarFromTinybar(queryCost.AsTinybar() + 10_000)).
-		Execute(hs.hedera_clients[networkSelected.String()])
-	if err != nil {
-		// if strings.Contains(strings.ToUpper(err.Error()), "INSUFFICIENT_PAYER_BALANCE") {
-		// 	lib.Log(lib.LOG_WARN, "GetPositionTokenBalance falling back to DB after insufficient payer balance", "marketId", marketId, "userEvmAddress", userEvmAddress)
-		// 	return hs.GetUserPositionTokenBalanceFromDb(marketId, userEvmAddress)
-		// }
-		return 0, 0, lib.LogAndError(lib.LOG_ERROR, "failed to execute contract call (GetPositionTokenBalance): %v", err)
-	}
-
-	yesBytes := result.GetUint256(0)
-	noBytes := result.GetUint256(1)
-
-	yesBig := new(big.Int).SetBytes(yesBytes)
-	noBig := new(big.Int).SetBytes(noBytes)
-
-	nDecimals, err := strconv.ParseFloat(os.Getenv("USDC_DECIMALS"), 64)
-	if err != nil {
-		return 0, 0, lib.LogAndError(lib.LOG_ERROR, "failed to parse USDC_DECIMALS: %v", err)
-	}
-
-	yesTokens := float64(yesBig.Uint64()) / math.Pow(10, nDecimals)
-	noTokens := float64(noBig.Uint64()) / math.Pow(10, nDecimals)
-
-	return yesTokens, noTokens, nil
-}
-
-func (hs *HederaService) GetUserPositionTokenBalanceFromDb(marketId string, userEvmAddress string) (float64, float64, error) {
-	positions, err := hs.positionsRepository.GetUserPositionsByMarketId(userEvmAddress, marketId)
-	if err != nil {
-		return 0, 0, lib.LogAndError(lib.LOG_ERROR, "failed to get position token balance from DB: %v", err)
-	}
-
-	if len(positions) == 0 {
-		return 0, 0, nil
-	}
-
-	nDecimals, err := strconv.ParseFloat(os.Getenv("USDC_DECIMALS"), 64)
-	if err != nil {
-		return 0, 0, lib.LogAndError(lib.LOG_ERROR, "failed to parse USDC_DECIMALS: %v", err)
-	}
-
-	yesTokens := float64(positions[0].NYes) / math.Pow(10, nDecimals)
-	noTokens := float64(positions[0].NNo) / math.Pow(10, nDecimals)
-
-	return yesTokens, noTokens, nil
-}
-
 func (hs *HederaService) GetRakePercent(marketId string) (float32, error) {
 	// TODO - look up most recent event_rake_updated entry
 	// extract the float value
 	rakePercent := float32(2.0)
 	return rakePercent, nil
+}
+
+// CreateNewMarket creates marketId on the network's PrismV2 proxy, signed with the API's
+// Hedera key (which must hold the contract's owner role). It returns the proxy contract ID.
+// A retry after a later failure finds the market already OPEN and does not resubmit.
+func (hs *HederaService) CreateNewMarket(marketId string, statement string, net string, closesAt time.Time) (hiero.ContractID, error) {
+	cfg, err := lib.GetPrismV2Network(net)
+	if err != nil {
+		return hiero.ContractID{}, err
+	}
+	id, err := uuid.Parse(marketId)
+	if err != nil {
+		return hiero.ContractID{}, fmt.Errorf("invalid marketId: %w", err)
+	}
+	if existing, err := lib.GetMarketV2(net, cfg.ContractID, id); err == nil && existing.State != lib.MarketUninitialized {
+		if existing.State == lib.MarketOpen {
+			lib.Log(lib.LOG_WARN, "market %s already exists on PrismV2 %s; not creating it again", marketId, cfg.ContractID)
+			return cfg.ContractID, nil
+		}
+		return hiero.ContractID{}, fmt.Errorf("market %s already exists on PrismV2 in state %s", marketId, existing.State)
+	}
+
+	marketIdBig, err := lib.Uuid7_to_bigint(marketId)
+	if err != nil {
+		return hiero.ContractID{}, fmt.Errorf("failed to convert marketId to bigint: %w", err)
+	}
+	params := hiero.NewContractFunctionParameters().
+		AddUint128BigInt(marketIdBig).
+		AddString(statement).
+		AddUint64(uint64(closesAt.Unix()))
+
+	lib.Log(lib.LOG_INFO, "Creating market %s on PrismV2 (%s), closing %s", marketId, cfg.ContractID, closesAt.UTC().Format(time.RFC3339))
+	txID, err := hs.executeAdminCall(net, cfg.ContractID, "createMarket", params)
+	if err != nil {
+		return hiero.ContractID{}, err
+	}
+	lib.Log(lib.LOG_INFO, "CreateNewMarket - tx successful. Hedera txId = %s", txID)
+	return cfg.ContractID, nil
+}
+
+// ResolveMarketOnChain records outcome (0 = NO, 1 = YES, 2 = VOID) on PrismV2, signed with
+// the API's Hedera key (which must hold the contract's oracle role). A retry after a later
+// failure finds the outcome already recorded and does not resubmit.
+func (hs *HederaService) ResolveMarketOnChain(net string, marketId string, contractIdStr string, outcome int32) error {
+	contractId, err := hiero.ContractIDFromString(contractIdStr)
+	if err != nil {
+		return fmt.Errorf("invalid contract ID in market record: %w", err)
+	}
+	id, err := uuid.Parse(marketId)
+	if err != nil {
+		return fmt.Errorf("invalid marketId: %w", err)
+	}
+	target := map[int32]lib.MarketStateV2{0: lib.MarketResolvedNo, 1: lib.MarketResolvedYes, 2: lib.MarketVoid}
+	want, ok := target[outcome]
+	if !ok {
+		return fmt.Errorf("unsupported outcome %d", outcome)
+	}
+	if existing, err := lib.GetMarketV2(net, contractId, id); err == nil && existing.State == want {
+		lib.Log(lib.LOG_WARN, "market %s is already %s on chain; not resolving it again", marketId, want)
+		return nil
+	}
+
+	marketIdBig, err := lib.Uuid7_to_bigint(marketId)
+	if err != nil {
+		return fmt.Errorf("failed to convert marketId to bigint: %w", err)
+	}
+	params := hiero.NewContractFunctionParameters().AddUint128BigInt(marketIdBig)
+	function := "voidMarket"
+	if outcome != 2 {
+		function = "resolveMarket"
+		params.AddBool(outcome == 1) // no = false, yes = true
+	}
+	txID, err := hs.executeAdminCall(net, contractId, function, params)
+	if err != nil {
+		return err
+	}
+	lib.Log(lib.LOG_INFO, "ResolveMarket - %s(%s) tx successful. Hedera txId = %s", function, marketId, txID)
+	return nil
+}
+
+// executeAdminCall submits a PrismV2 administration call with the API's key and waits for the receipt.
+func (hs *HederaService) executeAdminCall(net string, contractId hiero.ContractID, function string, params *hiero.ContractFunctionParameters) (string, error) {
+	client, ok := hs.hedera_clients[net]
+	if !ok || client == nil {
+		return "", fmt.Errorf("no Hedera client for %s", net)
+	}
+	response, err := hiero.NewContractExecuteTransaction().
+		SetContractID(contractId).
+		SetGas(1_000_000).
+		SetFunction(function, params).
+		Execute(client)
+	if err != nil {
+		return "", fmt.Errorf("%s: failed to execute contract: %w", function, err)
+	}
+	receipt, err := response.GetReceipt(client)
+	if err != nil {
+		return response.TransactionID.String(), fmt.Errorf("%s: transaction %s failed: %w", function, response.TransactionID.String(), err)
+	}
+	if receipt.Status != hiero.StatusSuccess {
+		return response.TransactionID.String(), fmt.Errorf("%s: transaction %s status %s", function, response.TransactionID.String(), receipt.Status)
+	}
+	return response.TransactionID.String(), nil
+}
+
+// GetUserPositionBalancesV2 returns a signer's on-chain YES and NO balances in collateral units.
+func (hs *HederaService) GetUserPositionBalancesV2(net string, contractId hiero.ContractID, marketId string, evmAddress string) (uint64, uint64, error) {
+	id, err := uuid.Parse(marketId)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid marketId: %w", err)
+	}
+	yes, no, err := lib.GetPositionBalancesV2(net, contractId, id, evmAddress)
+	if err != nil {
+		return 0, 0, err
+	}
+	if !yes.IsUint64() || !no.IsUint64() {
+		return 0, 0, fmt.Errorf("position balance exceeds uint64")
+	}
+	return yes.Uint64(), no.Uint64(), nil
 }

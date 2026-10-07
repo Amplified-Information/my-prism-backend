@@ -398,44 +398,63 @@ resource "aws_security_group" "allow_web_ingress" {
   }
 }
 
-resource "aws_security_group" "allow_internal_vpc" {
-  name        = "allow_internal_vpc"
-  description = "Allow internal traffic between instances"
+resource "aws_security_group" "proxy_service" {
+  name        = "${var.env}-proxy-service"
+  description = "Proxy service traffic"
   vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["10.0.0.0/16"] # Allow traffic within the VPC
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["10.0.0.0/16"] # Allow traffic within the VPC
-  }
 }
 
-resource "aws_security_group" "allow_internal_private_subnet" {
-  name        = "allow_internal_private_subnet"
-  description = "Allow internal traffic between instances"
+resource "aws_security_group" "monolith_service" {
+  name        = "${var.env}-monolith-service"
+  description = "Application service traffic"
   vpc_id      = aws_vpc.main.id
+}
 
-  ingress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["10.0.1.0/24"]  # allow internal subnet
-  }
+resource "aws_security_group" "data_service" {
+  name        = "${var.env}-data-service"
+  description = "Database and message-bus traffic"
+  vpc_id      = aws_vpc.main.id
+}
 
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["10.0.1.0/24"]  # allow internal subnet
-  }
+locals {
+  proxy_to_monolith_ports = toset(["8888", "8889", "50051", "5173", "8080", "8081"])
+  monolith_to_data_ports  = toset(["4222", "5432"])
+}
+
+resource "aws_vpc_security_group_egress_rule" "proxy_to_monolith" {
+  for_each                     = local.proxy_to_monolith_ports
+  security_group_id            = aws_security_group.proxy_service.id
+  referenced_security_group_id = aws_security_group.monolith_service.id
+  ip_protocol                  = "tcp"
+  from_port                    = tonumber(each.value)
+  to_port                      = tonumber(each.value)
+}
+
+resource "aws_vpc_security_group_ingress_rule" "proxy_to_monolith" {
+  for_each                     = local.proxy_to_monolith_ports
+  security_group_id            = aws_security_group.monolith_service.id
+  referenced_security_group_id = aws_security_group.proxy_service.id
+  ip_protocol                  = "tcp"
+  from_port                    = tonumber(each.value)
+  to_port                      = tonumber(each.value)
+}
+
+resource "aws_vpc_security_group_egress_rule" "monolith_to_data" {
+  for_each                     = local.monolith_to_data_ports
+  security_group_id            = aws_security_group.monolith_service.id
+  referenced_security_group_id = aws_security_group.data_service.id
+  ip_protocol                  = "tcp"
+  from_port                    = tonumber(each.value)
+  to_port                      = tonumber(each.value)
+}
+
+resource "aws_vpc_security_group_ingress_rule" "monolith_to_data" {
+  for_each                     = local.monolith_to_data_ports
+  security_group_id            = aws_security_group.data_service.id
+  referenced_security_group_id = aws_security_group.monolith_service.id
+  ip_protocol                  = "tcp"
+  from_port                    = tonumber(each.value)
+  to_port                      = tonumber(each.value)
 }
 
 
@@ -625,7 +644,7 @@ resource "aws_security_group" "allow_alb_egress" {
     from_port   = 8090
     to_port     = 8090
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    security_groups = [aws_security_group.proxy_service.id]
   }
 }
 
@@ -641,7 +660,7 @@ resource "aws_security_group" "allow_alb_ingress" {
     from_port   = 8090
     to_port     = 8090
     protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/24"]  # Public subnet CIDR
+    security_groups = [aws_security_group.allow_alb_egress.id]
   }
 }
 
@@ -692,8 +711,8 @@ resource "aws_security_group" "allow_hedera_rpc_egress" {
 # - access `aws ssm get-parameter ...` - so can acccess the "/shared/READ_GHCR" secret
 #####
 
-resource "aws_iam_role" "combined_role" {
-   name = "${var.env}-combined-role"
+resource "aws_iam_role" "monolith_role" {
+  name = "${var.env}-monolith-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -709,16 +728,14 @@ resource "aws_iam_role" "combined_role" {
   })
 }
 
-resource "aws_iam_policy" "combined_policy" {
-  name        = "${var.env}-combined-policy"
-  description = "Combined policy"
+resource "aws_iam_policy" "monolith_policy" {
+  name        = "${var.env}-monolith-policy"
+  description = "Application host policy; only this host can read signing credentials"
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
-      // First apply deny to ssm:GetParameter
-      // AmazonSSMManagedInstanceCore grants SSM parameter reads on all resources.
-      // Explicitly deny other environment paths so those broad permissions cannot
-      // expose another environment's secrets.
+      // Keep this role constrained if another policy is attached in the future.
+      // AmazonSSMManagedInstanceCore itself does not grant Parameter Store reads.
       {
         Effect = "Deny",
         Action = [
@@ -726,12 +743,10 @@ resource "aws_iam_policy" "combined_policy" {
           "ssm:GetParameters",
           "ssm:GetParametersByPath"
         ],
-        NotResource = [
-          "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/shared",
-          "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/shared/*",
-          "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${var.env}",
-          "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${var.env}/*"
-        ]
+        NotResource = concat(
+          ["arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/shared/READ_GHCR"],
+          [for key in local.monolith_secret_keys : "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${var.env}/${key}"]
+        )
       },
       // Now apply read access for the EC2 box
       // N.B. the EC2 box only has access to /shared/* and /${var.env}/*
@@ -740,10 +755,10 @@ resource "aws_iam_policy" "combined_policy" {
         Action = [
           "ssm:GetParameter"
         ],
-        Resource = [
-          "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/shared/*",       # all envs can access /shared/*
-          "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${var.env}/*"    # only the dev box can access secrets in /dev/*
-        ]
+        Resource = concat(
+          ["arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/shared/READ_GHCR"],
+          [for key in local.monolith_secret_keys : "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${var.env}/${key}"]
+        )
       },
       {
         Effect = "Allow",
@@ -758,8 +773,8 @@ resource "aws_iam_policy" "combined_policy" {
           "s3:ListBucket"
         ],
         Resource = [
-          "arn:aws:s3:::prismlabs-deployment",
-          "arn:aws:s3:::prismlabs-deployment/*"
+          "arn:aws:s3:::${var.s3_bucket_deployment}",
+          "arn:aws:s3:::${var.s3_bucket_deployment}/*"
         ]
       },
       // EC2 box has S3 WRITE access to s3://pl-deployment-badges":
@@ -808,13 +823,15 @@ resource "aws_iam_policy" "combined_policy" {
       {
         Effect = "Allow",
         Action = [
-          "logs:CreateLogGroup",
           "logs:CreateLogStream",
-          "logs:PutLogEvents",
-          "logs:DescribeLogGroups",
-          "logs:DescribeLogStreams"
+          "logs:PutLogEvents"
         ],
-        Resource = "arn:aws:logs:${var.aws_region}:*:log-group:/prism/${var.env}:*"
+        Resource = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/prism/${var.env}:*"
+      },
+      {
+        Effect   = "Allow",
+        Action   = ["logs:DescribeLogGroups", "logs:DescribeLogStreams"],
+        Resource = "*"
       }
     ]
   })
@@ -822,20 +839,128 @@ resource "aws_iam_policy" "combined_policy" {
 
 # IAM for SSM Session Manager (for AWS Console "Connect" via Session Manager)
 # check with: `sudo systemctl status amazon-ssm-agent`
-resource "aws_iam_role_policy_attachment" "ssm_managed_instance_core" {
-  role       = aws_iam_role.combined_role.name
+resource "aws_iam_role_policy_attachment" "monolith_ssm_managed_instance_core" {
+  role       = aws_iam_role.monolith_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
 
-resource "aws_iam_role_policy_attachment" "combined_policy_attach" {
-  role       = aws_iam_role.combined_role.name
-  policy_arn = aws_iam_policy.combined_policy.arn
+resource "aws_iam_role_policy_attachment" "monolith_policy_attach" {
+  role       = aws_iam_role.monolith_role.name
+  policy_arn = aws_iam_policy.monolith_policy.arn
 }
 
-resource "aws_iam_instance_profile" "combined_instance_profile" {
-  name = "${var.env}-combined-instance-profile"
-  role = aws_iam_role.combined_role.name
+resource "aws_iam_instance_profile" "monolith_instance_profile" {
+  name = "${var.env}-monolith-instance-profile"
+  role = aws_iam_role.monolith_role.name
+}
+
+locals {
+  monolith_secret_keys = toset([
+    "DB_PWORD", "NATS_USER", "NATS_PASSWORD", "PREVIEWNET_HEDERA_OPERATOR_KEY",
+    "TESTNET_HEDERA_OPERATOR_KEY", "MAINNET_HEDERA_OPERATOR_KEY", "SMTP_PWORD",
+    "JWT_SECRET", "OPENAI_API_KEY", "PREVIEWNET_PRISM_TOKEN_HOT_PAYER_KEY",
+    "TESTNET_PRISM_TOKEN_HOT_PAYER_KEY", "MAINNET_PRISM_TOKEN_HOT_PAYER_KEY"
+  ])
+  data_secret_keys = toset(["DB_PWORD", "NATS_USER", "NATS_PASSWORD", "REDIS_PASSWORD"])
+}
+
+resource "aws_iam_role" "proxy_role" {
+  name               = "${var.env}-proxy-role"
+  assume_role_policy = aws_iam_role.monolith_role.assume_role_policy
+}
+
+resource "aws_iam_role" "data_role" {
+  name               = "${var.env}-data-role"
+  assume_role_policy = aws_iam_role.monolith_role.assume_role_policy
+}
+
+resource "aws_iam_policy" "proxy_policy" {
+  name        = "${var.env}-proxy-policy"
+  description = "Proxy host deployment access without application secrets"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect      = "Deny"
+        Action      = ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath"]
+        NotResource = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/shared/READ_GHCR"
+      },
+      { Effect = "Allow", Action = ["ssm:GetParameter"], Resource = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/shared/READ_GHCR" },
+      { Effect = "Allow", Action = ["s3:GetObject", "s3:ListBucket"], Resource = ["arn:aws:s3:::${var.s3_bucket_deployment}", "arn:aws:s3:::${var.s3_bucket_deployment}/*"] },
+      { Effect = "Allow", Action = ["s3:PutObject"], Resource = "arn:aws:s3:::pl-deployment-badges/${var.env}/*" },
+      {
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogStream", "logs:PutLogEvents"]
+        Resource = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/prism/${var.env}:*"
+      },
+      { Effect = "Allow", Action = ["logs:DescribeLogGroups", "logs:DescribeLogStreams"], Resource = "*" }
+    ]
+  })
+}
+
+resource "aws_iam_policy" "data_policy" {
+  name        = "${var.env}-data-policy"
+  description = "Data host deployment and data-service secrets; explicitly excludes signing credentials"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Deny"
+        Action = ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath"]
+        NotResource = concat(
+          ["arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/shared/READ_GHCR"],
+          [for key in local.data_secret_keys : "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${var.env}/${key}"]
+        )
+      },
+      {
+        Effect = "Allow"
+        Action = ["ssm:GetParameter"]
+        Resource = concat(
+          ["arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/shared/READ_GHCR"],
+          [for key in local.data_secret_keys : "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${var.env}/${key}"]
+        )
+      },
+      { Effect = "Allow", Action = ["s3:GetObject", "s3:ListBucket"], Resource = ["arn:aws:s3:::${var.s3_bucket_deployment}", "arn:aws:s3:::${var.s3_bucket_deployment}/*"] },
+      { Effect = "Allow", Action = ["s3:PutObject"], Resource = "arn:aws:s3:::pl-deployment-badges/${var.env}/*" },
+      {
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogStream", "logs:PutLogEvents"]
+        Resource = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/prism/${var.env}:*"
+      },
+      { Effect = "Allow", Action = ["logs:DescribeLogGroups", "logs:DescribeLogStreams"], Resource = "*" }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "proxy_ssm_managed_instance_core" {
+  role       = aws_iam_role.proxy_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_role_policy_attachment" "data_ssm_managed_instance_core" {
+  role       = aws_iam_role.data_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_role_policy_attachment" "proxy_policy_attach" {
+  role       = aws_iam_role.proxy_role.name
+  policy_arn = aws_iam_policy.proxy_policy.arn
+}
+
+resource "aws_iam_role_policy_attachment" "data_policy_attach" {
+  role       = aws_iam_role.data_role.name
+  policy_arn = aws_iam_policy.data_policy.arn
+}
+
+resource "aws_iam_instance_profile" "proxy_instance_profile" {
+  name = "${var.env}-proxy-instance-profile"
+  role = aws_iam_role.proxy_role.name
+}
+
+resource "aws_iam_instance_profile" "data_instance_profile" {
+  name = "${var.env}-data-instance-profile"
+  role = aws_iam_role.data_role.name
 }
 
 
@@ -855,13 +980,9 @@ output "allow_web_ingress_id" {
   value       = aws_security_group.allow_web_ingress.id
 }
 
-output "allow_internal_vpc_id" {
-  value       = aws_security_group.allow_internal_vpc.id
-}
-
-output "allow_internal_private_subnet_id" {
-  value       = aws_security_group.allow_internal_private_subnet.id
-}
+output "proxy_service_security_group_id" { value = aws_security_group.proxy_service.id }
+output "monolith_service_security_group_id" { value = aws_security_group.monolith_service.id }
+output "data_service_security_group_id" { value = aws_security_group.data_service.id }
 
 output "allow_ssh_ingress_id" {
   value       = aws_security_group.allow_ssh_ingress.id
@@ -927,21 +1048,74 @@ output "vpc_id" {
 
 
 
-output "combined_iam_policy_name" {
-  value = aws_iam_instance_profile.combined_instance_profile.name
+output "proxy_iam_instance_profile_name" { value = aws_iam_instance_profile.proxy_instance_profile.name }
+output "monolith_iam_instance_profile_name" { value = aws_iam_instance_profile.monolith_instance_profile.name }
+output "data_iam_instance_profile_name" { value = aws_iam_instance_profile.data_instance_profile.name }
+
+resource "aws_cloudwatch_log_group" "fluent_bit" {
+  name              = "/prism/${var.env}"
+  retention_in_days = 30
+  tags               = { Environment = var.env }
 }
 
-# apply a 30 day retention period to cloudwatch logs:
-# resource "aws_cloudwatch_log_group" "fluent_bit" {
-#   name              = "/prism/${var.env}"
-#   retention_in_days = 30
+#####
+# Daily backups for the persistent PostgreSQL and JetStream EBS volume.
+#####
 
-#   lifecycle {
-#     # N.B. do not destroy this aws_cloudwatch_log_group or your will lose your logs
-#     prevent_destroy = true
-#   }
+resource "aws_backup_vault" "data" {
+  name = "${var.env}-prism-data"
 
-#   tags = {
-#     Environment = var.env
-#   }
-# }
+  tags = {
+    Environment = var.env
+    Service     = "data"
+  }
+
+}
+
+resource "aws_backup_plan" "data" {
+  name = "${var.env}-prism-data-daily"
+
+  rule {
+    rule_name         = "daily-35-day-retention"
+    target_vault_name = aws_backup_vault.data.name
+    schedule           = "cron(0 5 * * ? *)"
+    start_window       = 60
+    completion_window  = 180
+
+    lifecycle {
+      delete_after = 35
+    }
+
+    recovery_point_tags = {
+      Environment = var.env
+      Service     = "data"
+    }
+  }
+}
+
+resource "aws_iam_role" "backup" {
+  name = "${var.env}-prism-backup-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "backup.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "backup" {
+  role       = aws_iam_role.backup.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup"
+}
+
+resource "aws_backup_selection" "data_volume" {
+  name         = "${var.env}-prism-data-volume"
+  iam_role_arn = aws_iam_role.backup.arn
+  plan_id      = aws_backup_plan.data.id
+  resources = [
+    "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:volume/${var.ebs_persistent_volume_id}"
+  ]
+}

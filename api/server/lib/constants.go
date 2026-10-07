@@ -5,9 +5,7 @@ import "time"
 const (
 	MID_MARKET_PRICE           = 0.5
 	SUBJECT_CLOB_ORDERS        = "clob.orders"
-	NATS_CLOB_MATCHES_FULL     = "clob.matches.full"
-	NATS_CLOB_MATCHES_PARTIAL  = "clob.matches.partial"
-	NATS_CLOB_MATCHES_WILDCARD = "clob.matches.*"
+	NATS_CLOB_MATCHES_SETTLE   = "clob.matches.settle" // one ClobMatch per PrismV2 fill
 	NATS_CLOB_CANCEL_ORDERS    = "clob.orders.cancel"
 )
 
@@ -21,8 +19,8 @@ const (
 
 var VolumeResolutionPeriods = []string{"1h", "24h", "7d", "30d"}
 
-// the sig scheme date ranges are used to determine which signature scheme to use for a given timestamp
-// see: lib/sign.go/AssemblePayloadHexForSigning
+// Legacy V1 order-signing scheme date ranges. Only reported in MacroMetadata;
+// PrismV2 orders are signed as lib.AuthorizationV2 (see docs/PRISM_V2_ORDER_PROTOCOL.md).
 // N.B: the index in the array is the version number
 var SigSchemeDateRanges = [][2]int64{
 	{0, 1763904000},          // v0: 1st Jan 1970 00:00:00 to 22nd Mar 2026 00:00:00

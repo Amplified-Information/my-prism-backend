@@ -602,6 +602,24 @@ CREATE TABLE public.markets (
 ALTER TABLE public.markets OWNER TO your_db_user;
 
 --
+-- Name: smart_contract_events_v2; Type: TABLE; Schema: public; Owner: your_db_user
+--
+
+CREATE TABLE public.smart_contract_events_v2 (
+    id bigint NOT NULL,
+    net text NOT NULL,
+    contract_id text NOT NULL,
+    event text NOT NULL,
+    args jsonb NOT NULL,
+    tx_hash text NOT NULL,
+    event_timestamp timestamp with time zone NOT NULL,
+    host text,
+    md5uniq text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: matches; Type: TABLE; Schema: public; Owner: your_db_user
 --
 
@@ -614,7 +632,18 @@ CREATE TABLE public.matches (
     tx_hash character varying(256) NOT NULL,
     qty1 double precision NOT NULL,
     qty2 double precision NOT NULL,
-    hcs_tx_id character varying(256) DEFAULT NULL::character varying
+    hcs_tx_id character varying(256) DEFAULT NULL::character varying,
+    match_id text,
+    status text DEFAULT 'pending'::text NOT NULL,
+    attempts integer DEFAULT 0 NOT NULL,
+    last_error text,
+    submitted_at timestamp with time zone,
+    finalized_at timestamp with time zone,
+    protocol_version smallint DEFAULT 1 NOT NULL,
+    fill_shares numeric(78,0),
+    execution_yes_price bigint,
+    yes_collateral numeric(78,0),
+    no_collateral numeric(78,0)
 );
 
 
@@ -755,6 +784,17 @@ CREATE TABLE public.prediction_intents (
     redeemed_at timestamp with time zone,
     qty_orig double precision NOT NULL,
     qty_rem double precision NOT NULL,
+    protocol_version smallint DEFAULT 2 NOT NULL,
+    side smallint,
+    action smallint,
+    limit_yes_price bigint,
+    qty_shares numeric(78,0),
+    collateral_cap numeric(78,0),
+    deadline bigint,
+    chain_id bigint,
+    verifying_contract text,
+    shares_filled numeric(78,0) DEFAULT 0 NOT NULL,
+    collateral_filled numeric(78,0) DEFAULT 0 NOT NULL,
     CONSTRAINT order_requests_account_id_check CHECK ((length(account_id) >= 5)),
     CONSTRAINT order_requests_evmaddress_check CHECK ((length(evmaddress) = 40)),
     CONSTRAINT order_requests_keytype_check CHECK ((keytype = ANY (ARRAY[1, 2, 3]))),

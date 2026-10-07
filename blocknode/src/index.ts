@@ -16,7 +16,7 @@ const PORT_ADMIN = 7777
 
 // --- Guard required env vars ---
 // keep in sync with: .config, docker-compose-data.yml, src/index.ts, Dockerfile, localRun.sh
-const requiredVars = ['BN_NATS_HOST', 'BN_NATS_PORT', 'BN_QUERY_FREQ_SECS', 'BN_QUERY_LOOKBACK_SECS', 'BN_SUPPORTED_NETWORKS']
+const requiredVars = ['BN_NATS_HOST', 'BN_NATS_PORT', 'BN_NATS_USER', 'BN_NATS_PASSWORD', 'BN_QUERY_FREQ_SECS', 'BN_QUERY_LOOKBACK_SECS', 'BN_SUPPORTED_NETWORKS']
 
 // Add SMART_CONTRACT_IDS_{NET} for each network in SUPPORTED_NETWORKS
 const supportedNetworks = (process.env.BN_SUPPORTED_NETWORKS || '').split(/[, ]+/).filter(Boolean)
@@ -122,7 +122,12 @@ const stack = new Dedupe(DEDUPE_STACK_SIZE)
 
 const main = async () => {
 	// get a nats singleton
-	const nats = await getNatsConnection(process.env.BN_NATS_HOST!, parseInt(process.env.BN_NATS_PORT!, 10))
+	const nats = await getNatsConnection(
+		process.env.BN_NATS_HOST!,
+		parseInt(process.env.BN_NATS_PORT!, 10),
+		process.env.BN_NATS_USER!,
+		process.env.BN_NATS_PASSWORD!
+	)
 	if (!nats) {
 		log.error('Failed to connect to NATS, exiting')
 		process.exit(1)

@@ -29,23 +29,43 @@ service ClobInternal {
 
 message Empty {}
 
+// A PrismV2 order: the exact signed Authorization plus its cumulative fill state.
 // Note: ensure there's a persistent record of all the values here - need to be able to re-create the CLOB state from these values alone
+// Prices are integer YES probabilities on a 1_000_000 scale. Shares and collateral use the
+// collateral token's smallest unit. Side: 0 = YES, 1 = NO. Action: 0 = BUY, 1 = SELL.
 message CreateOrderRequestClob {
+  reserved 5, 6, 7, 12; // V1 floating-point price/qty and primary/secondary fields
   string tx_id = 1 [json_name = "txId", (validate.rules).string = {pattern: "(?i)^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"} /* Strict RFC-9562-compliant UUIDv7 */];
   string net = 2 [json_name = "net"];
   string market_id = 3 [json_name = "marketId"];
   string account_id = 4 [json_name = "accountId"];
-  double price_usd = 5 [json_name = "priceUsd"];
-  // For orders stored on the book, this is the remaining quantity. In match
-  // notifications, the CLOB copies the executed fill quantity into this field.
-  double qty_rem = 6 [json_name = "qtyRem"];
-  double qty_orig = 7 [json_name = "qtyOrig"]; // keep track of the original qty for signature validation
   string sig = 8 [json_name = "sig"];
   string public_key = 9 [json_name = "publicKey"]; // pass key info - i) avoid lookups ii) handle situation where user has changed their key
-  string evm_address = 10 [json_name = "evmAddress"];
+  string evm_address = 10 [json_name = "evmAddress"]; // the authorization signer, 40 hex chars without 0x
   int32 key_type = 11 [json_name = "keyType"];
-  string primary_secondary = 12 [json_name = "primarySecondary", (validate.rules).string = {in: ["p", "s"]}];
-  // double leverage = 13 [json_name = "leverage", (validate.rules).double = {gte: 1.0, lte: 100.0}];
+  uint64 chain_id = 13 [json_name = "chainId"];
+  string verifying_contract = 14 [json_name = "verifyingContract"]; // proxy EVM address, 40 hex chars without 0x
+  uint32 side = 15 [json_name = "side"];
+  uint32 action = 16 [json_name = "action"];
+  uint64 limit_yes_price = 17 [json_name = "limitYesPrice"];
+  uint64 qty_shares = 18 [json_name = "qtyShares"];
+  uint64 collateral_cap = 19 [json_name = "collateralCap"]; // only enforced for BUY orders
+  uint64 deadline = 20 [json_name = "deadline"]; // unix seconds
+  // Cumulative fill state. In a ClobMatch these are the values *before* that fill.
+  uint64 shares_filled = 21 [json_name = "sharesFilled"];
+  uint64 collateral_filled = 22 [json_name = "collateralFilled"];
+}
+
+// Published on clob.matches.settle for every fill. The bid is the YES-price buyer
+// (BUY YES or SELL NO); the ask is the YES-price seller (SELL YES or BUY NO).
+message ClobMatch {
+  string market_id = 1 [json_name = "marketId"];
+  CreateOrderRequestClob bid = 2 [json_name = "bid"];
+  CreateOrderRequestClob ask = 3 [json_name = "ask"];
+  uint64 fill_shares = 4 [json_name = "fillShares"];
+  uint64 execution_yes_price = 5 [json_name = "executionYesPrice"];
+  uint64 yes_collateral = 6 [json_name = "yesCollateral"]; // floor(fill_shares * price / 1_000_000)
+  uint64 no_collateral = 7 [json_name = "noCollateral"];   // fill_shares - yes_collateral
 }
 
 message StdResponse {
@@ -59,11 +79,13 @@ message BookRequest {
 }
 
 message OrderDetail {
-  string tx_id = 1      [json_name = "txId"];
-  string account_id = 2 [json_name = "accountId"];
-  double price_usd = 3  [json_name = "priceUsd"];
-  double qty = 4        [json_name = "qty"];
-  string ps = 5         [json_name = "ps", (validate.rules).string = {in: ["p", "s"]}];
+  reserved 3, 4, 5; // V1 price_usd, qty and primary/secondary
+  string tx_id = 1             [json_name = "txId"];
+  string account_id = 2        [json_name = "accountId"];
+  uint64 limit_yes_price = 6   [json_name = "limitYesPrice"];
+  uint64 shares_remaining = 7  [json_name = "sharesRemaining"];
+  uint32 side = 8              [json_name = "side"];
+  uint32 action = 9            [json_name = "action"];
 }
 
 message BookSnapshot {
@@ -100,6 +122,7 @@ message OrdersForUserResponse {
 }
 
 message MarketDepthQtyResponse {
-  double qty_bid = 1 [json_name = "qtyBid"];
-  double qty_ask = 2 [json_name = "qtyAsk"];
+  reserved 1, 2; // V1 floating-point depth
+  uint64 shares_bid = 3 [json_name = "sharesBid"];
+  uint64 shares_ask = 4 [json_name = "sharesAsk"];
 }

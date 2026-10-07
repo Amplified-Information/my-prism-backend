@@ -2,6 +2,12 @@
 old
 _old
 .env
+.secrets
+.secrets.*
+!.secrets.example
+*.tfstate
+*.tfstate.*
+crash.log
 
 .secrets.cache
 

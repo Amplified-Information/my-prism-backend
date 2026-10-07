@@ -1,6 +1,7 @@
 package repositories
 
 import (
+	"encoding/json"
 	sqlc "api/gen/sqlc"
 	"api/server/lib"
 	"context"
@@ -384,4 +385,27 @@ func (scer *SmartContractEventRepository) GetWinningsRedeemedEventByMarketIdAndW
 		return nil, lib.ErrorLog("failed to GetWinningsRedeemedEventByMarketIdAndWinner by marketId", "error", err, "marketId", marketId)
 	}
 	return &event, nil
+}
+
+// CreateEventV2 stores a PrismV2 event. It returns false when the event was already stored.
+func (scer *SmartContractEventRepository) CreateEventV2(net string, contractId string, eventType string, args map[string]interface{}, txHash string, timestamp time.Time, hostname string, md5uniq string) (bool, error) {
+	argsJSON, err := json.Marshal(args)
+	if err != nil {
+		return false, err
+	}
+	q := sqlc.New(scer.db)
+	n, err := q.CreateSmartContractEventV2(context.Background(), sqlc.CreateSmartContractEventV2Params{
+		Net:            net,
+		ContractID:     contractId,
+		Event:          eventType,
+		Args:           argsJSON,
+		TxHash:         txHash,
+		EventTimestamp: timestamp,
+		Host:           sql.NullString{String: hostname, Valid: hostname != ""},
+		Md5uniq:        md5uniq,
+	})
+	if err != nil {
+		return false, lib.ErrorLog("CreateSmartContractEventV2 failed", "error", err, "event", eventType, "txHash", txHash)
+	}
+	return n > 0, nil
 }

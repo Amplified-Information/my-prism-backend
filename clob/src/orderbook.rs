@@ -11,7 +11,8 @@ pub mod proto {
 }
 use proto::{CreateOrderRequestClob, BookSnapshot, OrderDetail};
 
-use crate::{nats};
+use crate::matching::{self, Book, PRICE_SCALE};
+use crate::nats;
 
 #[derive(Debug, Clone)]
 pub struct OrderBookService {
@@ -21,10 +22,9 @@ pub struct OrderBookService {
 
 impl OrderBookService {
     pub async fn new(nats_service: nats::NatsService) -> Self {
-        
         Self {
             order_books: Arc::new(RwLock::new(HashMap::new())),
-            nats_service, // Initialize NATS service here
+            nats_service,
         }
     }
 
@@ -32,7 +32,6 @@ impl OrderBookService {
         // No guards for performance - assume validated upstream
 
         // prevent overwriting existing market
-        // let poly_id = net.clone() + ":" + &market_id;   // <hederaNet>:<UUID>
         if self.order_books.read().await.contains_key(&market_id.to_lowercase()) {
             log::warn!("WARN: Attempt to create a market ({}) which already exists in OrderBookService", market_id.to_ascii_lowercase());
             return Ok(false);
@@ -45,22 +44,12 @@ impl OrderBookService {
         Ok(true)
     }
 
-    // pub async fn remove_market(&self, market_id: &str) {
-    // // Guards
-    // if !is_valid_market_id(market_id.clone()) {
-    //     log::error!("Invalid market_id format: {}", market_id);
-    //     return;
-    // }
-    //     let mut order_books = self.order_books.write().await;
-    //     order_books.remove(market_id);
-    // }
-
     pub async fn order_exists(&self, tx_id: &str) -> bool {
         let lut = TX_ID_LUT.lock().unwrap();
         lut.contains(tx_id)
     }
 
-    pub async fn place_order(&self, order: CreateOrderRequestClob) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn place_order(&self, order: CreateOrderRequestClob) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // No guards for performance - assume validated upstream
         let order_books = self.order_books.read().await;
         if let Some(order_book) = order_books.get(&order.market_id.to_lowercase()) {
@@ -72,7 +61,6 @@ impl OrderBookService {
             let mut lut = TX_ID_LUT.lock().unwrap();
             lut.insert(tx_id);
 
-            // return OK
             Ok(())
         } else {
             Err("Market not found".into())
@@ -81,9 +69,7 @@ impl OrderBookService {
 
     pub async fn get_book(&self, market_id: &str, depth: usize) -> Result<BookSnapshot, Box<dyn std::error::Error>> {
         // No guards for performance - assume validated upstream
-
-        let order_books: tokio::sync::RwLockReadGuard<'_, HashMap<String, Arc<RwLock<OrderBook>>>> = self.order_books.read().await;
-        // let poly_id = net.to_string() + ":" + market_id;   // <hederaNet>:<UUID>
+        let order_books = self.order_books.read().await;
         if let Some(order_book) = order_books.get(&market_id.to_lowercase()) {
             let book = order_book.read().await;
             Ok(book.snapshot(depth))
@@ -92,54 +78,22 @@ impl OrderBookService {
         }
     }
 
-    // pub fn start_periodic_scan(&self, market_id: &str, duration_seconds: u64) -> Result<impl Future<Output = Result<(), Box<dyn std::error::Error>>>, Box<dyn std::error::Error>> {
-    //     let order_books = self.order_books.clone();
-    //     let market_id = market_id.to_string().to_lowercase();
-
-    //     if let Some(order_book) = order_books.blocking_read().get(&market_id.to_lowercase()) {
-    //         let order_book = Arc::clone(order_book);
-    //         Ok(async move {
-    //             let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(duration_seconds));
-    //             loop {
-    //                 interval.tick().await;
-    //                 let mut book = order_book.write().await;
-    //                 book.scan_for_matches().await;
-    //             }
-    //         })
-    //     } else {
-    //         Err("Market not found".into())
-    //     }
-    // }
-
     pub async fn get_price_update(&self, market_id: &str) -> Result<proto::PriceUpdate, Box<dyn std::error::Error>> {
         // No guards for performance - assume validated upstream
-
         let order_books = self.order_books.read().await;
-        // let poly_id = net.to_string() + ":" + market_id;   // <hederaNet>:<UUID>
         if let Some(order_book) = order_books.get(&market_id.to_lowercase()) {
             let book = order_book.read().await;
 
-            // Determine the latest price from the order book
-            let best_bid = book.buy_orders.iter().map(|o| o.price_usd).max_by(|a, b| a.partial_cmp(b).unwrap());
-            let best_ask = book.sell_orders.iter().map(|o| o.price_usd).min_by(|a, b| a.partial_cmp(b).unwrap());
+            // Best bid is the highest YES price bid; best ask the lowest YES price ask.
+            let best_bid = book.book.bids.iter().map(|o| o.limit_yes_price).max();
+            let best_ask = book.book.asks.iter().map(|o| o.limit_yes_price).min();
+            let to_price = |p: Option<u64>| p.map(|p| p as f64 / PRICE_SCALE as f64).unwrap_or(0.5);
 
-            // let latest_price = match (best_bid, best_ask) {
-            //     (Some(bid), Some(ask)) => (bid + ask) / 2.0, // Midpoint
-            //     (Some(bid), None) => bid,
-            //     (None, Some(ask)) => ask,
-            //     (None, None) => 0.5, // No orders
-            // };
-
-            let best_bid = best_bid.unwrap_or(0.5);
-            let best_ask = best_ask.unwrap_or(0.5);
-
-            let price_update = proto::PriceUpdate {
-                price_bid_usd: best_bid,
-                price_ask_usd: best_ask,
+            Ok(proto::PriceUpdate {
+                price_bid_usd: to_price(best_bid),
+                price_ask_usd: to_price(best_ask),
                 timestamp_ms: chrono::Utc::now().timestamp_millis(),
-            };
-
-            Ok(price_update)
+            })
         } else {
             Err(format!("Market not found {}", market_id).into())
         }
@@ -147,29 +101,16 @@ impl OrderBookService {
 
     pub async fn cancel_order(&self, market_id: &str, tx_id: &str) -> Result<bool, Box<dyn std::error::Error>> {
         // No guards for performance - assume validated upstream
-
         let order_books = self.order_books.read().await;
         if let Some(order_book) = order_books.get(&market_id.to_lowercase()) {
             let mut book = order_book.write().await;
-
-            // Try to find and remove the order from buy orders
-            if let Some(pos) = book.buy_orders.iter().position(|o| o.tx_id == tx_id) {
-                book.buy_orders.remove(pos);
-
-                log::info!("Order with tx_id {} cancelled from buy orders in market {}", tx_id, market_id);
-                return Ok(true);
+            if book.book.remove(tx_id) {
+                log::info!("Order with tx_id {} cancelled in market {}", tx_id, market_id);
+                Ok(true)
+            } else {
+                log::warn!("Order with tx_id {} not found in market {}", tx_id, market_id);
+                Ok(false)
             }
-
-            // Try to find and remove the order from sell orders
-            if let Some(pos) = book.sell_orders.iter().position(|o| o.tx_id == tx_id) {
-                book.sell_orders.remove(pos);
-
-                log::info!("Order with tx_id {} cancelled from sell orders in market {}", tx_id, market_id);
-                return Ok(true);
-            }
-
-            log::warn!("Order with tx_id {} not found in market {}", tx_id, market_id);
-            Ok(false)
         } else {
             Err("Market not found".into())
         }
@@ -177,64 +118,49 @@ impl OrderBookService {
 
     pub async fn get_orders_for_user(&self, evm_address: &str) -> Result<Vec<CreateOrderRequestClob>, Box<dyn std::error::Error>> {
         // No guards for performance - assume validated upstream
-
+        let wanted = evm_address.trim_start_matches("0x").to_ascii_lowercase();
         let order_books = self.order_books.read().await;
         let mut user_orders = Vec::new();
 
         for (_market_id, order_book) in order_books.iter() {
             let book = order_book.read().await;
-
-            // Check buy orders
-            for order in &book.buy_orders {
-                if order.account_id.eq_ignore_ascii_case(evm_address) {
-                    user_orders.push(order.clone());
-                }
-            }
-
-            // Check sell orders
-            for order in &book.sell_orders {
-                if order.account_id.eq_ignore_ascii_case(evm_address) {
-                    user_orders.push(order.clone());
-                }
-            }
+            user_orders.extend(
+                book.book
+                    .orders()
+                    .filter(|o| o.evm_address.trim_start_matches("0x").eq_ignore_ascii_case(&wanted))
+                    .cloned(),
+            );
         }
 
         Ok(user_orders)
     }
 
-    pub async fn get_tv_pending_usd(&self) -> Result<f64, Box<dyn std::error::Error>> {
+    /// Collateral (smallest units) committed by resting orders: each order's unfilled
+    /// shares valued at its limit, YES shares at the YES price and NO shares at its complement.
+    pub async fn get_tv_pending_units(&self) -> Result<u128, Box<dyn std::error::Error>> {
         // No guards for performance - assume validated upstream
-
         let order_books = self.order_books.read().await;
-        let mut total_value = 0.0;
+        let mut total: u128 = 0;
 
         for (_market_id, order_book) in order_books.iter() {
-            // log::info!("Calculating TV Pending USD for market {}", _market_id);
             let book = order_book.read().await;
-
-            for order in &book.buy_orders {
-                total_value += order.price_usd.abs() * order.qty_rem;
-            }
-
-            for order in &book.sell_orders {
-                total_value += order.price_usd.abs() * order.qty_rem;
+            for order in book.book.orders() {
+                let token_price = if order.side == 0 { order.limit_yes_price } else { PRICE_SCALE - order.limit_yes_price.min(PRICE_SCALE) };
+                total += matching::remaining_shares(order) as u128 * token_price as u128 / PRICE_SCALE as u128;
             }
         }
-        log::info!("tv_pending (USDC) across all markets: {}", total_value);
-        Ok(total_value)
+        log::info!("tv_pending (collateral units) across all markets: {}", total);
+        Ok(total)
     }
 
-    pub async fn get_market_depth_qty(&self, market_id: &str) -> Result<(f64, f64), Box<dyn std::error::Error>> {
+    /// Unfilled shares resting on each side: (bids, asks).
+    pub async fn get_market_depth_shares(&self, market_id: &str) -> Result<(u64, u64), Box<dyn std::error::Error>> {
         // No guards for performance - assume validated upstream
-
         let order_books = self.order_books.read().await;
         if let Some(order_book) = order_books.get(&market_id.to_lowercase()) {
             let book = order_book.read().await;
-
-            let buy_depth_qty: f64 = book.buy_orders.iter().map(|o| o.qty_rem).sum();
-            let sell_depth_qty: f64 = book.sell_orders.iter().map(|o| o.qty_rem).sum();
-
-            Ok((buy_depth_qty, sell_depth_qty))
+            let sum = |orders: &Vec<CreateOrderRequestClob>| orders.iter().fold(0u64, |acc, o| acc.saturating_add(matching::remaining_shares(o)));
+            Ok((sum(&book.book.bids), sum(&book.book.asks)))
         } else {
             Err(format!("Market not found {}", market_id).into())
         }
@@ -242,7 +168,6 @@ impl OrderBookService {
 
     pub async fn close_market(&self, market_id: &str) -> Result<bool, Box<dyn std::error::Error>> {
         // No guards for performance - assume validated upstream
-
         let mut order_books = self.order_books.write().await;
         if order_books.remove(&market_id.to_lowercase()).is_some() {
             log::info!("Market {} closed and removed from OrderBookService", market_id);
@@ -256,16 +181,14 @@ impl OrderBookService {
 
 #[derive(Debug)]
 pub struct OrderBook {
-    buy_orders: Vec<CreateOrderRequestClob>,
-    sell_orders: Vec<CreateOrderRequestClob>,
+    book: Book,
     nats_service: Arc<nats::NatsService> // wrap in arc to make cloning cheap
 }
 
 impl OrderBook {
     pub fn new(nats_service: &nats::NatsService) -> Self {
         Self {
-            buy_orders: Vec::new(),
-            sell_orders: Vec::new(),
+            book: Book::default(),
             nats_service: Arc::new(nats_service.clone()),
         }
     }
@@ -273,183 +196,48 @@ impl OrderBook {
     pub async fn add_order(&mut self, order: CreateOrderRequestClob) {
         // No guards for performance - assume validated upstream
 
-        log::info!("CREATE \t CreateOrderRequestClob: {:?}", order); // Log the incoming order
+        // Do not log the complete order: it contains a reusable signature.
+        log::info!("CREATE tx_id={} market_id={} account_id={}", order.tx_id, order.market_id, order.account_id);
 
-        if order.price_usd < 0.0 {
-            Self::match_order(&self.nats_service, order, &mut self.buy_orders, &mut self.sell_orders).await;
-        } else {
-            Self::match_order(&self.nats_service, order, &mut self.sell_orders, &mut self.buy_orders).await;
+        let now = chrono::Utc::now().timestamp().max(0) as u64;
+        let matches = self.book.add(order, now);
+
+        // Publish while holding the book lock so fills reach settlement in the order
+        // they happened. Each fill has a deterministic message ID, so a retry is deduplicated.
+        for m in matches {
+            log::info!(
+                "MATCH market_id={} bid={} ask={} shares={} price={}",
+                m.market_id,
+                m.bid.as_ref().map(|o| o.tx_id.as_str()).unwrap_or(""),
+                m.ask.as_ref().map(|o| o.tx_id.as_str()).unwrap_or(""),
+                m.fill_shares,
+                m.execution_yes_price,
+            );
+            self.nats_service.publish_match_with_retry(&m).await;
         }
-    }
-
-    async fn match_order(nats_service: &nats::NatsService, mut incoming_order: CreateOrderRequestClob, opposite_orders: &mut Vec<CreateOrderRequestClob>, same_side_orders: &mut Vec<CreateOrderRequestClob>) {
-        // No guards for performance - assume validated upstream
-
-        // Price-time priority by side:
-        // - incoming BUY matches lowest ask first (ask prices are stored as negative, compare by abs asc)
-        // - incoming SELL matches highest bid first (bid prices are stored as positive, compare desc)
-        if incoming_order.price_usd > 0.0 {
-            opposite_orders.sort_by(|a, b| a.price_usd.abs().partial_cmp(&b.price_usd.abs()).unwrap());
-        } else {
-            opposite_orders.sort_by(|a, b| b.price_usd.partial_cmp(&a.price_usd).unwrap());
-        }
-
-        let i = 0;
-        while i < opposite_orders.len() {
-            let existing_order = &mut opposite_orders[i];
-
-            // // Prevent self-trading: skip matching against the same account or wallet.
-            // if incoming_order.evm_address.eq_ignore_ascii_case(&existing_order.evm_address) ||
-            //    incoming_order.account_id.eq_ignore_ascii_case(&existing_order.account_id) {
-            //     i += 1;
-            //     continue;
-            // }
-
-            // Match based on price constraints
-            if (incoming_order.price_usd > 0.0 && incoming_order.price_usd >= existing_order.price_usd.abs()) ||
-               (incoming_order.price_usd < 0.0 && existing_order.price_usd >= incoming_order.price_usd.abs()) {
-
-                if incoming_order.qty_rem <= existing_order.qty_rem {
-                    // Incoming fully consumed; existing may still have remainder.
-                    let matched_qty = incoming_order.qty_rem;
-                    let existing_remainder = existing_order.qty_rem - matched_qty;
-
-                    let orc1 = {
-                        let mut order = incoming_order.clone();
-                        order.qty_rem = matched_qty;
-                        order
-                    };
-                    let orc2 = {
-                        let mut order = existing_order.clone();
-                        order.qty_rem = matched_qty;
-                        order
-                    };
-
-                    existing_order.qty_rem -= incoming_order.qty_rem;
-                    if existing_order.qty_rem.abs() < 1e-3 { // small EPSILON to account for floating point precision
-                        opposite_orders.remove(i);
-                    }
-
-                    log::info!("MATCH \t OrderRequestClob: {:?}", incoming_order);
-
-                    let nats_clone = nats_service.clone();
-                    tokio::spawn(async move {
-                        // // ensure the positive price order is always first!
-                        // let (first, second) = if orc1.price_usd >= 0.0 {
-                        //     (orc1, orc2)
-                        // } else {
-                        //     (orc2, orc1)
-                        // };
-                        let is_partial_match = existing_remainder.abs() >= 1e-3;
-                        if let Err(e) = nats_clone.publish_match(is_partial_match, &orc1, &orc2).await {
-                            log::error!("NATS\tFailed to publish match: {}", e);
-                        }
-                    });
-                    
-                    return;
-                } else {
-                    // Existing fully consumed; incoming still has remainder.
-                    let matched_qty = existing_order.qty_rem;
-                    let incoming_before_match = {
-                        let mut order = incoming_order.clone();
-                        order.qty_rem = matched_qty;
-                        order
-                    };
-                    let orc2 = {
-                        let mut order = existing_order.clone();
-                        order.qty_rem = matched_qty;
-                        order
-                    };
-                    incoming_order.qty_rem -= matched_qty;
-                    opposite_orders.remove(i);
-
-                    log::info!("MATCH_PARTIAL \t Remaining incoming order quantity: {}", incoming_order.qty_rem);
-
-                    let nats_clone = nats_service.clone();
-                    tokio::spawn(async move {
-                        if let Err(e) = nats_clone.publish_match(true, &incoming_before_match, &orc2).await {
-                            log::error!("NATS\tFailed to publish (partial) match: {}", e);
-                        }
-                    });
-                    continue; // Continue searching for additional matches (partial match)
-                }
-            } else {
-                // No match possible due to price constraint
-                break;
-            }
-        }
-
-        // If no match, add to the respective order book // log::info!("No match found, adding to same side orders: {:?}", incoming_order);
-        same_side_orders.push(incoming_order);
     }
 
     pub fn snapshot(&self, depth: usize) -> BookSnapshot {
         // No guards for performance - assume validated upstream
-
         let effective_depth = if depth == 0 { usize::MAX } else { depth }; // depth = 0 -> return everything
 
+        let detail = |order: &CreateOrderRequestClob| OrderDetail {
+            tx_id: order.tx_id.clone(),
+            account_id: order.account_id.clone(),
+            limit_yes_price: order.limit_yes_price,
+            shares_remaining: matching::remaining_shares(order),
+            side: order.side,
+            action: order.action,
+        };
+
+        let mut bids: Vec<&CreateOrderRequestClob> = self.book.bids.iter().collect();
+        let mut asks: Vec<&CreateOrderRequestClob> = self.book.asks.iter().collect();
+        bids.sort_by(|a, b| b.limit_yes_price.cmp(&a.limit_yes_price)); // best (highest) bid first
+        asks.sort_by_key(|o| o.limit_yes_price); // best (lowest) ask first
+
         BookSnapshot {
-            bids: self.buy_orders.iter().map(|order| OrderDetail {
-                tx_id: order.tx_id.clone(),
-                account_id: order.account_id.clone(),
-                price_usd: order.price_usd,
-                qty: order.qty_rem,
-                ps: order.primary_secondary.clone(),
-            }).collect(),
-            asks: self.sell_orders.iter().map(|order| OrderDetail {
-                tx_id: order.tx_id.clone(),
-                account_id: order.account_id.clone(),
-                price_usd: order.price_usd,
-                qty: order.qty_rem,
-                ps: order.primary_secondary.clone(),
-            }).take(effective_depth).collect(),
+            bids: bids.into_iter().take(effective_depth).map(|o| detail(o)).collect(),
+            asks: asks.into_iter().take(effective_depth).map(|o| detail(o)).collect(),
         }
     }
-
-    // // Scan to find matches in the order book
-    // // This function runs periodically
-    // pub async fn scan_for_matches(&mut self) {
-    //     log::info!("SCAN \t Scanning orderbook for matches...");
-
-    //     // Sort buy orders by price descending (highest first)
-    //     self.buy_orders.sort_by(|a, b| b.price_usd.partial_cmp(&a.price_usd).unwrap());
-    //     // Sort sell orders by price ascending (lowest first)
-    //     self.sell_orders.sort_by(|a, b| a.price_usd.partial_cmp(&b.price_usd).unwrap());
-
-    //     // Attempt to match all sell orders with buy orders
-    //     let mut i = 0;
-    //     while i < self.sell_orders.len() {
-    //         let sell_order = self.sell_orders[i].clone();
-
-    //         // Check if the sell order can be matched with the highest buy order
-    //         if let Some(highest_buy_order) = self.buy_orders.first() {
-    //             if sell_order.price_usd.abs() <= highest_buy_order.price_usd {
-    //                 self.sell_orders.remove(i);
-    //                 Self::match_order(&self.nats_service, sell_order, &mut self.buy_orders, &mut self.sell_orders).await;
-    //                 continue; // Recheck the current index after removal
-    //             }
-    //         }
-
-    //         i += 1; // Move to the next sell order if no match
-    //     }
-
-    //     // Attempt to match all buy orders with sell orders
-    //     let mut i = 0;
-    //     while i < self.buy_orders.len() {
-    //         let buy_order = self.buy_orders[i].clone();
-
-    //         // Check if the buy order can be matched with the lowest sell order
-    //         if let Some(lowest_sell_order) = self.sell_orders.first() {
-    //             if buy_order.price_usd >= lowest_sell_order.price_usd.abs() {
-    //                 self.buy_orders.remove(i);
-    //                 Self::match_order(&self.nats_service, buy_order, &mut self.sell_orders, &mut self.buy_orders).await;
-    //                 continue; // Recheck the current index after removal
-    //             }
-    //         }
-
-    //         i += 1; // Move to the next buy order if no match
-    //     }
-
-    //     log::info!("SCAN \t Complete.");
-    // }
 }

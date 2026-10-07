@@ -1,9 +1,9 @@
 name: push deployment files to S3
 
+# Deployment remains manual until the staging AWS OIDC role and isolated
+# deployment bucket described in docs/STAGING_V2_AWS_CHECKLIST.md exist.
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 
 jobs:
@@ -12,10 +12,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
-        with:
-          submodules: true  # N.B. fetch submodules
-          token: ${{ secrets.READ_REPO }}
+        uses: actions/checkout@v5
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v3

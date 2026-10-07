@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 
 	pb_api "api/gen"
 	repositories "api/server/repositories"
@@ -562,6 +563,8 @@ func main() {
 		"DB_NAME",
 		"DB_MAX_ROWS",
 		"NATS_URL",
+		"NATS_USER",
+		"NATS_PASSWORD",
 		"TIMESTAMP_ALLOWED_PAST_SECONDS",
 		"TIMESTAMP_ALLOWED_FUTURE_SECONDS",
 		"SEND_EMAIL",
@@ -609,6 +612,16 @@ func main() {
 
 	if len(missing) > 0 {
 		fatal("Missing required environment variables: %v", missing)
+	}
+
+	// Orders are refused on any network without a complete PrismV2 configuration.
+	for _, net := range strings.Split(vals["AVAILABLE_NETWORKS"], ",") {
+		if net = strings.TrimSpace(net); net == "" {
+			continue
+		}
+		if _, err := lib.GetPrismV2Network(net); err != nil {
+			lib.Log(lib.LOG_WARN, "PrismV2 is not configured for %s; orders on it will be refused: %v", net, err)
+		}
 	}
 
 	var err error

@@ -410,26 +410,12 @@ UUID7=$(printf '%08x-%04x-7%03x-%x%03x-%012x\n' \
   $(( RANDOM<<24 | RANDOM<<12 | RANDOM )) )
 ```
 
-Create `SIG`:
-
-Ensure openssl and jq are available:
-
-`which openssl jq`
+Placing an order needs a PrismV2 authorization signed by the account's key. See
+[docs/PRISM_V2_ORDER_PROTOCOL.md](../docs/PRISM_V2_ORDER_PROTOCOL.md) for the signing
+procedure, a reference vector and the request format, then:
 
 ```bash
-grpcurl -plaintext -import-path ./proto -proto api.proto -d '{"txid": "'$UUID7'", "marketId": "'$UUID7'", "accountId": "'$ACCOUNT_ID'", "buySell": '$BUYSELL', "sig": "'$SIG'", "priceUsd": '$PRICE_USD', "nShares": '$N_SHARES', "sig": "'$SIG'", "generated_at": "'$UTC'"}' localhost:8888 api.ApiService.PredictIntent
+grpcurl -plaintext -import-path ./proto -proto api.proto -d "$PAYLOAD" localhost:8888 api.ApiServicePublic/CreatePredictionIntent
 # notice how the validation takes place!
-
-```
-
-Or...
-
-Grab the JSON.stringified payload from the console.log:
-
-```bash
-export API_PORT=8888
-export PAYLOAD='{"txid":"019a2bc2-d729-7407-acb7-fff6e81daa11","marketId":"019a2bc2-d729-7407-acb8-003b2e4fe475","generated_at":"2025-10-28T16:59:40.713Z","accountId":"0.0.7090546","buySell":"buy","priceUsd":0.5,"nShares":10,"sig":""}'
-
-grpcurl -plaintext -import-path ./proto -proto api.proto -d $PAYLOAD localhost:$API_PORT api.ApiService.PredictIntent
 ```
 

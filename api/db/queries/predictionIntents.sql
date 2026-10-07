@@ -1,8 +1,17 @@
 -- CREATE
 
 -- name: CreatePredictionIntent :one
-INSERT INTO prediction_intents (tx_id, net, market_id, account_id, price_usd, qty_orig, qty_rem, sig, public_key_hex, evmaddress, keytype, generated_at, primary_secondary)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+-- PrismV2 authorization. price_usd, qty_orig, qty_rem and primary_secondary are
+-- derived display/analytics values; the signed integer columns are authoritative.
+INSERT INTO prediction_intents (
+    tx_id, net, market_id, account_id, price_usd, qty_orig, qty_rem, sig, public_key_hex, evmaddress, keytype, generated_at, primary_secondary,
+    protocol_version, chain_id, verifying_contract, side, action, limit_yes_price, qty_shares, collateral_cap, deadline
+)
+VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+    2, sqlc.arg(chain_id), sqlc.arg(verifying_contract), sqlc.arg(side), sqlc.arg(action), sqlc.arg(limit_yes_price),
+    sqlc.arg(qty_shares)::numeric, sqlc.arg(collateral_cap)::numeric, sqlc.arg(deadline)
+)
 RETURNING *;
 
 
@@ -102,15 +111,18 @@ AND m.deleted_at IS NULL;
 
 -- UPDATE
 
--- name: DecrementPredictionIntentQtyRem :one
+-- name: AddPredictionIntentFill :one
+-- Applies one finalized on-chain fill. qty_rem is kept as the derived remaining quantity.
 UPDATE prediction_intents
-SET qty_rem = GREATEST(qty_rem - $3, 0.0),
+SET shares_filled = shares_filled + sqlc.arg(fill_shares)::numeric,
+    collateral_filled = collateral_filled + sqlc.arg(fill_collateral)::numeric,
+    qty_rem = GREATEST((qty_shares - shares_filled - sqlc.arg(fill_shares)::numeric)::float8 / sqlc.arg(unit_scale)::float8, 0.0),
     updated_at = CURRENT_TIMESTAMP,
     fully_matched_at = CASE
-        WHEN GREATEST(qty_rem - $3, 0.0) <= 0.000000001 THEN COALESCE(fully_matched_at, CURRENT_TIMESTAMP)
+        WHEN shares_filled + sqlc.arg(fill_shares)::numeric >= qty_shares THEN COALESCE(fully_matched_at, CURRENT_TIMESTAMP)
         ELSE fully_matched_at
     END
-WHERE market_id = $1 AND tx_id = $2
+WHERE tx_id = sqlc.arg(tx_id) AND protocol_version = 2
 RETURNING *;
 
 -- name: MarkPredictionIntentAsRegenerated :exec
@@ -130,9 +142,9 @@ SET evicted_at = CURRENT_TIMESTAMP
 WHERE tx_id = $1;
 
 -- name: MarkPredictionIntentAsRedeemedForAccount :exec
-UPDATE prediction_intents -- updates all rows where market_id=$1 and evmaddress=$2
+UPDATE prediction_intents -- updates all rows where market_id=$1 and evmaddress matches $2 (case and 0x insensitive)
 SET redeemed_at = CURRENT_TIMESTAMP
-WHERE market_id = $1 AND evmaddress = $2;
+WHERE market_id = $1 AND lower(replace(evmaddress, '0x', '')) = lower(replace(sqlc.arg(evmaddress), '0x', ''));
 
 
 

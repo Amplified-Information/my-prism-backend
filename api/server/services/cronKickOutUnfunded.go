@@ -5,9 +5,7 @@ import (
 	"api/server/lib"
 	repositories "api/server/repositories"
 	"fmt"
-	"math"
 	"os"
-	"strconv"
 	"strings"
 
 	hiero "github.com/hiero-ledger/hiero-sdk-go/v2/sdk"
@@ -80,39 +78,25 @@ func (cs *CronKickOutUnfundedService) KickOutOrderIntentsNotBackedByFunds() {
 				continue
 			}
 
-			usdcAddressStr := os.Getenv(fmt.Sprintf("%s_USDC_ADDRESS", strings.ToUpper(market.Net)))
-			usdcDecimalsStr := os.Getenv("USDC_DECIMALS")
-
-			if usdcAddressStr == "" || usdcDecimalsStr == "" {
-				lib.Log(lib.LOG_ERROR, "USDC_ADDRESS or USDC_DECIMALS environment variable is not set")
-				continue
-			}
-			usdcDecimals, err := strconv.ParseUint(usdcDecimalsStr, 10, 64)
+			usdcAddress, err := hiero.ContractIDFromString(os.Getenv(fmt.Sprintf("%s_USDC_ADDRESS", strings.ToUpper(market.Net))))
 			if err != nil {
-				lib.Log(lib.LOG_ERROR, "invalid USDC_DECIMALS: %v", err)
-				continue
-			}
-			usdcAddress, err := hiero.ContractIDFromString(usdcAddressStr)
-			if err != nil {
-				lib.Log(lib.LOG_ERROR, "invalid USDC address: %v", err)
+				lib.Log(lib.LOG_ERROR, "invalid %s_USDC_ADDRESS: %v", strings.ToUpper(market.Net), err)
 				continue
 			}
 
-			allowance, err := lib.GetSpenderAllowanceUsd(*net, accountId, smartContractId, usdcAddress, usdcDecimals)
+			// BUY orders spend collateral: they need both a token balance and an allowance to the contract.
+			allowance, err := lib.GetSpenderAllowance(*net, accountId, smartContractId, usdcAddress)
 			if err != nil {
 				lib.Log(lib.LOG_ERROR, "Failed to fetch allowance for account ID %s: %v", accountIdStr, err)
 				continue
 			}
-			lib.Log(lib.LOG_INFO, "-> Account ID %s has allowance %f", accountIdStr, allowance)
-
-			usdcBalanceInt64, err := lib.GetUsdcBalanceUsd(*net, accountId)
+			usdcBalance, err := lib.GetUsdcBalanceUsd(*net, accountId) // smallest units
 			if err != nil {
 				lib.Log(lib.LOG_ERROR, "Failed to fetch USDC balance for account ID %s: %v", accountIdStr, err)
 				continue
 			}
-			usdcBalance := float64(usdcBalanceInt64) / math.Pow(10, float64(usdcDecimals))
-
-			lib.Log(lib.LOG_INFO, "-> Account ID %s has USDC balance %f", accountIdStr, usdcBalance)
+			available := min(allowance, usdcBalance)
+			lib.Log(lib.LOG_INFO, "-> Account ID %s: allowance=%d balance=%d (collateral units)", accountIdStr, allowance, usdcBalance)
 
 			// retrieve all live orderIntents for this market, for this specific accountId
 			usersOpenPredictionIntents, err := cs.predictionIntentsRepository.GetAllOpenPredictionIntentsByMarketIdAndAccountId(market.MarketID, accountIdStr)
@@ -121,117 +105,82 @@ func (cs *CronKickOutUnfundedService) KickOutOrderIntentsNotBackedByFunds() {
 				continue
 			}
 
-			var txIds []string
+			var buyOrders, sellOrders []sqlc.PredictionIntent
 			for _, pi := range usersOpenPredictionIntents {
-				txIds = append(txIds, pi.TxID.String())
-			}
-			lib.Log(lib.LOG_INFO, "usersOpenPredictionIntents (%d): %v", len(usersOpenPredictionIntents), txIds)
-
-			// Separate primary and secondary orders
-			var primaryOrders, secondaryOrders []sqlc.PredictionIntent
-			for _, pi := range usersOpenPredictionIntents {
-				if pi.PrimarySecondary == "p" {
-					primaryOrders = append(primaryOrders, pi)
+				if lib.Action(pi.Action.Int16) == lib.ActionBUY {
+					buyOrders = append(buyOrders, pi)
 				} else {
-					secondaryOrders = append(secondaryOrders, pi)
+					sellOrders = append(sellOrders, pi)
 				}
 			}
 
-			// Validate primary orders (USDC-backed)
-			cs.validateAndKickoutPrimaryOrders(primaryOrders, &market, accountIdStr, usdcBalance, allowance)
-
-			// Validate secondary orders (position token-backed)
-			if len(secondaryOrders) > 0 {
-				cs.validateAndKickoutSecondaryOrders(secondaryOrders, &market, accountIdStr, *net)
+			cs.validateAndKickoutBuyOrders(buyOrders, &market, accountIdStr, available)
+			if len(sellOrders) > 0 {
+				cs.validateAndKickoutSellOrders(sellOrders, &market, smartContractId)
 			}
 		}
 	}
 }
-func (cs *CronKickOutUnfundedService) validateAndKickoutPrimaryOrders(primaryOrders []sqlc.PredictionIntent, market *sqlc.Market, accountIdStr string, usdcBalance float64, allowance float64) {
-	sumTotalOfAllPrimaryIntents := 0.0
-	for _, pi := range primaryOrders {
-		lib.Log(lib.LOG_INFO, "[primary] processing txId=%s", pi.TxID.String())
-			sumTotalOfAllPrimaryIntents += (math.Abs(pi.PriceUsd) * pi.QtyRem)
-		if sumTotalOfAllPrimaryIntents > usdcBalance {
-			_, err := cs.predictionIntentsService.CancelPredictionIntentNoSigCheck(market.MarketID.String(), pi.TxID.String())
-			if err != nil {
-				lib.Log(lib.LOG_ERROR, "Failed to cancel primary prediction intent txId %s for market ID %s and account ID %s: %v", pi.TxID.String(), market.MarketID, accountIdStr, err)
-				continue
-			}
-			lib.Log(lib.LOG_WARN, "-> Cancelled primary prediction intent txId %s for market ID %s and account ID %s due to insufficient USDC (total required: %f, balance: %f)", pi.TxID.String(), market.MarketID, accountIdStr, sumTotalOfAllPrimaryIntents, usdcBalance)
 
-			err = cs.predictionIntentsRepository.MarkPredictionIntentAsEvicted(pi.TxID)
-			if err != nil {
-				lib.Log(lib.LOG_ERROR, "Failed to mark as evicted prediction intent txId %s: %v", pi.TxID.String(), err)
-				continue
-			}
-			lib.Log(lib.LOG_WARN, "-> Marked as evicted prediction intent txId %s", pi.TxID.String())
+// validateAndKickoutBuyOrders evicts BUY orders, oldest first kept, once the remaining
+// collateral caps of the user's open BUYs exceed what the contract can pull from them.
+func (cs *CronKickOutUnfundedService) validateAndKickoutBuyOrders(buyOrders []sqlc.PredictionIntent, market *sqlc.Market, accountIdStr string, available uint64) {
+	var required uint64
+	for _, pi := range buyOrders {
+		order, err := clobOrderFromIntent(&pi)
+		if err != nil {
+			lib.Log(lib.LOG_ERROR, "[buy] skipping txId=%s: %v", pi.TxID, err)
+			continue
+		}
+		if order.CollateralCap > order.CollateralFilled {
+			required += order.CollateralCap - order.CollateralFilled
+		}
+		if required > available {
+			cs.evict(market, pi, fmt.Sprintf("insufficient collateral (required %d, available %d)", required, available))
 		}
 	}
 }
 
-func (cs *CronKickOutUnfundedService) validateAndKickoutSecondaryOrders(secondaryOrders []sqlc.PredictionIntent, market *sqlc.Market, accountIdStr string, net hiero.LedgerID) {
-	if len(secondaryOrders) == 0 {
-		return
-	}
-
-	template := secondaryOrders[0]
-	evmAddress := template.Evmaddress
-
-	// yesTokens, noTokens, err := cs.hederaService.GetUserPositionTokenBalanceOnChain(net, market.MarketID.String(), evmAddress)
-	yesTokens, noTokens, err := cs.hederaService.GetUserPositionTokenBalanceFromDb(market.MarketID.String(), evmAddress)
+// validateAndKickoutSellOrders evicts SELL orders when the user's on-chain YES or NO
+// balance no longer covers the unfilled quantity of their open SELLs on that side.
+func (cs *CronKickOutUnfundedService) validateAndKickoutSellOrders(sellOrders []sqlc.PredictionIntent, market *sqlc.Market, contractId hiero.ContractID) {
+	evmAddress := sellOrders[0].Evmaddress
+	yesBalance, noBalance, err := cs.hederaService.GetUserPositionBalancesV2(market.Net, contractId, market.MarketID.String(), evmAddress)
 	if err != nil {
-		lib.Log(lib.LOG_ERROR, "Failed to get position token balance for account %s on market %s: %v", evmAddress, market.MarketID, err)
+		lib.Log(lib.LOG_ERROR, "Failed to get position balances for %s on market %s: %v", evmAddress, market.MarketID, err)
 		return
 	}
-	lib.Log(lib.LOG_INFO, "[secondary] User %s has YES=%.8f NO=%.8f tokens on market %s", evmAddress, yesTokens, noTokens, market.MarketID)
 
-	var sumYesRequired, sumNoRequired float64
-	for _, pi := range secondaryOrders {
-		lib.Log(lib.LOG_INFO, "[secondary] processing txId=%s with priceUsd=%.2f qtyOrig=%.8f qtyRem=%.8f", pi.TxID.String(), pi.PriceUsd, pi.QtyOrig, pi.QtyRem)
-
-		if pi.PriceUsd < 0 {
-			sumYesRequired += pi.QtyRem
+	var requiredYes, requiredNo uint64
+	for _, pi := range sellOrders {
+		order, err := clobOrderFromIntent(&pi)
+		if err != nil {
+			lib.Log(lib.LOG_ERROR, "[sell] skipping txId=%s: %v", pi.TxID, err)
+			continue
+		}
+		remaining := order.QtyShares - order.SharesFilled
+		if lib.Side(order.Side) == lib.SideYES {
+			requiredYes += remaining
+			if requiredYes > yesBalance {
+				cs.evict(market, pi, fmt.Sprintf("insufficient YES shares (required %d, have %d)", requiredYes, yesBalance))
+			}
 		} else {
-			sumNoRequired += pi.QtyRem
-		}
-	}
-
-	lib.Log(lib.LOG_INFO, "[secondary] Required: YES=%.8f NO=%.8f | Have: YES=%.8f NO=%.8f", sumYesRequired, sumNoRequired, yesTokens, noTokens)
-
-	if sumYesRequired > yesTokens {
-		for _, pi := range secondaryOrders {
-			if pi.PriceUsd < 0 {
-				_, err := cs.predictionIntentsService.CancelPredictionIntentNoSigCheck(market.MarketID.String(), pi.TxID.String())
-				if err != nil {
-					lib.Log(lib.LOG_ERROR, "Failed to cancel secondary YES prediction intent txId %s: %v", pi.TxID.String(), err)
-					continue
-				}
-				lib.Log(lib.LOG_WARN, "-> Cancelled secondary YES prediction intent txId %s due to insufficient YES tokens (required: %.8f, have: %.8f)", pi.TxID.String(), sumYesRequired, yesTokens)
-
-				err = cs.predictionIntentsRepository.MarkPredictionIntentAsEvicted(pi.TxID)
-				if err != nil {
-					lib.Log(lib.LOG_ERROR, "Failed to mark as evicted prediction intent txId %s: %v", pi.TxID.String(), err)
-				}
+			requiredNo += remaining
+			if requiredNo > noBalance {
+				cs.evict(market, pi, fmt.Sprintf("insufficient NO shares (required %d, have %d)", requiredNo, noBalance))
 			}
 		}
 	}
+}
 
-	if sumNoRequired > noTokens {
-		for _, pi := range secondaryOrders {
-			if pi.PriceUsd > 0 {
-				_, err := cs.predictionIntentsService.CancelPredictionIntentNoSigCheck(market.MarketID.String(), pi.TxID.String())
-				if err != nil {
-					lib.Log(lib.LOG_ERROR, "Failed to cancel secondary NO prediction intent txId %s: %v", pi.TxID.String(), err)
-					continue
-				}
-				lib.Log(lib.LOG_WARN, "-> Cancelled secondary NO prediction intent txId %s due to insufficient NO tokens (required: %.8f, have: %.8f)", pi.TxID.String(), sumNoRequired, noTokens)
-
-				err = cs.predictionIntentsRepository.MarkPredictionIntentAsEvicted(pi.TxID)
-				if err != nil {
-					lib.Log(lib.LOG_ERROR, "Failed to mark as evicted prediction intent txId %s: %v", pi.TxID.String(), err)
-				}
-			}
-		}
+func (cs *CronKickOutUnfundedService) evict(market *sqlc.Market, pi sqlc.PredictionIntent, reason string) {
+	if _, err := cs.predictionIntentsService.CancelPredictionIntentNoSigCheck(market.MarketID.String(), pi.TxID.String()); err != nil {
+		lib.Log(lib.LOG_ERROR, "Failed to cancel prediction intent txId %s: %v", pi.TxID.String(), err)
+		return
 	}
+	if err := cs.predictionIntentsRepository.MarkPredictionIntentAsEvicted(pi.TxID); err != nil {
+		lib.Log(lib.LOG_ERROR, "Failed to mark as evicted prediction intent txId %s: %v", pi.TxID.String(), err)
+		return
+	}
+	lib.Log(lib.LOG_WARN, "-> Evicted prediction intent txId %s on market %s: %s", pi.TxID.String(), market.MarketID, reason)
 }

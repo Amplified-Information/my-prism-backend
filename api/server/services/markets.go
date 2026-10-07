@@ -5,13 +5,10 @@ import (
 	sqlc "api/gen/sqlc"
 	"api/server/lib"
 	repositories "api/server/repositories"
-	"fmt"
 	"os"
 	"strconv"
 	"strings"
 	"time"
-
-	hiero "github.com/hiero-ledger/hiero-sdk-go/v2/sdk"
 )
 
 type MarketsService struct {
@@ -162,21 +159,15 @@ func (ms *MarketsService) CreateMarket(req *pb_api.CreateMarketRequest) (*pb_api
 		closesAt = closesAtTime
 	}
 
-	remainingAllowance, err := ms.hederaService.CreateNewMarket(req.MarketId, req.Statement, req.Net)
+	contractID, err := ms.hederaService.CreateNewMarket(req.MarketId, req.Statement, req.Net, closesAt)
 	if err != nil {
 		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to create new market (marketId=%s) on Hedera: %v", req.MarketId, err)
 	}
+	remainingAllowance := uint64(0) // PrismV2 charges no market creation fee
 
 	err = lib.CreateMarketOnClob(req.MarketId)
 	if err != nil {
 		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to create new market (marketId=%s) on CLOB: %v", req.MarketId, err)
-	}
-
-	contractID, err := hiero.ContractIDFromString(
-		os.Getenv(fmt.Sprintf("%s_SMART_CONTRACT_ID", strings.ToUpper(req.Net))),
-	)
-	if err != nil {
-		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to parse smart contract id for net %s: %v", req.Net, err)
 	}
 
 	// categoryIds := []int32{} // v1 endpoint compatibility: empty array
@@ -265,10 +256,11 @@ func (ms *MarketsService) CreateMarketv2(req *pb_api.CreateMarketv2Request) (*pb
 
 	// Step 1:
 	// create a market on the **smart contract** - return with error if it fails
-	remainingAllowance, err := ms.hederaService.CreateNewMarket(req.MarketId, req.Statement, req.Net)
+	contractID, err := ms.hederaService.CreateNewMarket(req.MarketId, req.Statement, req.Net, closesAt)
 	if err != nil {
 		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to create new market (marketId=%s) on Hedera: %v", req.MarketId, err)
 	}
+	remainingAllowance := uint64(0) // PrismV2 charges no market creation fee
 
 	// Step 2:
 	// create market on the **CLOB**
@@ -278,11 +270,7 @@ func (ms *MarketsService) CreateMarketv2(req *pb_api.CreateMarketv2Request) (*pb
 	}
 
 	// Step 3:
-	// now record the tx on the **db**
-	contractID, err := hiero.ContractIDFromString(
-		// YES, use the current X_SMART_CONTRACT_ID loaded from env vars - we're creating a new market
-		os.Getenv(fmt.Sprintf("%s_SMART_CONTRACT_ID", strings.ToUpper(req.Net))),
-	)
+	// now record the market on the **db**
 	market, err := ms.marketsRepository.CreateMarket(req.MarketId, req.Net, imgUrl, req.Statement, closesAt, req.Description, req.Rules, contractID.String(), aliasYes, aliasNo, hexColorYes, hexColorNo, isLomEnabled)
 	if err != nil {
 		return nil, lib.LogAndError(lib.LOG_ERROR, "failed to create a new market row (marketId=%s) on the db: %v", req.MarketId, err)
@@ -415,17 +403,13 @@ func (ms *MarketsService) ResolveMarket(marketId string, outcome int32) (bool, e
 		return false, lib.LogAndError(lib.LOG_ERROR, "failed to get market by id: %v", err)
 	}
 
-	// step 1 - resolve on the smart contract
-	isOK, err := ms.hederaService.ResolveMarketOnChain(market.Net, marketId, market.SmartContractID, outcome)
-	if err != nil {
+	// step 1 - resolve (outcome 0 or 1) or void (outcome 2) on the smart contract
+	if err := ms.hederaService.ResolveMarketOnChain(market.Net, marketId, market.SmartContractID, outcome); err != nil {
 		return false, lib.LogAndError(lib.LOG_ERROR, "failed to resolve market on chain: %v", err)
-	}
-	if !isOK {
-		return false, lib.LogAndError(lib.LOG_ERROR, "transaction failed to execute on chain for unknown reasons")
 	}
 
 	// step 2 - mark as resolved on the db
-	isOK, err = ms.marketsRepository.ResolveMarket(marketId, outcome)
+	isOK, err := ms.marketsRepository.ResolveMarket(marketId, outcome)
 	if err != nil {
 		return false, lib.LogAndError(lib.LOG_ERROR, "failed to resolve market on db: %v", err)
 	}

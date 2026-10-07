@@ -38,7 +38,11 @@ FROM nats:2.12-alpine
 # EXPOSE $NATS_PORT
 # EXPOSE $NATS_CLUSTER_PORT
 
-CMD ["nats-server"]
+COPY nats-server.conf /etc/nats/nats-server.conf
+
+EXPOSE 4222 8222
+
+CMD ["nats-server", "-c", "/etc/nats/nats-server.conf"]
 # , \
 #   "--port", "${NATS_PORT}", \
 #   "--cluster", "nats://${NATS_CLUSTER_NAME}:${NATS_CLUSTER_PORT}", \

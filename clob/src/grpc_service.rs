@@ -126,11 +126,12 @@ impl ClobInternal for ClobService {
         &self,
         _request: Request<crate::orderbook::proto::Empty>,
     ) -> Result<Response<crate::orderbook::proto::StdResponse>, Status> {
-        let tv_pending_usd = self.order_book_service.get_tv_pending_usd().await;
-        match tv_pending_usd {
-            Ok(tv_pending_usd) => {
+        // Collateral smallest units; the API converts to USD with USDC_DECIMALS.
+        let tv_pending_units = self.order_book_service.get_tv_pending_units().await;
+        match tv_pending_units {
+            Ok(tv_pending_units) => {
                 let response = crate::orderbook::proto::StdResponse {
-                    message: tv_pending_usd.to_string(),
+                    message: tv_pending_units.to_string(),
                     error_code: 0,
                 };
                 Ok(Response::new(response))
@@ -147,12 +148,12 @@ impl ClobInternal for ClobService {
         _request: Request<crate::orderbook::proto::MarketIdRequest>,
     ) -> Result<Response<crate::orderbook::proto::MarketDepthQtyResponse>, Status> {
         let inner = _request.into_inner();
-        let market_depth_qty = self.order_book_service.get_market_depth_qty(&inner.market_id).await;
-        match market_depth_qty {
-            Ok((qty_bid, qty_ask)) => {
+        let market_depth = self.order_book_service.get_market_depth_shares(&inner.market_id).await;
+        match market_depth {
+            Ok((shares_bid, shares_ask)) => {
                 let response = crate::orderbook::proto::MarketDepthQtyResponse {
-                    qty_bid,
-                    qty_ask,
+                    shares_bid,
+                    shares_ask,
                 };
                 Ok(Response::new(response))
             },

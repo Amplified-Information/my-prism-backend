@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -37,6 +35,7 @@ func (pis *PredictionIntentsService) Init(dbRepository *repositories.DbRepositor
 	pis.predictionIntentsRepository = predictionIntentRepository
 
 	pis.natsService = natsService
+	go pis.runOrderOutbox()
 	// pis.hederaService = hederaService
 
 	lib.Log(lib.LOG_INFO, "Service: PredictionIntents service initialized successfully, %p", pis)
@@ -44,40 +43,49 @@ func (pis *PredictionIntentsService) Init(dbRepository *repositories.DbRepositor
 	return nil
 }
 
+// minOrderLifetime rejects authorizations that would expire before they could settle.
+const minOrderLifetime = 60 * time.Second
+
+// CreatePredictionIntent accepts a signed PrismV2 Authorization. It checks everything
+// the contract will check (domain, limits, signature) plus funding, then commits the
+// order and its CLOB outbox message atomically.
 func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PrismPredictionIntentRequest) (string, error) {
 	/////
 	// validations
 	/////
-	// Validate account ID format and minimum account number
+	netSelectedByUser := strings.ToLower(req.Net)
+	if !lib.IsValidNetwork(netSelectedByUser) {
+		return "", lib.LogAndError(lib.LOG_ERROR, "invalid network: %s", req.Net)
+	}
+	cfg, err := lib.GetPrismV2Network(netSelectedByUser)
+	if err != nil {
+		return "", lib.LogAndError(lib.LOG_ERROR, "PrismV2 is not configured for %s: %v", netSelectedByUser, err)
+	}
+
 	accountId, err := hiero.AccountIDFromString(req.AccountId)
 	if err != nil {
 		return "Invalid accountId format", err
 	}
 
-	// Validate timestamp is within the last TIMESTAMP_ALLOWED_PAST_SECONDS seconds
-	timestamp, err := time.Parse(time.RFC3339, req.GeneratedAt)
-	if err != nil {
-		return "", lib.LogAndError(lib.LOG_ERROR, "invalid timestamp format: %v", err)
+	// The authorization must be bound to this network's chain and PrismV2 proxy.
+	if req.ChainId != cfg.ChainID {
+		return "", lib.LogAndError(lib.LOG_ERROR, "chainId %d does not match %s (%d)", req.ChainId, netSelectedByUser, cfg.ChainID)
+	}
+	if !strings.EqualFold(req.VerifyingContract, cfg.ProxyAddress) {
+		return "", lib.LogAndError(lib.LOG_ERROR, "verifyingContract %s is not the PrismV2 proxy %s", req.VerifyingContract, cfg.ProxyAddress)
 	}
 
+	auth, err := lib.NewAuthorizationV2(req.ChainId, req.VerifyingContract, req.EvmAddress, req.MarketId, req.TxId, req.Side, req.Action, req.LimitYesPrice, req.QtyShares, req.CollateralCap, req.Deadline)
+	if err != nil {
+		return "", lib.LogAndError(lib.LOG_ERROR, "invalid authorization: %v", err)
+	}
 	now := time.Now().UTC()
-	allowedPastSeconds, err := strconv.Atoi(os.Getenv("TIMESTAMP_ALLOWED_PAST_SECONDS"))
-	if err != nil {
-		return "", lib.LogAndError(lib.LOG_ERROR, "invalid TIMESTAMP_ALLOWED_PAST_SECONDS environment variable: %v", err)
+	if req.Deadline < uint64(now.Add(minOrderLifetime).Unix()) {
+		return "", lib.LogAndError(lib.LOG_ERROR, "deadline %d is in the past or less than %s away", req.Deadline, minOrderLifetime)
 	}
-	allowedFutureSeconds, err := strconv.Atoi(os.Getenv("TIMESTAMP_ALLOWED_FUTURE_SECONDS"))
-	if err != nil {
-		return "", lib.LogAndError(lib.LOG_ERROR, "invalid TIMESTAMP_ALLOWED_FUTURE_SECONDS environment variable: %v", err)
-	}
-	pastDelta := now.Add(-1 * time.Duration(allowedPastSeconds) * time.Second)
-	futureDelta := now.Add(time.Duration(allowedFutureSeconds) * time.Second)
-
-	if timestamp.Before(pastDelta) {
-		return "", lib.LogAndError(lib.LOG_ERROR, "timestamp is too old: %s", req.GeneratedAt)
-	}
-
-	if timestamp.After(futureDelta) {
-		return "", lib.LogAndError(lib.LOG_ERROR, "timestamp is too far in the future: %s. Now: %s", req.GeneratedAt, now)
+	isBid := lib.IsBid(auth.Side, auth.Action)
+	if (isBid && req.LimitYesPrice == 0) || (!isBid && req.LimitYesPrice == lib.PriceScale) {
+		return "", lib.LogAndError(lib.LOG_ERROR, "limitYesPrice %d can never be filled for this side and action", req.LimitYesPrice)
 	}
 
 	// check we haven't received this txid previously
@@ -94,25 +102,15 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PrismPre
 		return "", lib.LogAndError(lib.LOG_ERROR, "duplicate txId: %s", req.TxId)
 	}
 
-	// validate that the network sent is valid
-	netSelectedByUser := strings.ToLower(req.Net)
-	if !lib.IsValidNetwork(netSelectedByUser) {
-		return "", lib.LogAndError(lib.LOG_ERROR, "invalid network: %s", req.Net)
-	}
-
-	// First look up the Hedera accountId against the mirror node
+	// The public key must belong to the account, and the signer address must be that
+	// account: PrismV2 asks the Hedera Account Service to check the signature for the signer.
 	publicKeyLookedUp, keyTypeLookedUp, err := lib.GetPublicKey(accountId, netSelectedByUser)
 	if err != nil {
 		return "", lib.LogAndError(lib.LOG_ERROR, "failed to get public key: %v", err)
 	}
-	lib.Log(lib.LOG_INFO, "Mirror node response for account %s on network %s: %s", accountId, netSelectedByUser, publicKeyLookedUp.String())
-
-	// keyType sent from the front-end (no 0x prefix) must match the keyType looked up on the mirror node
-	if !lib.IsValidKeyType(req.KeyType) {
+	if !lib.IsValidKeyType(req.KeyType) || lib.HederaKeyType(req.KeyType) != keyTypeLookedUp {
 		return "", lib.LogAndError(lib.LOG_ERROR, "keyType mismatch: expected %d, got %d", keyTypeLookedUp, req.KeyType)
 	}
-
-	// public key sent from the front-end (no 0x prefix) must match the public key looked up on the mirror node
 	publicKey, err := hiero.PublicKeyFromString(req.PublicKey)
 	if err != nil {
 		return "", lib.LogAndError(lib.LOG_ERROR, "failed to parse public key from string: %v", err)
@@ -120,37 +118,28 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PrismPre
 	if publicKeyLookedUp.String() != publicKey.String() || publicKey.String() == "" {
 		return "", lib.LogAndError(lib.LOG_ERROR, "public key mismatch: expected %s, got %s", publicKeyLookedUp.String(), publicKey.String())
 	}
-
-	// Now it's safe to proceed with the publicKey passed from the frontend...
-	usdcDecimals, err := strconv.ParseUint(os.Getenv("USDC_DECIMALS"), 10, 64)
+	ledger, err := hiero.LedgerIDFromString(netSelectedByUser)
 	if err != nil {
-		return "", lib.LogAndError(lib.LOG_ERROR, "failed to parse USDC_DECIMALS: %v", err)
+		return "", lib.LogAndError(lib.LOG_ERROR, "failed to get network selected: %v", err)
+	}
+	signerAccount, err := lib.EvmAddressToHederaAccountId(*ledger, req.EvmAddress)
+	if err != nil {
+		return "", lib.LogAndError(lib.LOG_ERROR, "failed to resolve signer address %s: %v", req.EvmAddress, err)
+	}
+	if signerAccount.String() != accountId.String() {
+		return "", lib.LogAndError(lib.LOG_ERROR, "signer address %s belongs to %s, not %s", req.EvmAddress, signerAccount, accountId)
 	}
 
-	payloadHex, err := lib.AssemblePayloadHexForSigning(req, usdcDecimals)
-	if err != nil {
-		return "", lib.LogAndError(lib.LOG_ERROR, "failed to extract payload for signing: %v", err)
-	}
-	// N.B. treat the hex string as a Utf8 string - don't want the hex conversion to remove leading zeros!!!
-	payloadUtf8 := payloadHex // Yes, this is intentional
-	lib.Log(lib.LOG_INFO, "payloadUtf8: %s", payloadUtf8)
-
-	isValidSig, err := lib.VerifySig(&publicKey, payloadUtf8, req.Sig)
+	isValidSig, err := auth.VerifySignature(&publicKey, req.Sig)
 	if err != nil {
 		return "", lib.LogAndError(lib.LOG_ERROR, "failed to verify signature: %v", err)
 	}
 	if !isValidSig {
 		return "", lib.LogAndError(lib.LOG_ERROR, "invalid signature for account %s", req.AccountId)
 	}
-	// if we get here, the sig is valid
 	lib.Log(lib.LOG_INFO, "**Signature is valid for account %s**", req.AccountId)
 
-	// Ensure user has provided enough of an allowance
-	_networkSelected, err := hiero.LedgerIDFromString(netSelectedByUser)
-	if err != nil {
-		return "", lib.LogAndError(lib.LOG_ERROR, "failed to get network selected: %v", err)
-	}
-
+	// The market must be tradeable in the database and OPEN on the PrismV2 proxy.
 	tradeable, err := pis.marketsRepository.IsMarketTradeable(req.MarketId)
 	if err != nil {
 		return "", lib.LogAndError(lib.LOG_ERROR, "failed to determine whether market %s is tradeable: %v", req.MarketId, err)
@@ -158,200 +147,136 @@ func (pis *PredictionIntentsService) CreatePredictionIntent(req *pb_api.PrismPre
 	if !tradeable {
 		return "", lib.LogAndError(lib.LOG_ERROR, "market %s is not tradeable (it may be resolved, closed, paused, suspended, or deleted)", req.MarketId)
 	}
-
 	market, err := pis.marketsRepository.GetMarketById(req.MarketId, true)
 	if err != nil {
 		return "", lib.LogAndError(lib.LOG_ERROR, "failed to get tradeable market %s: %v", req.MarketId, err)
 	}
-	_smartContractId, err := hiero.ContractIDFromString(market.SmartContractID)
+	if market.SmartContractID != cfg.ContractID.String() {
+		return "", lib.LogAndError(lib.LOG_ERROR, "market %s is on contract %s, not the PrismV2 proxy %s", req.MarketId, market.SmartContractID, cfg.ContractID)
+	}
+	onChain, err := lib.GetMarketV2(netSelectedByUser, cfg.ContractID, auth.MarketID)
 	if err != nil {
-		return "", lib.LogAndError(lib.LOG_ERROR, "failed to validate smart contract ID from market %s: %v", req.MarketId, err)
+		return "", lib.LogAndError(lib.LOG_ERROR, "failed to read market %s from PrismV2: %v", req.MarketId, err)
+	}
+	if onChain.State != lib.MarketOpen || onChain.CloseTime <= uint64(now.Unix()) {
+		return "", lib.LogAndError(lib.LOG_ERROR, "market %s is not open for trading on PrismV2 (state %s, closes %d)", req.MarketId, onChain.State, onChain.CloseTime)
 	}
 
-	// if it's a market order, ensure there's enough liquidity in the orderbook to fill the order - if not, reject the order to avoid user frustration of having a partially filled market order and then having to cancel the remaining qty
-	if math.Abs(req.PriceUsd) == 1.0 {
-		// - get the orderbook depth
-		// - if size is greater than the available liquidity, reject the order to avoid user frustration of having a partially filled market order and then having to cancel the remaining qty
-		qty, err := pis.getAvailableLiquidityUsdForMarket(req.PriceUsd, req.MarketId)
+	// A limit at the extreme of the range is a market order: refuse it unless the
+	// book can fill it now, rather than leave the user with a partial fill to cancel.
+	if (isBid && req.LimitYesPrice == lib.PriceScale) || (!isBid && req.LimitYesPrice == 0) {
+		available, err := pis.getAvailableLiquiditySharesForMarket(isBid, req.MarketId)
 		if err != nil {
 			return "", lib.LogAndError(lib.LOG_ERROR, "failed to get available liquidity for market %s: %v", req.MarketId, err)
 		}
-		if req.Qty > qty {
-			return "", lib.LogAndError(lib.LOG_ERROR, "order quantity %f exceeds available liquidity %f for market %s", req.Qty, qty, req.MarketId)
+		if req.QtyShares > available {
+			return "", lib.LogAndError(lib.LOG_ERROR, "order quantity %d exceeds available liquidity %d for market %s", req.QtyShares, available, req.MarketId)
 		}
 	}
 
-	switch req.PrimarySecondary {
-	case "p":
-		// primary orders - only check collateral (USDC) allowance when it's a primary order
-		// secondary orders don't require collateral to be posted to the contract - instead, the user transfers their position tokens to the contract
-		// check that they have enough position tokens for secondary orders in a separate check below (if req.PrimarySecondary == "s")
-
-		// read USDC address from env var
+	if auth.Action == lib.ActionBUY {
+		// A BUY can spend up to collateralCap: the user must have allowed and hold that much.
 		usdcAddress, err := hiero.ContractIDFromString(os.Getenv(fmt.Sprintf("%s_USDC_ADDRESS", strings.ToUpper(netSelectedByUser))))
 		if err != nil {
 			return "", lib.LogAndError(lib.LOG_ERROR, "failed to validate %s_USDC_ADDRESS: %v", strings.ToUpper(netSelectedByUser), err)
 		}
-
-		// ensure user has provided enough of an allowance to the smart contract:
-		spenderAllowanceUsd, err := lib.GetSpenderAllowanceUsd(*_networkSelected, accountId, _smartContractId, usdcAddress, usdcDecimals)
+		allowance, err := lib.GetSpenderAllowance(*ledger, accountId, cfg.ContractID, usdcAddress)
 		if err != nil {
 			return "", lib.LogAndError(lib.LOG_ERROR, "failed to get spender allowance: %v", err)
 		}
-		lib.Log(lib.LOG_INFO, "Spender allowance for account %s on contract %s: $%.2f", accountId.String(), _smartContractId.String(), spenderAllowanceUsd)
-
-		// amountBeingSpentUsd := math.Abs(req.PriceUsd * req.Qty) // Don't do this. This is incorrect! (e.g. -0.99 price_usd with qty 10 is a big USDC number that needs large allowance)
-		amountBeingSpentUsd := req.PriceUsd * req.Qty
-		if req.PriceUsd < 0.0 {
-			amountBeingSpentUsd = (1 - math.Abs(req.PriceUsd)) * req.Qty
+		if allowance < req.CollateralCap {
+			return "", lib.LogAndError(lib.LOG_ERROR, "allowance %d to %s is below the order's collateral cap %d", allowance, cfg.ContractID, req.CollateralCap)
 		}
-		if spenderAllowanceUsd < amountBeingSpentUsd {
-			return "", lib.LogAndError(lib.LOG_ERROR, "Spender allowance is $USD%.2f (USDC token: %s) on smartContractId=%s, which is too low for this predictionIntent ($USD%.2f, price_usd=%.2f)", spenderAllowanceUsd, usdcAddress.String(), _smartContractId.String(), amountBeingSpentUsd, req.PriceUsd)
-		}
-
-		// ensure the spenderAllowanceUsd is <= usdc balance currently in the user's wallet
-		currentUserBalanceUsdcInt64, err := lib.GetUsdcBalanceUsd(*_networkSelected, accountId)
+		balance, err := lib.GetUsdcBalanceUsd(*ledger, accountId) // smallest units
 		if err != nil {
 			return "", lib.LogAndError(lib.LOG_ERROR, "failed to get user's USDC balance: %v", err)
 		}
-		currentUserBalanceUsdc := float64(currentUserBalanceUsdcInt64) / math.Pow(10, float64(usdcDecimals))
-
-		lib.Log(lib.LOG_INFO, "Current USDC balance for account %s: $%.2f", accountId.String(), currentUserBalanceUsdc)
-		lib.Log(lib.LOG_INFO, "Spender allowance for account %s: $%.2f", accountId.String(), spenderAllowanceUsd)
-		if spenderAllowanceUsd <= currentUserBalanceUsdc {
-			// OK
-		} else {
-			if amountBeingSpentUsd <= currentUserBalanceUsdc {
-				// this is also OK - let's not warn the user that their allowance is higher than their balance
-			} else {
-				return "", lib.LogAndError(lib.LOG_ERROR, "Spender allowance ($USD%.2f) is greater than than the user's balance ($USD%.2f)", spenderAllowanceUsd, currentUserBalanceUsdc)
-			}
+		if balance < req.CollateralCap {
+			return "", lib.LogAndError(lib.LOG_ERROR, "USDC balance %d is below the order's collateral cap %d", balance, req.CollateralCap)
 		}
-		// OK if we got here
-		lib.Log(lib.LOG_INFO, "[primary] User has enough allowance and balance to cover this order of $USD%.2f", amountBeingSpentUsd)
-	case "s":
-		// secondary orders - additional checks for secondary orders
-		// ensure (on-chain read-only check) that the user has enough position tokens to cover their (secondary) predictionIntent
-		// this transfer will be attempted on-chain and will fail if there aren't enough position tokens to transfer, even if this API-side check fails
-		// sign convention for secondary orders:
-		// - positive price_usd => SELL/NO (requires NO tokens)
-		// - negative price_usd => SELL/YES (requires YES tokens)
-		lib.Log(lib.LOG_INFO, "[secondary] sign convention: positive price_usd => SELL/NO, negative price_usd => SELL/YES. Incoming price_usd=%.8f", req.PriceUsd)
-
-		// get user position tokens balance for this market
-		// call: getUserTokens(uint128 marketId, address user)
-		// nYesPositionTokens, nNoPositionTokens, err := pis.natsService.hederaService.GetUserPositionTokenBalanceOnChain(*_networkSelected, req.MarketId, req.EvmAddress)
-		nYesPositionTokens, nNoPositionTokens, err := pis.natsService.hederaService.GetUserPositionTokenBalanceFromDb(req.MarketId, req.EvmAddress)
+	} else {
+		// A SELL needs the shares on chain, net of the user's other open SELLs on that side.
+		yesBalance, noBalance, err := pis.natsService.hederaService.GetUserPositionBalancesV2(netSelectedByUser, cfg.ContractID, req.MarketId, req.EvmAddress)
 		if err != nil {
-			return "", lib.LogAndError(lib.LOG_ERROR, "failed to get user's position token balance: %v", err)
+			return "", lib.LogAndError(lib.LOG_ERROR, "failed to get position balances: %v", err)
 		}
-		lib.Log(lib.LOG_INFO, "[secondary] User has %.8f 'yes' position tokens and %.8f 'no' position tokens on market %s", nYesPositionTokens, nNoPositionTokens, req.MarketId)
-
-		marketUUID, err := uuid.Parse(req.MarketId)
+		held := yesBalance
+		if auth.Side == lib.SideNO {
+			held = noBalance
+		}
+		openOrders, err := pis.predictionIntentsRepository.GetAllOpenPredictionIntentsByMarketIdAndAccountId(auth.MarketID, req.AccountId)
 		if err != nil {
-			return "", lib.LogAndError(lib.LOG_ERROR, "invalid marketId uuid: %v", err)
+			return "", lib.LogAndError(lib.LOG_ERROR, "failed to load existing open orders: %v", err)
 		}
-		// yes, from the db is sufficient; we are not querying the CLOB here:
-		existingOpenIntents, err := pis.predictionIntentsRepository.GetAllOpenPredictionIntentsByMarketIdAndAccountId(marketUUID, req.AccountId)
-		if err != nil {
-			return "", lib.LogAndError(lib.LOG_ERROR, "failed to load existing open intents for marketId=%s accountId=%s: %v", req.MarketId, req.AccountId, err)
-		}
-
-		reservedSecondaryYesQty := 0.0
-		reservedSecondaryNoQty := 0.0
-		for _, existingIntent := range existingOpenIntents {
-			if existingIntent.PrimarySecondary != "s" {
+		reserved := uint64(0)
+		for _, row := range openOrders {
+			order, err := clobOrderFromIntent(&row)
+			if err != nil || lib.Action(order.Action) != lib.ActionSELL || lib.Side(order.Side) != auth.Side {
 				continue
 			}
-
-			matchedQtyForIntent, err := pis.predictionIntentsRepository.GetMatchedQtyForPredictionIntent(marketUUID, existingIntent.TxID)
-			if err != nil {
-				return "", lib.LogAndError(lib.LOG_ERROR, "failed to load matched qty for txId=%s in marketId=%s: %v", existingIntent.TxID.String(), req.MarketId, err)
-			}
-
-			remainingQtyForIntent := existingIntent.QtyRem - matchedQtyForIntent
-			if remainingQtyForIntent < 0 {
-				// Guard against minor drift from eventual consistency or floating point accumulation.
-				remainingQtyForIntent = 0
-			}
-
-			if existingIntent.PriceUsd > 0 {
-				reservedSecondaryNoQty += remainingQtyForIntent
-			} else {
-				reservedSecondaryYesQty += remainingQtyForIntent
-			}
+			reserved += order.QtyShares - order.SharesFilled
 		}
-
-		if req.PriceUsd > 0 {
-			// this is a secondary NO order - the user transfers NO tokens to the contract
-			requiredNoQty := reservedSecondaryNoQty + req.Qty
-			if nNoPositionTokens >= requiredNoQty {
-				// OK - user has enough "no" position tokens to cover this secondary NO order
-				lib.Log(lib.LOG_INFO, "[secondary] User has %.8f 'no' position tokens for market %s, existing reserved secondary NO=%.8f, new order=%.8f, required total=%.8f", nNoPositionTokens, req.MarketId, reservedSecondaryNoQty, req.Qty, requiredNoQty)
-			} else {
-				return "", lib.LogAndError(lib.LOG_ERROR, "user has %.8f 'no' position tokens but needs %.8f total (existing number of reserved secondary NO position tokens = %.8f. This order requests an additional %.8f NO position tokens)", nNoPositionTokens, requiredNoQty, reservedSecondaryNoQty, req.Qty)
-			}
-		} else {
-			// this is a secondary YES order - the user transfers YES tokens to the contract
-			requiredYesQty := reservedSecondaryYesQty + req.Qty
-			if nYesPositionTokens >= requiredYesQty {
-				// OK - user has enough "yes" position tokens to cover this secondary YES order
-				lib.Log(lib.LOG_INFO, "[secondary] User has %.8f 'yes' position tokens for market %s, existing reserved secondary YES=%.8f, new order=%.8f, required total=%.8f", nYesPositionTokens, req.MarketId, reservedSecondaryYesQty, req.Qty, requiredYesQty)
-			} else {
-				return "", lib.LogAndError(lib.LOG_ERROR, "user has %.8f 'yes' position tokens but needs %.8f total (existing number of reserved secondary YES position tokens = %.8f. This order requests an additional %.8f YES position tokens)", nYesPositionTokens, requiredYesQty, reservedSecondaryYesQty, req.Qty)
-			}
+		if reserved+req.QtyShares > held {
+			return "", lib.LogAndError(lib.LOG_ERROR, "insufficient shares: holding %d, %d reserved by open sells, order needs %d", held, reserved, req.QtyShares)
 		}
-	default:
-		return "", lib.LogAndError(lib.LOG_ERROR, "invalid PrimarySecondary value: %s. Must be 'p' for primary or 's' for secondary.", req.PrimarySecondary)
 	}
 
 	/////
-	///// OK - All validations passed
+	///// OK - All validations passed: commit the order and notify the CLOB via the outbox
 	/////
-	// Now you can (attempt to) put the order on the CLOB (subject to on-chain sig verification)
-
-	/////
-	// notify the CLOB via NATS:
-	/////
-
-	// Marshal the CLOB req: *pb_api.PredictionIntentRequest to JSON
+	unitScale, err := lib.CollateralUnitScale()
+	if err != nil {
+		return "", lib.LogAndError(lib.LOG_ERROR, "%v", err)
+	}
 	clobRequestObj := &pb_clob.CreateOrderRequestClob{
-		TxId:             req.TxId,
-		Net:              req.Net,
-		MarketId:         req.MarketId,
-		AccountId:        req.AccountId,
-		PriceUsd:         req.PriceUsd,
-		QtyRem:           req.Qty, // the clob will decrement this value over time as matches occur
-		QtyOrig:          req.Qty, // need to keep track of the original qty for on/off-chain signature validation
-		Sig:              req.Sig,
-		PublicKey:        req.PublicKey, // passing extra key info - i) avoid lookups ii) handle situation where user has changed their key
-		EvmAddress:       req.EvmAddress,
-		KeyType:          int32(req.KeyType),
-		PrimarySecondary: req.PrimarySecondary,
+		TxId:              req.TxId,
+		Net:               netSelectedByUser,
+		MarketId:          req.MarketId,
+		AccountId:         req.AccountId,
+		Sig:               req.Sig,
+		PublicKey:         req.PublicKey, // passing extra key info - i) avoid lookups ii) handle situation where user has changed their key
+		EvmAddress:        req.EvmAddress,
+		KeyType:           int32(req.KeyType),
+		ChainId:           req.ChainId,
+		VerifyingContract: strings.ToLower(req.VerifyingContract),
+		Side:              req.Side,
+		Action:            req.Action,
+		LimitYesPrice:     req.LimitYesPrice,
+		QtyShares:         req.QtyShares,
+		CollateralCap:     req.CollateralCap,
+		Deadline:          req.Deadline,
 	}
 	clobRequestJSON, err := json.Marshal(clobRequestObj)
 	if err != nil {
 		return "", lib.LogAndError(lib.LOG_ERROR, "failed to marshal CLOB request: %v", err)
 	}
 
-	// Publish the message to NATS:
-	err = pis.natsService.Publish(lib.SUBJECT_CLOB_ORDERS, clobRequestJSON)
-	if err != nil {
-		return "", lib.LogAndError(lib.LOG_ERROR, "failed to publish to NATS: %v", err)
-	}
-
-	lib.Log(lib.LOG_INFO, "Published order to NATS subject '%s': %s", lib.SUBJECT_CLOB_ORDERS, string(clobRequestJSON))
-
-	/////
-	// finally, store the predictionIntent object in the database (after successfully publishing notification to the CLOB)
-	/////
-	// store the OrderRequest in the database - the txid must be unique or this fails
-	_, err = pis.predictionIntentsRepository.CreateOrderIntentRequest(req)
+	// Commit the order and outbox atomically before publication. The background
+	// dispatcher retries until NATS acknowledges the message.
+	_, err = pis.predictionIntentsRepository.CreateOrderIntentRequestWithOutbox(req, float64(unitScale), lib.SUBJECT_CLOB_ORDERS, clobRequestJSON)
 	if err != nil {
 		return "", lib.LogAndError(lib.LOG_ERROR, "database error: failed to save order request: %v", err)
 	}
 
-	return fmt.Sprintf("txId submitted to CLOB for matching %s", req.TxId), nil
+	return fmt.Sprintf("txId accepted for durable CLOB delivery %s", req.TxId), nil
+}
+
+func (pis *PredictionIntentsService) runOrderOutbox() {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		records, err := pis.predictionIntentsRepository.PendingOrderOutbox(100)
+		if err != nil { lib.Log(lib.LOG_ERROR, "order outbox poll failed: %v", err); continue }
+		for _, record := range records {
+			if err := pis.natsService.PublishWithID(record.Subject, record.Payload, record.TxID.String()); err != nil {
+				_ = pis.predictionIntentsRepository.RecordOrderOutboxFailure(record.ID, err)
+				continue
+			}
+			if err := pis.predictionIntentsRepository.MarkOrderOutboxDelivered(record.ID); err != nil {
+				lib.Log(lib.LOG_ERROR, "failed to mark order outbox delivered (id=%d): %v", record.ID, err)
+			}
+		}
+	}
 }
 
 func (pis *PredictionIntentsService) CancelPredictionIntent(net string, marketId string, txId string, accountIdStr string, sigBase64 string, publicKeyStr string, keyType uint32) (*pb_api.StdResponse, error) {
@@ -523,19 +448,27 @@ func (pis *PredictionIntentsService) GetAllPredictionIntents(limit int32, offset
 	var pbPredictionIntents []*pb_api.PrismPredictionIntentRequest
 	for _, pi := range predictionIntents {
 
+		order, err := clobOrderFromIntent(&pi)
+		if err != nil {
+			continue // legacy V1 rows have no authorization to show
+		}
 		pbPredictionIntents = append(pbPredictionIntents, &pb_api.PrismPredictionIntentRequest{
-			TxId:             pi.TxID.String(),
-			Net:              pi.Net,
-			MarketId:         pi.MarketID.String(),
-			AccountId:        pi.AccountID,
-			PriceUsd:         pi.PriceUsd,
-			Qty:              pi.QtyRem,
-			Sig:              pi.Sig,
-			PublicKey:        pi.PublicKeyHex,
-			EvmAddress:       pi.Evmaddress,
-			KeyType:          uint32(pi.Keytype),
-			GeneratedAt:      pi.GeneratedAt.Format(time.RFC3339),
-			PrimarySecondary: pi.PrimarySecondary,
+			TxId:              order.TxId,
+			Net:               order.Net,
+			MarketId:          order.MarketId,
+			AccountId:         order.AccountId,
+			Sig:               order.Sig,
+			PublicKey:         order.PublicKey,
+			EvmAddress:        order.EvmAddress,
+			KeyType:           uint32(order.KeyType),
+			ChainId:           order.ChainId,
+			VerifyingContract: order.VerifyingContract,
+			Side:              order.Side,
+			Action:            order.Action,
+			LimitYesPrice:     order.LimitYesPrice,
+			QtyShares:         order.QtyShares,
+			CollateralCap:     order.CollateralCap,
+			Deadline:          order.Deadline,
 		})
 	}
 
@@ -545,15 +478,9 @@ func (pis *PredictionIntentsService) GetAllPredictionIntents(limit int32, offset
 	}, nil
 }
 
-/*
-*
-this function returs the available Usd liquidity in the orderbook (for a market order)
-*/
-func (pis *PredictionIntentsService) getAvailableLiquidityUsdForMarket(priceUsd float64, marketId string) (float64, error) {
-	if math.Abs(priceUsd) != 1.0 {
-		return 0.0, lib.LogAndError(lib.LOG_ERROR, "priceUsd must be either 1.0 (for buy/long orders) or -1.0 (for sell/short orders)")
-	}
-
+// getAvailableLiquiditySharesForMarket returns the resting shares a market order can
+// take: the asks for an incoming bid, the bids for an incoming ask.
+func (pis *PredictionIntentsService) getAvailableLiquiditySharesForMarket(incomingIsBid bool, marketId string) (uint64, error) {
 	clobAddr := os.Getenv("CLOB_HOST") + ":" + os.Getenv("CLOB_PORT")
 
 	conn, err := grpc.NewClient(clobAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -570,17 +497,13 @@ func (pis *PredictionIntentsService) getAvailableLiquidityUsdForMarket(priceUsd 
 		},
 	)
 	if err != nil {
-		return 0, lib.LogAndError(lib.LOG_ERROR, "failed to get market depth qty from CLOB (%s): %v", clobAddr, err)
+		return 0, lib.LogAndError(lib.LOG_ERROR, "failed to get market depth from CLOB (%s): %v", clobAddr, err)
 	}
 
-	qty := 0.0
-	if priceUsd > 0 {
-		qty = result.QtyBid
-	} else {
-		qty = result.QtyAsk
+	if incomingIsBid {
+		return result.SharesAsk, nil
 	}
-
-	return qty, nil
+	return result.SharesBid, nil
 }
 
 func (pis *PredictionIntentsService) GetTxHashes(txId string) (*pb_api.TxIdHashesResponse, error) {
