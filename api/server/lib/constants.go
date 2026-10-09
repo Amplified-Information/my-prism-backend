@@ -19,12 +19,15 @@ const (
 
 var VolumeResolutionPeriods = []string{"1h", "24h", "7d", "30d"}
 
-// Legacy V1 order-signing scheme date ranges. Only reported in MacroMetadata;
-// PrismV2 orders are signed as lib.AuthorizationV2 (see docs/PRISM_V2_ORDER_PROTOCOL.md).
+// Order-signing scheme date ranges, reported in MacroMetadata. Clients compare the
+// active entry with the scheme they sign and refuse to place orders on a mismatch.
+// v2 is the PrismV2 authorization (lib.AuthorizationV2, see docs/PRISM_V2_ORDER_PROTOCOL.md);
+// v0 and v1 are the removed floating-point schemes.
 // N.B: the index in the array is the version number
 var SigSchemeDateRanges = [][2]int64{
-	{0, 1763904000},          // v0: 1st Jan 1970 00:00:00 to 22nd Mar 2026 00:00:00
-	{1763904000, 2147483647}, // v1: 22nd Mar 2026 00:00:00 to 19th Jan 2038 03:14:07 (max 32-bit int)
+	{0, 1763904000},          // v0: 1st Jan 1970 00:00:00 to 23rd Nov 2025 13:20:00
+	{1763904000, 1791417600}, // v1: 23rd Nov 2025 13:20:00 to 8th Oct 2026 00:00:00
+	{1791417600, 2147483647}, // v2: 8th Oct 2026 00:00:00 to 19th Jan 2038 03:14:07 (max 32-bit int)
 }
 
 var LIMIT int32 = 50

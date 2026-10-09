@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!--
+    Content Security Policy (defense-in-depth fallback for environments where
+    the nginx-issued CSP header is not present, e.g. Lovable preview).
+    The authoritative CSP is set as an HTTP header in nginx.conf — keep the
+    two policies in sync. `frame-ancestors` and reporting directives are
+    header-only and intentionally omitted here.
+  -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.prism.market https://*.mirrornode.hedera.com https://*.hedera.com wss://*.hedera.com https://*.walletconnect.com https://*.walletconnect.org wss://*.walletconnect.com wss://*.walletconnect.org https://*.reown.com wss://*.reown.com https://*.web3modal.org https://pulse.walletconnect.org https://www.cloudflare.com https://ipapi.co; frame-src 'self' https://*.walletconnect.com https://*.walletconnect.org https://*.reown.com https://*.web3modal.org; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>prism.market</title>
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+
+  <meta name="description" content="Decentralized Prediction Market Protocol - Powered by Hedera" />
+  <meta name="author" content="Prism Market" />
+
+  <meta property="og:title" content="Prism Market" />
+  <meta property="og:description" content="Decentralized Prediction Market Protocol - Powered by Hedera" />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="Prism_banner_smaller.png" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@PrismMarket" />
+  <meta name="twitter:image" content="Prism_banner_smaller.png" />
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module" src="/main.tsx"></script>
+</body>
+</html>

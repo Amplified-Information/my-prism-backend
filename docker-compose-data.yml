@@ -45,7 +45,7 @@ services:
     ports:
       - "6379:6379"
   blocknode:
-    image: ghcr.io/prismmarketlabs/blocknode:0.1.19
+    image: ghcr.io/prismmarketlabs/blocknode:0.1.20
     restart: always
     depends_on:
       eventbus:

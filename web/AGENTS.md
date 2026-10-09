@@ -1,0 +1,1 @@
+- Order units, signing and book parsing for the PrismV2 protocol live only in lib/prismV2.ts; why: one tested place for integer math that must match the backend byte-for-byte.

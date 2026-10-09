@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /$
+Allow: /explore
+Allow: /markets
+Allow: /market/
+Allow: /terms
+Allow: /privacy
+Allow: /contact
+
+Disallow: /portfolio
+Disallow: /create
+Disallow: /login
+
+Sitemap: https://prism.market/sitemap.xml

@@ -1,2 +1,13 @@
 SEND_EMAIL=true
 EMAIL_ADDRESS=development@prism.market
+
+# PrismV2 on testnet (dev only: prod also serves testnet, from the base .config).
+# Proxy 0.0.10917251, deployed 2026-10-07. The API account must hold the operator, owner and oracle roles.
+TESTNET_SMART_CONTRACT_ID=0.0.10917251
+TESTNET_PRISM_V2_PROXY_ADDRESS=720158c9b044b97c8409b4a75fada57f8484faaa
+TESTNET_HEDERA_OPERATOR_ID=0.0.5852902
+TESTNET_HEDERA_OPERATOR_KEY_TYPE=ECDSA
+TESTNET_PUBLIC_KEY=031ea1723fe1ba5ce82302aaba9400dcdeb0f37c3ffe11d94328bbfc6263950a02
+MARKET_CREATION_FEE_USDC=0
+AVAILABLE_NETWORKS=testnet
+AVAILABLE_NETWORKS_ADMIN=testnet

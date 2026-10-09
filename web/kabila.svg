@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Kabila Wallet — Connect</title>
+  <meta name="description" content="Download Kabila Wallet to connect with your favorite DApps on Hedera." />
+  <meta property="og:title" content="Kabila Wallet — Connect" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="icon" type="image/png" href="https://kabila.app/brand/kabila-icon-blue-wc.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Inter", system-ui, -apple-system, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      background: linear-gradient(to bottom, #f8fafc, #f1f5f9);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+
+    .wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2rem;
+      width: 100%;
+      max-width: 384px;
+    }
+
+    /* ── Card ── */
+    .card {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.65);
+      border: 1px solid rgba(226, 232, 240, 0.5);
+      border-radius: 16px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+    }
+
+    /* ── Card header ── */
+    .card-header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+      padding: 2rem 1.25rem 1rem;
+      text-align: center;
+    }
+
+    /* Logo */
+    .logo-wrap {
+      position: relative;
+    }
+    .logo-glow {
+      position: absolute;
+      inset: -12px;
+      border-radius: 16px;
+      background: rgba(59, 130, 246, 0.15);
+      filter: blur(16px);
+    }
+    .logo-box {
+      position: relative;
+      width: 56px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 16px;
+      background: rgba(59, 130, 246, 0.1);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.05);
+    }
+    .logo-box svg {
+      width: 32px;
+      height: 32px;
+      color: #2563eb;
+      fill: currentColor;
+    }
+
+    .card-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      color: #0f172a;
+    }
+    .card-desc {
+      font-size: 0.875rem;
+      color: rgba(100, 116, 139, 0.85);
+      line-height: 1.5;
+      margin-top: 2px;
+    }
+
+    /* ── Card content ── */
+    .card-content {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 0 1.25rem 1.5rem;
+    }
+
+    /* ── Store link ── */
+    .store-link {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      height: 56px;
+      padding: 0 1rem;
+      border-radius: 12px;
+      border: 1px solid rgba(226, 232, 240, 0.6);
+      background: rgba(255, 255, 255, 0.5);
+      text-decoration: none;
+      color: #0f172a;
+      transition: border-color 0.25s, background 0.25s, box-shadow 0.25s;
+      overflow: hidden;
+    }
+    .store-link:hover {
+      border-color: rgba(59, 130, 246, 0.5);
+      background: rgba(239, 246, 255, 0.6);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.08);
+    }
+    .store-link:hover .store-icon {
+      background: rgba(219, 234, 254, 0.8);
+      color: #2563eb;
+    }
+    .store-link:hover .ext-icon {
+      transform: translateX(2px);
+      color: rgba(59, 130, 246, 0.6);
+    }
+
+    .store-icon {
+      flex-shrink: 0;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      background: #f1f5f9;
+      color: #64748b;
+      transition: background 0.25s, color 0.25s;
+    }
+    .store-icon svg {
+      width: 20px;
+      height: 20px;
+      fill: currentColor;
+    }
+
+    .store-text {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      line-height: 1.2;
+    }
+    .store-label {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #0f172a;
+    }
+    .store-sublabel {
+      font-size: 11px;
+      color: #94a3b8;
+    }
+
+    .ext-icon {
+      position: absolute;
+      right: 1rem;
+      width: 14px;
+      height: 14px;
+      color: rgba(148, 163, 184, 0.5);
+      transition: transform 0.25s, color 0.25s;
+      flex-shrink: 0;
+    }
+    .ext-icon svg {
+      width: 14px;
+      height: 14px;
+      stroke: currentColor;
+      fill: none;
+    }
+
+    /* ── Trust badges ── */
+    .trust {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      text-align: center;
+    }
+    .audited-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: rgba(148, 163, 184, 0.65);
+    }
+    .audited-row svg {
+      width: 14px;
+      height: 14px;
+      stroke: currentColor;
+      fill: none;
+      flex-shrink: 0;
+    }
+    .audited-text {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+    .trusted-text {
+      font-size: 11px;
+      color: rgba(148, 163, 184, 0.45);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+
+    <!-- Card -->
+    <div class="card">
+
+      <!-- Header -->
+      <div class="card-header">
+        <div class="logo-wrap">
+          <div class="logo-glow"></div>
+          <div class="logo-box">
+            <svg viewBox="0 0 126 130" xmlns="http://www.w3.org/2000/svg">
+              <path d="M72.94 120.96C70.2333 123.653 66.92 125 63 125C59.08 125 55.7667 123.653 53.06 120.96C50.3534 118.267 49 114.97 49 111.07C49 107.076 50.3534 103.733 53.06 101.04C55.7667 98.3466 59.08 97 63 97C66.92 97 70.2333 98.3466 72.94 101.04C75.6466 103.733 77 107.076 77 111.07C77 114.97 75.6466 118.267 72.94 120.96Z"/>
+              <path d="M118.674 103.623C122.951 109.73 121.467 118.148 115.36 122.425C109.252 126.701 100.834 125.217 96.5579 119.109L69.7767 80.8623L86.2571 57.3261L118.674 103.623Z"/>
+              <path d="M35.0584 7.74303C41.1659 3.4666 49.5837 4.95112 53.8602 11.0585L63.2088 24.409L72.5575 11.0585C76.834 4.9513 85.2519 3.46672 91.3592 7.74303C97.4667 12.0195 98.9511 20.4383 94.6747 26.5458L29.8602 119.109C25.5837 125.217 17.1659 126.701 11.0584 122.425C4.951 118.148 3.46654 109.73 7.74301 103.623L46.7274 47.9462L31.743 26.5448C27.4668 20.4373 28.9511 12.0194 35.0584 7.74303Z"/>
+            </svg>
+          </div>
+        </div>
+        <div>
+          <div class="card-title">Kabila Wallet</div>
+          <div class="card-desc" id="description"></div>
+        </div>
+      </div>
+
+      <!-- Download links -->
+      <div class="card-content">
+
+        <!-- Chrome -->
+        <a id="link-chrome" href="https://chromewebstore.google.com/detail/kabila-wallet/cnoepnljjcacmnjnopbhjelpmfokpijm" target="_blank" rel="noopener noreferrer" class="store-link">
+          <span class="store-icon">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 0C8.21 0 4.831 1.757 2.632 4.501l3.953 6.848A5.454 5.454 0 0 1 12 6.545h10.691A12 12 0 0 0 12 0zM1.931 5.47A11.943 11.943 0 0 0 0 12c0 6.012 4.42 10.991 10.189 11.864l3.953-6.847a5.45 5.45 0 0 1-6.865-2.29zm13.342 2.166a5.446 5.446 0 0 1 1.45 7.09l.002.001h-.002l-5.344 9.257c.206.01.413.016.621.016 6.627 0 12-5.373 12-12 0-1.54-.29-3.011-.818-4.364zM12 10.545A1.455 1.455 0 1 1 12 13.455 1.455 1.455 0 0 1 12 10.545z"/>
+            </svg>
+          </span>
+          <span class="store-text">
+            <span class="store-label" id="chrome-label"></span>
+            <span class="store-sublabel">Chrome Web Store</span>
+          </span>
+          <span class="ext-icon">
+            <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+              <path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+            </svg>
+          </span>
+        </a>
+
+        <!-- App Store -->
+        <a href="https://apps.apple.com/es/app/kabila-wallet/id6467106529" target="_blank" rel="noopener noreferrer" class="store-link">
+          <span class="store-icon">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/>
+            </svg>
+          </span>
+          <span class="store-text">
+            <span class="store-label">App Store</span>
+            <span class="store-sublabel" id="apple-sublabel"></span>
+          </span>
+          <span class="ext-icon">
+            <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+              <path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+            </svg>
+          </span>
+        </a>
+
+        <!-- Google Play -->
+        <a href="https://play.google.com/store/apps/details?id=wallet.kabila.app" target="_blank" rel="noopener noreferrer" class="store-link">
+          <span class="store-icon">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"/>
+            </svg>
+          </span>
+          <span class="store-text">
+            <span class="store-label">Google Play</span>
+            <span class="store-sublabel">Android</span>
+          </span>
+          <span class="ext-icon">
+            <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+              <path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+            </svg>
+          </span>
+        </a>
+
+      </div>
+    </div>
+
+    <!-- Trust badges -->
+    <div class="trust">
+      <div class="audited-row">
+        <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+          <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
+          <path d="m9 12 2 2 4-4"/>
+        </svg>
+        <span class="audited-text" id="audited"></span>
+      </div>
+      <span class="trusted-text" id="trusted"></span>
+    </div>
+
+  </div>
+
+  <script>
+    (function () {
+      var lang = (navigator.language || "").startsWith("es") ? "es" : "en";
+
+      var t = {
+        en: {
+          opening: "Opening Kabila Wallet\u2026<br>If the app didn\u2019t open, download it below.",
+          download: "Download Kabila Wallet to connect with your favorite DApps.",
+          chromeLabel: "Chrome Extension",
+          appleSub: "iPhone & iPad",
+          audited: "Audited by Hacken",
+          trusted: "Trusted by Hashgraph \u00b7 Hedera Foundation \u00b7 Google Cloud \u00b7 Hashgraph Association",
+        },
+        es: {
+          opening: "Abriendo Kabila Wallet\u2026<br>Si la app no se abri\u00f3, desc\u00e1rgala a continuaci\u00f3n.",
+          download: "Descarga Kabila Wallet para conectarte con tus DApps favoritas.",
+          chromeLabel: "Extensi\u00f3n de Chrome",
+          appleSub: "iPhone y iPad",
+          audited: "Auditado por Hacken",
+          trusted: "Con el apoyo de Hashgraph \u00b7 Hedera Foundation \u00b7 Google Cloud \u00b7 Hashgraph Association",
+        },
+      }[lang];
+
+      var hasUri = !!new URLSearchParams(window.location.search).get("uri");
+
+      document.getElementById("description").innerHTML = hasUri ? t.opening : t.download;
+      document.getElementById("chrome-label").textContent = t.chromeLabel;
+      document.getElementById("apple-sublabel").textContent = t.appleSub;
+      document.getElementById("audited").textContent = t.audited;
+      document.getElementById("trusted").textContent = t.trusted;
+      document.documentElement.lang = lang;
+    })();
+  </script>
+</body>
+</html>
